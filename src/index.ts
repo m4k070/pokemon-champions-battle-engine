@@ -1,0 +1,54 @@
+export type {
+  TypeName,
+  MoveCategory,
+  StatusCondition,
+  WeatherType,
+  StatKey,
+  BaseStats,
+  Stats,
+  MoveData,
+  TypeChart,
+  BattleEventName,
+  EventData,
+  EventHandler,
+} from './types.js';
+
+export { EventEmitter } from './event-emitter.js';
+export { Pokemon } from './pokemon.js';
+export type { PokémonConstructorData } from './pokemon.js';
+export { Move } from './move.js';
+export type { MoveConstructorData } from './move.js';
+export { Ability } from './ability.js';
+export type { AbilityConstructorData } from './ability.js';
+export { Item } from './item.js';
+export type { ItemConstructorData } from './item.js';
+export { Team } from './team.js';
+export type { SwitchOption } from './team.js';
+export { BattleField } from './battle-field.js';
+export type { SideHazards, SideFlags } from './battle-field.js';
+export { BattleState } from './battle-state.js';
+export { BattleEngine } from './battle-engine.js';
+export type { UseMoveResult } from './battle-engine.js';
+
+export {
+  AttackSection,
+  DefenseSection,
+  DamageSection,
+  DamageApplierSection,
+  ModifierSection,
+} from './sections/index.js';
+export type { DamageResult, ModifierResult } from './sections/index.js';
+
+export { AbilityHandlers, ItemHandlers } from './handlers/index.js';
+
+export { StatPointSystem, Level50System, MegaEvolutionSystem } from './rules/index.js';
+export type { StatPointsData, MegaStoneConfig } from './rules/index.js';
+
+export { SelectionAI } from './ai/selection-ai.js';
+export type { TeamAnalysis } from './ai/selection-ai.js';
+
+export { PokemonDataCache, PokemonAPI } from './api/pokemon-api.js';
+export type { PokeApiPokemonData, PokeApiMoveData } from './api/pokemon-api.js';
+
+export { META_TEAMS } from './data/meta-teams.js';
+export type { MetaTeamEntry } from './data/meta-teams.js';

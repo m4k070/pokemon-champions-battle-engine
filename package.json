@@ -2,17 +2,24 @@
   "name": "pokemon-champions-battle-engine",
   "version": "2.0.0",
   "description": "Pokemon Champions Battle Engine v2.0 - Section-based battle simulation with Event System",
-  "main": "src/battle-engine.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "type": "module",
   "scripts": {
-    "start": "node src/battle-engine.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.js",
-    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
-    "dev": "node src/battle-engine.js",
-    "simulate": "node src/sample_battle.js",
-    "simulate:py": "python3 src/sample_battle.py",
-    "docs": "markdownlint docs/*.md"
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "sample": "node dist/sample-battle.js",
+    "sample:dev": "tsx src/sample-battle.ts",
+    "check": "tsc --noEmit",
+    "test": "jest --config jest.config.js",
+    "test:watch": "jest --config jest.config.js --watch",
+    "test:coverage": "jest --config jest.config.js --coverage",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts",
+    "docs": "typedoc --out docs/api src/",
+    "prepare": "npm run build"
   },
   "keywords": [
     "pokemon",
@@ -27,10 +34,18 @@
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
-    "jest": "^29.7.0",
-    "@types/jest": "^29.5.0",
+    "@babel/preset-env": "^8.0.2",
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.10.6",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "babel-jest": "^30.4.1",
     "eslint": "^8.56.0",
-    "prettier": "^3.2.5"
+    "jest": "^29.7.0",
+    "prettier": "^3.2.5",
+    "ts-jest": "^29.1.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0"
