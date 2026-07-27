@@ -1,0 +1,1 @@
+{"version":3,"file":"ability-handlers.d.ts","sourceRoot":"","sources":["../../src/handlers/ability-handlers.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,qBAAqB,CAAC;AAGxD,qBAAa,eAAe;IAC1B,OAAO,CAAC,MAAM,CAAe;gBAEjB,MAAM,EAAE,YAAY;IAIhC,KAAK,IAAI,IAAI;CAsBd"}
