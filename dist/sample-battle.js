@@ -1,5 +1,7 @@
 import { Pokemon } from './pokemon.js';
-import { BattleEngine } from './battle-engine.js';
+import { BattleSession, BattleHistory } from './battle-runner.js';
+import { RandomBattleAgent } from './ai/battle-agent.js';
+import { OpenCodeBattleAgent } from './ai/opencode-battle-agent.js';
 const kabaldonData = {
     name: 'カバルドン',
     types: ['ground'],
@@ -40,52 +42,47 @@ const dragonData = {
     ],
 };
 export { kabaldonData, windyData, dragonData };
-const engine = new BattleEngine();
-const kabaldon = new Pokemon(kabaldonData);
-const windy = new Pokemon(windyData);
-const dragon = new Pokemon(dragonData);
-const teamA = [kabaldon];
-const teamB = [windy, dragon];
-let activeA = kabaldon;
-let activeB = windy;
-console.log('=== サンプルバトル開始 ===');
-console.log(`Team A: ${teamA.map(p => p.name).join(', ')}`);
-console.log(`Team B: ${teamB.map(p => p.name).join(', ')}`);
-console.log();
-engine.setActivePokemon(0, activeA);
-engine.setActivePokemon(1, activeB);
-engine.startTurn();
-activeA = engine.switchIn(activeA, teamA);
-activeB = engine.switchIn(activeB, teamB);
-const speedA = engine.calculateSpeed(activeA);
-const speedB = engine.calculateSpeed(activeB);
-if (speedA > speedB) {
-    console.log(`${activeA.name}が先に行動`);
-    engine.useMove(activeA, activeB, activeA.moves[3]);
-    engine.useMove(activeB, activeA, activeB.moves[2]);
+const MAX_TURNS = 10;
+function printReasoningLog(history) {
+    const entries = history.session.reasoningLog.filter((entry) => entry.reasoning);
+    if (entries.length === 0)
+        return;
+    console.log('\n' + '='.repeat(50));
+    console.log('=== 思考ログ ===');
+    for (const entry of entries) {
+        console.log(`[T${entry.turn} / ${entry.pokemonName}] ${entry.reasoning}`);
+    }
 }
-else {
-    console.log(`${activeB.name}が先に行動`);
-    engine.useMove(activeB, activeA, activeB.moves[2]);
-    engine.useMove(activeA, activeB, activeA.moves[3]);
+async function main() {
+    const teamA = [new Pokemon(kabaldonData)];
+    const teamB = [new Pokemon(windyData), new Pokemon(dragonData)];
+    const session = await BattleSession.start(teamA, teamB);
+    const history = new BattleHistory(session);
+    // OPENCODE_API_KEYがあればLLMに行動選択させる。なければランダムエージェント（無料・オフライン）。
+    const useLLM = Boolean(process.env.OPENCODE_API_KEY);
+    const agentA = useLLM ? new OpenCodeBattleAgent() : new RandomBattleAgent();
+    const agentB = useLLM ? new OpenCodeBattleAgent() : new RandomBattleAgent();
+    console.log('=== サンプルバトル開始 ===');
+    console.log(`Team A: ${teamA.map((p) => p.name).join(', ')}`);
+    console.log(`Team B: ${teamB.map((p) => p.name).join(', ')}`);
+    console.log(`行動選択: ${useLLM ? 'OpenCode Go (LLM)' : 'RandomBattleAgent'}`);
+    console.log();
+    while (!session.isFinished() && session.engine.turn < MAX_TURNS) {
+        await history.playTurn(agentA, agentB);
+    }
+    console.log(session.engine.getLog());
+    printReasoningLog(history);
+    console.log('\n' + '='.repeat(50));
+    const winner = session.winner();
+    console.log(winner === null ? '引き分け（ターン上限に到達）' : `${winner === 0 ? 'Team A' : 'Team B'}の勝利！`);
+    // おまけ: 直前のターンをundo/redoできることの確認
+    if (history.canUndo()) {
+        const beforeUndoTurn = session.engine.turn;
+        history.undo();
+        console.log(`\n[undo] ターン${beforeUndoTurn} -> ${session.engine.turn}まで巻き戻し`);
+        history.redo();
+        console.log(`[redo] ターン${session.engine.turn}まで復元`);
+    }
 }
-engine.endTurn(teamA, teamB);
-engine.startTurn();
-activeB = engine.switchIn(dragon, teamB);
-engine.setActivePokemon(1, activeB);
-const speedA2 = engine.calculateSpeed(activeA);
-const speedB2 = engine.calculateSpeed(activeB);
-if (speedA2 > speedB2) {
-    console.log(`${activeA.name}が先に行動`);
-    engine.useMove(activeA, activeB, activeA.moves[0]);
-    engine.useMove(activeB, activeA, activeB.moves[0]);
-}
-else {
-    console.log(`${activeB.name}が先に行動`);
-    engine.useMove(activeB, activeA, activeB.moves[0]);
-    engine.useMove(activeA, activeB, activeA.moves[0]);
-}
-engine.endTurn(teamA, teamB);
-console.log('\n' + '='.repeat(50));
-console.log(engine.getLog());
+main();
 //# sourceMappingURL=sample-battle.js.map

@@ -1,35 +1,53 @@
 # Pokemon Champions Battle Engine v2.0
 
-ポケモンチャンピオンズのバトルシミュレーションエンジン。Game FreakのCEDEC2026講演で示されたSection設計とEvent Systemを採用し、Poke APIから最新データを取得して正確なシミュレーションを行う。
+ポケモンチャンピオンズのバトルシミュレーションエンジン。`BattleEngine`がEvent Systemを介して特性・道具・天候・ステルスロックを処理し、Poke APIから最新データを取得してシミュレーションを行う。
 
 ## 特徴
 
-- **Section設計**: Game FreakのCEDEC2026講演に基づくSection/Event Handler設計
-- **Event System**: 特性・道具・天気をEvent Handlerとして独立実装
+- **Event System**: 特性・道具・天候をEvent Handlerとして`BattleEngine`内に実装
 - **Poke API連携**: 最新のポケモンデータを自動取得・キャッシュ
 - **Champions固有ルール**: 能力ポイント、Lv.50固定、メガシンカ対応
 - **メタチームテンプレート**: 主要アーキタイプの定義済みチーム
 - **選出AI**: アーキタイプ判定と最適選出ロジック
+- **BattleAgent / BattleSession**: LLM（OpenCode Go）・ランダム・人間など、行動選択の方式を差し替え可能。
+  1ターンずつ進行・undo/redo・分岐（fork）に対応
+- **MCPサーバー**: バトルのルール適用をMCPツールとして公開。行動の決定はMCPクライアント側が担う
 
 ## 機能
 
-### Step 1: Poke API連携モジュール
+### Poke API連携モジュール
 - ポケモンデータ取得（種族値、タイプ、特性、技リスト）
 - JSONキャッシュ機能（重複取得回避・手動クリア可能）
 
-### Step 2: Section設計バトルエンジン
-- 攻撃力セクション / 防御力セクション / ダメージ算出セクション / ダメージ補正セクション
+### バトルエンジン
+- 攻撃力／防御力／ダメージ算出／タイプ相性補正を`BattleEngine`内で一貫して計算
 - Event System（イベント発火・ハンドラー登録・連鎖・割り込み）
+- ステルスロック（`BattleField`によるサイド別設置状態管理、交代時ダメージ）
+- 天候ダメージ（砂嵐・あられの毎ターンダメージ、耐性タイプの判定）
 
-### Step 3: Event Handler実装
-- 特性（すなおこし、いかく、へんげんじざい等）
+### Event Handler実装
+- 特性（すなおこし、いかく）
 - 道具（たべのこし、いのちのたま、オボンのみ、きあいのタスキ、こだわりスカーフ）
-- 天気（砂嵐、雨、晴れ、霰）
+- 天候（砂嵐、雨、晴れ、あられ）
 
-### Step 3: Champions固有ルール
+### Champions固有ルール
 - 能力ポイントシステム（1能力最大32、合計66）
 - Lv.50固定
-- メガシンカ仕様
+- メガシンカ仕様（種族値の増減量はポケモンごとに異なる。既定値はPoke API実データと突合済みの
+  静的テーブルだが、`MegaEvolutionSystem.fromPokeApi(api)`でPoke APIから都度取得することも可能）
+
+### 行動選択（BattleAgent）とバトル進行（BattleSession）
+- `BattleAgent`インターフェースの実装を差し替えることで、行動選択の方式を切り替えられる
+  - `RandomBattleAgent`: 合法手からランダムに選ぶ既定実装（無料・オフライン・大量検証向け）
+  - `OpenCodeBattleAgent`: OpenCode Go（`https://opencode.ai/zen/go/v1`）経由でLLMに行動と思考理由を選ばせる
+- `BattleSession`は1ターンずつ進行できる状態機械（`beginTurn` → 必要なら`applyForcedSwitch` → `applyTurn` → `endTurn`）
+- `snapshot()`/`restore()`/`fork()`により、`BattleHistory`でのundo/redoや同一局面からの分岐探索に対応
+
+### MCPサーバー
+- `src/mcp-battle-server.ts`の`createBattleServer()`が、行動の決定を一切行わない「ルール適用専任」のMCPサーバーを構築する
+- 公開ツール: `start_battle` / `get_battle_state` / `apply_forced_switch` / `apply_turn` / `undo` / `redo` / `fork_battle` / `get_battle_log` / `list_battles`
+- `apply_turn`の`actionA`/`actionB`には具体的な行動（`{type:"move",moveIndex}`等）か`"auto"`（その陣営はサーバー内蔵の`RandomBattleAgent`に任せる）を渡せる
+- 起動: `npm run mcp:dev`（開発）/ `npm run mcp`（ビルド後）。stdioトランスポートで動作するため、Claude Codeなど任意のMCPクライアントからstdio起動で接続できる
 
 ## クイックスタート
 
@@ -37,48 +55,62 @@
 # 依存関係インストール
 npm install
 
-# シミュレーション実行
-npm run simulate
+# サンプルバトル実行（RandomBattleAgent、OPENCODE_API_KEYがあればOpenCodeBattleAgent）
+npm run sample:dev
+
+# MCPサーバー起動（stdio）
+npm run mcp:dev
 
 # テスト実行
 npm test
 
-# 開発サーバー起動
+# 開発時の型チェック（watch）
 npm run dev
 ```
 
 ## 使用例
 
-```javascript
-import { PokemonAPI, BattleEngine, Pokemon, PokemonDataCache } from './src/battle-engine.js';
+### BattleSession + BattleAgent（推奨）
 
-// キャッシュ作成
-const cache = new PokemonDataCache();
-const api = new PokemonAPI(cache);
+```typescript
+import { Pokemon, Move, BattleSession, BattleHistory, RandomBattleAgent } from './src/index.js';
 
-// ポケモンデータ取得
-const garchompData = await api.fetchPokemonData(445); // ガブリアス
+const teamA = [new Pokemon({ name: 'ガブリアス', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'choice-scarf',
+  baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+  moves: [new Move({ name: 'じしん', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' })] })];
+const teamB = [/* ... */];
 
-// ポケモン作成
-const garchomp = new Pokemon({
-  name: 'ガブリアス',
-  types: ['dragon', 'ground'],
-  ability: 'rough-skin',
-  item: 'choice-scarf',
-  stats: garchompData.baseStats,
-  moves: [...]
-});
+const session = await BattleSession.start(teamA, teamB);
+const history = new BattleHistory(session);
+const agent = new RandomBattleAgent(); // または new OpenCodeBattleAgent()
 
-// バトルエンジン初期化
+while (!session.isFinished() && session.engine.turn < 20) {
+  await history.playTurn(agent, agent);
+}
+
+console.log(session.engine.getLog());
+console.log('winner:', session.winner()); // 0 | 1 | null
+
+// 直前のターンをやり直したい場合
+history.undo();
+// 現在の局面から独立した分岐を試したい場合
+const branch = history.fork();
+```
+
+### BattleEngineを直接操作する（低レベルAPI）
+
+```typescript
+import { BattleEngine, Pokemon } from './src/index.js';
+
 const engine = new BattleEngine();
+engine.setActivePokemon(0, garchomp);
+engine.setActivePokemon(1, opponent);
 
-// バトル実行
 engine.startTurn();
-engine.switchIn(garchomp, teamA);
-engine.switchIn(opponent, teamB);
+engine.switchIn(garchomp, teamA, 0); // 第3引数の side を渡すとステルスロック等が適用される
+engine.switchIn(opponent, teamB, 1);
 
-// 技を使用
-const result = engine.useMove(attacker, defender, move);
+const result = engine.useMove(garchomp, opponent, garchomp.moves[0]);
 console.log(engine.getLog());
 ```
 
@@ -86,38 +118,32 @@ console.log(engine.getLog());
 
 ```
 src/
-├── battle-engine.js      # メインバトルエンジン
-├── battle-engine-v2.js   # 完全版エンジン
-├── battle-engine.py      # Python版
-├── sample_battle.js      # サンプルバトル
-├── sample_battle.py      # Python版サンプル
-├── domain/
-│   ├── pokemon.js        # ポケモンドメインモデル
-│   ├── move.js           # 技モデル
-│   ├── ability.js        # 特性モデル
-│   ├── item.js           // アイテムモデル
-│   └── team.js           // チームモデル
-├── engine/
-│   ├── battle-engine.js      # メインエンジン
-│   ├── sections/             # Section実装
-│   │   ├── attack-section.js
-│   │   ├── defense-section.js
-│   │   ├── damage-section.js
-│   │   └── modifier-section.js
-│   ├── event-system.js       # Event System
-│   ├── handlers/
-│   │   ├── ability-handlers.js
-│   │   ├── item-handlers.js
-│   │   └── weather-handlers.js
-│   ├── meta-teams.js         # メタチームテンプレート
-│   └── selection-ai.js       # 選出AI
+├── battle-engine.ts          # メインバトルエンジン（攻撃/防御/ダメージ計算、Event System、
+│                             #   特性・道具・天候・ステルスロックのハンドラーを内包）
+├── battle-field.ts           # ステルスロック等サイド別フィールド状態
+├── battle-runner.ts          # BattleSession（1ターンずつ進行・snapshot/restore/fork）/ BattleHistory（undo/redo）
+├── battle-snapshot.ts        # 盤面のプレーンデータ化（snapshot/restore）
+├── pokemon.ts                # ポケモンドメインモデル
+├── move.ts                   # 技モデル
+├── ability.ts                # 特性モデル
+├── item.ts                   # アイテムモデル
+├── team.ts                   # チームモデル
+├── type-chart.ts             # タイプ相性表
+├── event-emitter.ts          # Event System
+├── sample-battle.ts          # サンプルバトル（BattleSession + BattleAgent）
+├── mcp-server.ts             # MCPサーバーの起動エントリーポイント（stdio）
+├── mcp-battle-server.ts      # MCPツール定義本体（createBattleServer）
+├── ai/
+│   ├── selection-ai.ts           # チームのアーキタイプ判定
+│   ├── battle-agent.ts           # BattleAgentインターフェース / RandomBattleAgent
+│   └── opencode-battle-agent.ts  # OpenCode Go経由のLLM BattleAgent
 ├── api/
-│   ├── pokemon-api.js        # Poke API連携
-│   └── cache.js              // JSONキャッシュ
+│   └── pokemon-api.ts    # Poke API連携・キャッシュ
+├── data/
+│   └── meta-teams.ts     # メタチームテンプレート
 └── rules/
-    ├── stat-point-system.js  // 能力ポイントシステム
-    ├── level50-system.js     // Lv.50固定
-    └── mega-evolution.js     // メガシンカ
+    ├── stat-point-system.ts  # 能力ポイントシステム・Lv.50固定
+    └── mega-evolution.ts     # メガシンカ（Poke APIから種族値差分を算出するfromPokeApiあり）
 ```
 
 ## テスト
@@ -136,15 +162,14 @@ npm test -- --testNamePattern="ダメージ計算"
 ## ドキュメント
 
 - [設計ドキュメント](docs/BATTLE_SYSTEM_DESIGN.md)
-- [API仕様](docs/API.md)
-- [エージェントインターフェース](docs/AGENT_INTERFACE.md)
+- [エージェントインターフェース](docs/AGENT_INTERFACE.md)（Python時代の記述が残っており現状のBattleAgentとは一致しない箇所があります）
 - [実装済みアイテム](docs/IMPLEMENTED_ITEMS.md)
+- `npm run docs`でTypeDocによるAPIリファレンスを`docs/api/`に生成できます
 
 ## 開発環境
 
 - Node.js 18+
-- Python 3.10+
-- npm / pip
+- npm
 
 ## ライセンス
 

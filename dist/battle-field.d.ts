@@ -1,4 +1,3 @@
-import type { WeatherType } from './types.js';
 export interface SideHazards {
     playerA: number;
     playerB: number;
@@ -8,10 +7,6 @@ export interface SideFlags {
     playerB: boolean;
 }
 export declare class BattleField {
-    weather: WeatherType | null;
-    weatherTurnsLeft: number;
-    trickRoom: boolean;
-    trickRoomTurnsLeft: number;
     stealthRock: SideFlags;
     spikes: SideHazards;
     toxicSpikes: SideHazards;
