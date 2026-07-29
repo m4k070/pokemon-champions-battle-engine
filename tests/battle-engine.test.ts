@@ -1,6 +1,6 @@
 import { BattleEngine } from '../src/battle-engine.js';
 import { Pokemon } from '../src/pokemon.js';
-import type { BaseStats, MoveData, TypeName } from '../src/types.js';
+import { Move } from '../src/move.js';
 
 describe('BattleEngine', () => {
   let engine: BattleEngine;
@@ -53,16 +53,16 @@ describe('BattleEngine', () => {
       });
 
       const defender = new Pokemon({
-        name: 'Togekiss',
-        types: ['fairy', 'flying'],
-        ability: 'serene-grace',
+        name: 'Dragonite',
+        types: ['dragon', 'flying'],
+        ability: 'multiscale',
         item: 'leftovers',
-        baseStats: { HP: 85, ATK: 50, DEF: 95, SPATK: 120, SPDEF: 115, SPEED: 80 },
+        baseStats: { HP: 91, ATK: 134, DEF: 95, SPATK: 100, SPDEF: 100, SPEED: 80 },
       });
 
-      const result = engine.useMove(attacker, defender, {
+      const result = engine.useMove(attacker, defender, new Move({
         name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 10, category: 'physical',
-      });
+      }));
 
       expect(result.success).toBe(true);
       expect(result.effectiveness).toBe(2.0);
@@ -87,9 +87,9 @@ describe('BattleEngine', () => {
         baseStats: { HP: 85, ATK: 50, DEF: 95, SPATK: 120, SPDEF: 115, SPEED: 80 },
       });
 
-      const result = engine.useMove(attacker, defender, {
+      const result = engine.useMove(attacker, defender, new Move({
         name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical',
-      });
+      }));
 
       expect(result.effectiveness).toBe(0);
     });
@@ -155,16 +155,16 @@ describe('BattleEngine', () => {
       });
 
       const defender = new Pokemon({
-        name: 'Togekiss',
-        types: ['fairy', 'flying'],
-        ability: 'serene-grace',
+        name: 'Dragonite',
+        types: ['dragon', 'flying'],
+        ability: 'multiscale',
         item: 'leftovers',
-        baseStats: { HP: 85, ATK: 50, DEF: 95, SPATK: 120, SPDEF: 115, SPEED: 80 },
+        baseStats: { HP: 91, ATK: 134, DEF: 95, SPATK: 100, SPDEF: 100, SPEED: 80 },
       });
 
-      const result = engine.useMove(attacker, defender, {
+      const result = engine.useMove(attacker, defender, new Move({
         name: 'outrage', type: 'dragon', power: 120, category: 'physical',
-      });
+      }));
 
       expect(result.effectiveness).toBe(2.0);
     });
@@ -193,7 +193,8 @@ describe('BattleEngine', () => {
         baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
       });
 
-      expect(engine.calculateSpeed(pokemon)).toBe(153);
+      // Lv50: floor((102*2+31)*50/100)+5 = 122, choice-scarf x1.5 -> 183
+      expect(engine.calculateSpeed(pokemon)).toBe(183);
     });
 
     test('should handle Trick Room speed reversal', () => {
@@ -217,6 +218,154 @@ describe('BattleEngine', () => {
       });
 
       expect(engine.calculateSpeed(fastPokemon)).toBeLessThan(engine.calculateSpeed(slowPokemon));
+    });
+  });
+
+  describe('Stealth Rock', () => {
+    test('should damage a switching-in Pokemon based on rock-type effectiveness', () => {
+      const engine = new BattleEngine();
+      engine.setStealthRock(1);
+
+      const charizard = new Pokemon({
+        name: 'Charizard',
+        types: ['fire', 'flying'],
+        ability: 'blaze',
+        item: null,
+        baseStats: { HP: 78, ATK: 84, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 },
+      });
+
+      engine.switchIn(charizard, [charizard], 1);
+
+      // 4倍弱点(炎/飛行): maxHP/8 * 4 = maxHP/2
+      expect(charizard.currentHP).toBe(charizard.maxHP - Math.floor(charizard.maxHP / 2));
+    });
+
+    test('should apply only a quarter of the base damage to a Pokemon quad-resistant to rock', () => {
+      const engine = new BattleEngine();
+      engine.setStealthRock(0);
+
+      // じめん+はがねは岩を「ふあい・じめん・はがね」いずれも半減する2タイプが重なり4分の1耐性になる
+      const excadrill = new Pokemon({
+        name: 'Excadrill',
+        types: ['ground', 'steel'],
+        ability: 'mold-breaker',
+        item: null,
+        baseStats: { HP: 110, ATK: 135, DEF: 60, SPATK: 50, SPDEF: 65, SPEED: 88 },
+      });
+
+      engine.switchIn(excadrill, [excadrill], 0);
+
+      // 地面・鋼はどちらも岩を半減: maxHP/8 * 0.5 * 0.5 = maxHP/32
+      expect(excadrill.currentHP).toBe(excadrill.maxHP - Math.floor(excadrill.maxHP / 32));
+    });
+  });
+
+  describe('Weather Damage', () => {
+    test('should damage non-immune types at end of turn during sandstorm', () => {
+      const engine = new BattleEngine();
+      engine.weather = 'sand';
+      engine.weatherTurnsLeft = 5;
+
+      const sylveon = new Pokemon({
+        name: 'Sylveon',
+        types: ['fairy'],
+        ability: 'pixilate',
+        item: null,
+        baseStats: { HP: 95, ATK: 65, DEF: 65, SPATK: 110, SPDEF: 130, SPEED: 60 },
+      });
+
+      engine.endTurn([sylveon], []);
+
+      expect(sylveon.currentHP).toBe(sylveon.maxHP - Math.floor(sylveon.maxHP / 16));
+    });
+
+    test('should not damage rock/ground/steel types during sandstorm', () => {
+      const engine = new BattleEngine();
+      engine.weather = 'sand';
+      engine.weatherTurnsLeft = 5;
+
+      const cabaldon = new Pokemon({
+        name: 'Cabaldon',
+        types: ['ground'],
+        ability: 'sand-stream',
+        item: null,
+        baseStats: { HP: 263, ATK: 135, DEF: 195, SPATK: 75, SPDEF: 135, SPEED: 65 },
+      });
+
+      engine.endTurn([cabaldon], []);
+
+      expect(cabaldon.currentHP).toBe(cabaldon.maxHP);
+    });
+  });
+
+  describe('PP Management', () => {
+    test('should decrement PP by 1 on use', () => {
+      const attacker = new Pokemon({
+        name: 'Garchomp',
+        types: ['dragon', 'ground'],
+        ability: 'rough-skin',
+        item: null,
+        baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+      });
+      const defender = new Pokemon({
+        name: 'Togekiss',
+        types: ['fairy', 'flying'],
+        ability: 'serene-grace',
+        item: null,
+        baseStats: { HP: 85, ATK: 50, DEF: 95, SPATK: 120, SPDEF: 115, SPEED: 80 },
+      });
+      const move = new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10 });
+
+      engine.useMove(attacker, defender, move);
+
+      expect(move.pp).toBe(9);
+    });
+
+    test('should decrement PP even when the move misses', () => {
+      const attacker = new Pokemon({
+        name: 'Garchomp',
+        types: ['dragon', 'ground'],
+        ability: 'rough-skin',
+        item: null,
+        baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+      });
+      const defender = new Pokemon({
+        name: 'Togekiss',
+        types: ['fairy', 'flying'],
+        ability: 'serene-grace',
+        item: null,
+        baseStats: { HP: 85, ATK: 50, DEF: 95, SPATK: 120, SPDEF: 115, SPEED: 80 },
+      });
+      const move = new Move({ name: 'stone-edge', type: 'rock', power: 100, accuracy: 0, pp: 5 });
+
+      const result = engine.useMove(attacker, defender, move);
+
+      expect(result.success).toBe(false);
+      expect(move.pp).toBe(4);
+    });
+
+    test('should refuse to use a move with no PP left', () => {
+      const attacker = new Pokemon({
+        name: 'Garchomp',
+        types: ['dragon', 'ground'],
+        ability: 'rough-skin',
+        item: null,
+        baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+      });
+      const defender = new Pokemon({
+        name: 'Togekiss',
+        types: ['fairy', 'flying'],
+        ability: 'serene-grace',
+        item: null,
+        baseStats: { HP: 85, ATK: 50, DEF: 95, SPATK: 120, SPDEF: 115, SPEED: 80 },
+      });
+      const move = new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 0 });
+
+      const result = engine.useMove(attacker, defender, move);
+
+      expect(result.success).toBe(false);
+      expect(move.pp).toBe(0);
+      expect(defender.currentHP).toBe(defender.maxHP);
     });
   });
 });
@@ -264,9 +413,9 @@ describe('Integration Tests', () => {
 
     engine.startTurn();
 
-    const result = engine.useMove(teamA[0], teamB[0], {
+    const result = engine.useMove(teamA[0], teamB[0], new Move({
       name: 'earthquake', type: 'ground', power: 100, category: 'physical',
-    });
+    }));
 
     expect(result.success).toBe(true);
     expect(result.damage).toBeGreaterThan(0);

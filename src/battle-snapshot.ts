@@ -1,0 +1,162 @@
+import { BattleEngine } from './battle-engine.js';
+import { Pokemon } from './pokemon.js';
+import type { BattleField, SideFlags, SideHazards } from './battle-field.js';
+import type { BaseStats, MoveData, Stats, StatusCondition, TypeName, WeatherType } from './types.js';
+
+// Pokemon/BattleEngine/BattleFieldはミュータブルなクラス＋イベントハンドラ(関数)を持つため
+// structuredCloneでそのまま複製できない。盤面の「値」だけを抜き出したプレーンデータに変換し、
+// そこから作り直す（再構築する）ことでundo/redo/forkを可能にする。
+export interface PokemonSnapshot {
+  name: string;
+  baseName: string;
+  types: TypeName[];
+  ability: string;
+  item: string | null;
+  itemUsed: boolean;
+  lockedMove: number | null;
+  baseStats: BaseStats;
+  stats: Stats;
+  moves: MoveData[];
+  currentHP: number;
+  status: StatusCondition | null;
+  statusTurnsLeft: number;
+  isMega: boolean;
+}
+
+export interface FieldSnapshot {
+  stealthRock: SideFlags;
+  spikes: SideHazards;
+  toxicSpikes: SideHazards;
+  stickyWeb: SideFlags;
+  auroraVeil: SideHazards;
+  reflect: SideHazards;
+  lightScreen: SideHazards;
+  tailwind: SideHazards;
+}
+
+export interface BattleSnapshot {
+  turn: number;
+  weather: WeatherType | null;
+  weatherTurnsLeft: number;
+  trickRoom: boolean;
+  trickRoomTurnsLeft: number;
+  log: string[];
+  field: FieldSnapshot;
+  teamA: PokemonSnapshot[];
+  teamB: PokemonSnapshot[];
+  activeIndexA: number;
+  activeIndexB: number;
+}
+
+export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
+  return {
+    name: pokemon.name,
+    baseName: pokemon.baseName,
+    types: [...pokemon.types],
+    ability: pokemon.ability,
+    item: pokemon.item,
+    itemUsed: pokemon.itemUsed,
+    lockedMove: pokemon.lockedMove,
+    baseStats: { ...pokemon.baseStats },
+    stats: { ...pokemon.stats },
+    moves: pokemon.moves.map((move) => ({ ...move })),
+    currentHP: pokemon.currentHP,
+    status: pokemon.status,
+    statusTurnsLeft: pokemon.statusTurnsLeft,
+    isMega: pokemon.isMega,
+  };
+}
+
+export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
+  return new Pokemon({
+    name: snapshot.name,
+    baseName: snapshot.baseName,
+    types: [...snapshot.types],
+    ability: snapshot.ability,
+    item: snapshot.item,
+    itemUsed: snapshot.itemUsed,
+    lockedMove: snapshot.lockedMove,
+    baseStats: { ...snapshot.baseStats },
+    stats: { ...snapshot.stats },
+    moves: snapshot.moves.map((move) => ({ ...move })),
+    currentHP: snapshot.currentHP,
+    status: snapshot.status,
+    statusTurnsLeft: snapshot.statusTurnsLeft,
+    isMega: snapshot.isMega,
+  });
+}
+
+function snapshotField(field: BattleField): FieldSnapshot {
+  return {
+    stealthRock: { ...field.stealthRock },
+    spikes: { ...field.spikes },
+    toxicSpikes: { ...field.toxicSpikes },
+    stickyWeb: { ...field.stickyWeb },
+    auroraVeil: { ...field.auroraVeil },
+    reflect: { ...field.reflect },
+    lightScreen: { ...field.lightScreen },
+    tailwind: { ...field.tailwind },
+  };
+}
+
+function restoreField(field: BattleField, snapshot: FieldSnapshot): void {
+  field.stealthRock = { ...snapshot.stealthRock };
+  field.spikes = { ...snapshot.spikes };
+  field.toxicSpikes = { ...snapshot.toxicSpikes };
+  field.stickyWeb = { ...snapshot.stickyWeb };
+  field.auroraVeil = { ...snapshot.auroraVeil };
+  field.reflect = { ...snapshot.reflect };
+  field.lightScreen = { ...snapshot.lightScreen };
+  field.tailwind = { ...snapshot.tailwind };
+}
+
+export function snapshotBattle(
+  engine: BattleEngine,
+  teamA: Pokemon[],
+  teamB: Pokemon[],
+  activeA: Pokemon,
+  activeB: Pokemon
+): BattleSnapshot {
+  return {
+    turn: engine.turn,
+    weather: engine.weather,
+    weatherTurnsLeft: engine.weatherTurnsLeft,
+    trickRoom: engine.trickRoom,
+    trickRoomTurnsLeft: engine.trickRoomTurnsLeft,
+    log: [...engine.log],
+    field: snapshotField(engine.field),
+    teamA: teamA.map(snapshotPokemon),
+    teamB: teamB.map(snapshotPokemon),
+    activeIndexA: teamA.indexOf(activeA),
+    activeIndexB: teamB.indexOf(activeB),
+  };
+}
+
+export interface RestoredBattle {
+  engine: BattleEngine;
+  teamA: Pokemon[];
+  teamB: Pokemon[];
+  activeA: Pokemon;
+  activeB: Pokemon;
+}
+
+export function restoreBattle(snapshot: BattleSnapshot): RestoredBattle {
+  const engine = new BattleEngine();
+  engine.turn = snapshot.turn;
+  engine.weather = snapshot.weather;
+  engine.weatherTurnsLeft = snapshot.weatherTurnsLeft;
+  engine.trickRoom = snapshot.trickRoom;
+  engine.trickRoomTurnsLeft = snapshot.trickRoomTurnsLeft;
+  engine.log = [...snapshot.log];
+  restoreField(engine.field, snapshot.field);
+
+  const teamA = snapshot.teamA.map(restorePokemon);
+  const teamB = snapshot.teamB.map(restorePokemon);
+  const activeA = teamA[snapshot.activeIndexA];
+  const activeB = teamB[snapshot.activeIndexB];
+
+  engine.setActivePokemon(0, activeA);
+  engine.setActivePokemon(1, activeB);
+
+  return { engine, teamA, teamB, activeA, activeB };
+}

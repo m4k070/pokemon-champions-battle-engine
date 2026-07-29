@@ -31,10 +31,10 @@ export declare class Pokemon {
     maxHP: number;
     status: StatusCondition | null;
     statusTurnsLeft: number;
-    isFainted: boolean;
     baseName: string;
     isMega: boolean;
     constructor(data: PokémonConstructorData);
+    get isFainted(): boolean;
     static calculateStats(baseStats: BaseStats, level: number): Stats;
     takeDamage(damage: number, engine?: BattleEngine): void;
     heal(amount: number): void;

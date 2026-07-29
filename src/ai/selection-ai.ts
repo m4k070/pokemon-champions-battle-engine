@@ -1,5 +1,3 @@
-import type { MoveAction, SwitchAction, ForfeitAction } from '../types.js';
-import type { Pokemon } from '../pokemon.js';
 import type { Team } from '../team.js';
 
 export interface TeamAnalysis {
@@ -7,6 +5,8 @@ export interface TeamAnalysis {
   recommendation: string;
 }
 
+// 毎ターンの行動選択は BattleAgent（RandomBattleAgent / LLM実装）が担う。
+// SelectionAIはチーム全体のアーキタイプ判定のみを担当する。
 export class SelectionAI {
   analyzeTeam(team: Team): TeamAnalysis {
     const types = team.members.flatMap((p) => p.types);
@@ -25,26 +25,5 @@ export class SelectionAI {
       archetype,
       recommendation: `Detected archetype: ${archetype}`,
     };
-  }
-
-  selectLead(team: Team): Pokemon {
-    return team.members[0];
-  }
-
-  selectMove(pokemon: Pokemon, _opponent: Pokemon): MoveAction {
-    const availableMoves = pokemon.moves.filter((_, i) => pokemon.canUseMove(i));
-    const randomIndex = Math.floor(Math.random() * availableMoves.length);
-    const move = availableMoves[randomIndex];
-    const moveIndex = pokemon.moves.indexOf(move);
-
-    return { type: 'move', moveIndex, target: 0 };
-  }
-
-  selectSwitch(team: Team): SwitchAction | ForfeitAction {
-    const available = team.getAvailableSwitches();
-    if (available.length === 0) {
-      return { type: 'forfeit' };
-    }
-    return { type: 'switch', pokemonIndex: available[0].index };
   }
 }

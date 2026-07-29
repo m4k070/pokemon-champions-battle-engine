@@ -12,6 +12,8 @@
     "dev": "tsx watch src/index.ts",
     "sample": "node dist/sample-battle.js",
     "sample:dev": "tsx src/sample-battle.ts",
+    "mcp": "node dist/mcp-server.js",
+    "mcp:dev": "tsx src/mcp-server.ts",
     "check": "tsc --noEmit",
     "test": "jest --config jest.config.js",
     "test:watch": "jest --config jest.config.js --watch",
@@ -31,7 +33,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "node-fetch": "^3.3.2"
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "node-fetch": "^3.3.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@babel/preset-env": "^8.0.2",

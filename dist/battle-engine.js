@@ -1,5 +1,6 @@
 import { EventEmitter } from './event-emitter.js';
 import { TYPE_CHART } from './type-chart.js';
+import { BattleField } from './battle-field.js';
 export class BattleEngine {
     events;
     weather;
@@ -9,6 +10,7 @@ export class BattleEngine {
     turn;
     log;
     typeChart;
+    field;
     activePokemon0 = null;
     activePokemon1 = null;
     constructor() {
@@ -20,7 +22,15 @@ export class BattleEngine {
         this.turn = 0;
         this.log = [];
         this.typeChart = TYPE_CHART;
+        this.field = new BattleField();
         this.setupEventHandlers();
+    }
+    sideKey(side) {
+        return side === 0 ? 'playerA' : 'playerB';
+    }
+    setStealthRock(side) {
+        this.field.stealthRock[this.sideKey(side)] = true;
+        this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側の場にステルスロックが設置された`);
     }
     setActivePokemon(side, pokemon) {
         if (side === 0) {
@@ -77,8 +87,8 @@ export class BattleEngine {
                     this.log.push(`${p.name}はいのちのたまの反動で${damage}のダメージを受けた`);
                 }
                 if (p.item === 'sitrus-berry' && !p.itemUsed) {
-                    if (p.currentHP <= p.maxHP / 4) {
-                        const heal = Math.floor(p.maxHP / 2);
+                    if (p.currentHP <= p.maxHP / 2) {
+                        const heal = Math.floor(p.maxHP / 4);
                         p.heal(heal);
                         p.itemUsed = true;
                         this.log.push(`${p.name}はオボンのみで${heal}回復した`);
@@ -91,8 +101,9 @@ export class BattleEngine {
             if (!defender || typeof defender !== 'object')
                 return;
             const d = defender;
-            if (d.item === 'focus-sash' && !d.itemUsed && d.currentHP === d.maxHP) {
-                d.currentHP = 1;
+            const damage = data.damage;
+            if (d.item === 'focus-sash' && !d.itemUsed && d.currentHP === d.maxHP && damage >= d.currentHP) {
+                data.damage = d.currentHP - 1;
                 d.itemUsed = true;
                 this.log.push(`${d.name}はきあいのタスキで耐えた！`);
             }
@@ -152,10 +163,14 @@ export class BattleEngine {
         defender.takeDamage(damage, this);
     }
     useMove(attacker, defender, move) {
+        if (move.pp <= 0) {
+            this.log.push(`${attacker.name}は${move.name}を出そうとしたが、PPが残っていない！`);
+            return { success: false };
+        }
+        move.pp -= 1;
         this.log.push(`${attacker.name}の${move.name}`);
-        const accuracy = move.accuracy;
-        if (accuracy !== undefined && accuracy < 100) {
-            if (Math.random() * 100 > accuracy) {
+        if (move.accuracy < 100) {
+            if (Math.random() * 100 > move.accuracy) {
                 this.log.push('技は外れた');
                 return { success: false };
             }
@@ -170,18 +185,6 @@ export class BattleEngine {
             }
             return { success: true, status: move.status };
         }
-        const moveFull = {
-            name: move.name,
-            type: move.type,
-            power: move.power,
-            accuracy: accuracy ?? 100,
-            pp: move.pp ?? 10,
-            maxPP: move.pp ?? 10,
-            category: move.category ?? 'physical',
-            status: move.status ?? null,
-            priority: 0,
-            effectChance: null,
-        };
         let power = move.power;
         if (attacker.types && attacker.types.includes(move.type)) {
             power *= 1.5;
@@ -189,7 +192,7 @@ export class BattleEngine {
         if (attacker.item === 'life-orb') {
             power *= 1.3;
         }
-        const moveWithStab = { ...moveFull, power };
+        const moveWithStab = { ...move, power };
         const attack = this.calculateAttack(attacker, moveWithStab);
         const defense = this.calculateDefense(defender, moveWithStab);
         const baseDamage = this.calculateBaseDamage(attack, defense, moveWithStab);
@@ -231,7 +234,25 @@ export class BattleEngine {
     endTurn(teamA, teamB) {
         this.applyStatusEffects(teamA);
         this.applyStatusEffects(teamB);
+        this.applyWeatherDamage([...teamA, ...teamB]);
         this.events.emit('end-turn', { team: [...teamA, ...teamB], engine: this });
+    }
+    applyWeatherDamage(team) {
+        if (this.weather !== 'sand' && this.weather !== 'hail')
+            return;
+        for (const pokemon of team) {
+            if (pokemon.isFainted)
+                continue;
+            const isImmune = this.weather === 'sand'
+                ? pokemon.types.some((t) => t === 'rock' || t === 'ground' || t === 'steel')
+                : pokemon.types.includes('ice');
+            if (isImmune)
+                continue;
+            const damage = Math.floor(pokemon.maxHP / 16);
+            pokemon.takeDamage(damage, this);
+            const weatherName = this.weather === 'sand' ? '砂嵐' : 'あられ';
+            this.log.push(`${pokemon.name}は${weatherName}のダメージで${damage}のダメージを受けた`);
+        }
     }
     applyStatusEffects(team) {
         for (const pokemon of team) {
@@ -259,9 +280,17 @@ export class BattleEngine {
             }
         }
     }
-    switchIn(pokemon, team) {
+    switchIn(pokemon, team, side) {
         this.log.push(`${pokemon.name}が場に出た！`);
         this.events.emit('switch-in', { pokemon, team, engine: this });
+        if (side !== undefined && !pokemon.isFainted && this.field.stealthRock[this.sideKey(side)]) {
+            const effectiveness = this.getTypeEffectiveness('rock', pokemon.types);
+            if (effectiveness > 0) {
+                const damage = Math.floor((pokemon.maxHP / 8) * effectiveness);
+                pokemon.takeDamage(damage, this);
+                this.log.push(`${pokemon.name}はステルスロックのダメージで${damage}のダメージを受けた`);
+            }
+        }
         return pokemon;
     }
     calculateSpeed(pokemon) {

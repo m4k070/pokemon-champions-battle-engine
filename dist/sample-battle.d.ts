@@ -1,5 +1,4 @@
-import type { BaseStats, TypeName } from './types.js';
-import type { MoveData } from './types.js';
+import type { BaseStats, MoveData, TypeName } from './types.js';
 declare const kabaldonData: {
     name: string;
     types: TypeName[];

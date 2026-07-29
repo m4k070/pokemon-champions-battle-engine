@@ -1,5 +1,3 @@
-import type { WeatherType } from './types.js';
-
 export interface SideHazards {
   playerA: number;
   playerB: number;
@@ -10,11 +8,9 @@ export interface SideFlags {
   playerB: boolean;
 }
 
+// 天候・トリックルームはBattleEngine側が単一の情報源として保持する
+// （このクラスは設置技など「陣営ごとの」フィールド状態のみを扱う）。
 export class BattleField {
-  weather: WeatherType | null;
-  weatherTurnsLeft: number;
-  trickRoom: boolean;
-  trickRoomTurnsLeft: number;
   stealthRock: SideFlags;
   spikes: SideHazards;
   toxicSpikes: SideHazards;
@@ -25,10 +21,6 @@ export class BattleField {
   tailwind: SideHazards;
 
   constructor() {
-    this.weather = null;
-    this.weatherTurnsLeft = 0;
-    this.trickRoom = false;
-    this.trickRoomTurnsLeft = 0;
     this.stealthRock = { playerA: false, playerB: false };
     this.spikes = { playerA: 0, playerB: 0 };
     this.toxicSpikes = { playerA: 0, playerB: 0 };
