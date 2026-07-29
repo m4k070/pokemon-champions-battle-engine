@@ -1,1 +1,0 @@
-{"version":3,"file":"selection-ai.d.ts","sourceRoot":"","sources":["../../src/ai/selection-ai.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,IAAI,EAAE,MAAM,YAAY,CAAC;AAEvC,MAAM,WAAW,YAAY;IAC3B,SAAS,EAAE,MAAM,CAAC;IAClB,cAAc,EAAE,MAAM,CAAC;CACxB;AAID,qBAAa,WAAW;IACtB,WAAW,CAAC,IAAI,EAAE,IAAI,GAAG,YAAY;CAkBtC"}
