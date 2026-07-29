@@ -1,1 +1,0 @@
-{"version":3,"file":"damage-applier-section.d.ts","sourceRoot":"","sources":["../../src/sections/damage-applier-section.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,qBAAqB,CAAC;AACxD,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,eAAe,CAAC;AAE7C,qBAAa,oBAAoB;IAC/B,OAAO,CAAC,MAAM,CAAe;gBAEjB,MAAM,EAAE,YAAY;IAIhC,WAAW,CAAC,QAAQ,EAAE,OAAO,EAAE,MAAM,EAAE,MAAM,GAAG,IAAI;CAIrD"}
