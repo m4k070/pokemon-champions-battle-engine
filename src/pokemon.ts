@@ -33,7 +33,6 @@ export class Pokemon {
   maxHP: number;
   status: StatusCondition | null;
   statusTurnsLeft: number;
-  isFainted: boolean;
   baseName: string;
   isMega: boolean;
 
@@ -48,7 +47,6 @@ export class Pokemon {
     this.moves = data.moves ?? [];
     this.status = data.status ?? null;
     this.statusTurnsLeft = data.statusTurnsLeft ?? 0;
-    this.isFainted = false;
     this.baseName = data.baseName ?? data.name;
     this.isMega = data.isMega ?? false;
 
@@ -59,6 +57,11 @@ export class Pokemon {
     }
     this.maxHP = this.stats.HP;
     this.currentHP = data.currentHP ?? this.maxHP;
+  }
+
+  // currentHPから導出する（保存フィールドにすると直接代入時に同期が崩れるため）。
+  get isFainted(): boolean {
+    return this.currentHP <= 0;
   }
 
   static calculateStats(baseStats: BaseStats, level: number): Stats {
@@ -73,13 +76,13 @@ export class Pokemon {
   }
 
   takeDamage(damage: number, engine?: BattleEngine): void {
+    let effectiveDamage = damage;
     if (engine) {
-      engine.events.emit('apply-damage', { defender: this, damage, engine });
+      const data = { defender: this, damage, engine };
+      engine.events.emit('apply-damage', data);
+      effectiveDamage = data.damage;
     }
-    this.currentHP = Math.max(0, this.currentHP - damage);
-    if (this.currentHP === 0) {
-      this.isFainted = true;
-    }
+    this.currentHP = Math.max(0, this.currentHP - effectiveDamage);
   }
 
   heal(amount: number): void {
