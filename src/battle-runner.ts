@@ -1,4 +1,5 @@
 import { BattleEngine } from './battle-engine.js';
+import { MegaEvolutionSystem } from './rules/mega-evolution.js';
 import type { Pokemon } from './pokemon.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './ai/battle-agent.js';
 import { snapshotBattle, restoreBattle } from './battle-snapshot.js';
@@ -28,7 +29,8 @@ function buildContext(
   self: Pokemon,
   selfTeam: Pokemon[],
   opponent: Pokemon,
-  opponentTeam: Pokemon[]
+  opponentTeam: Pokemon[],
+  canMegaEvolve: boolean
 ): BattleContext {
   return {
     turn: engine.turn,
@@ -36,6 +38,7 @@ function buildContext(
     selfTeam,
     opponent,
     opponentTeam,
+    canMegaEvolve,
     field: {
       weather: engine.weather,
       weatherTurnsLeft: engine.weatherTurnsLeft,
@@ -58,6 +61,7 @@ export interface StartSessionOptions {
   leadA?: Pokemon;
   leadB?: Pokemon;
   engine?: BattleEngine;
+  megaEvolutionSystem?: MegaEvolutionSystem;
 }
 
 // 1ターンずつ進められるバトルの実行単位。snapshot()/restore()/fork()により
@@ -70,19 +74,29 @@ export class BattleSession {
   teamB: Pokemon[];
   activeA: Pokemon;
   activeB: Pokemon;
+  megaEvolutionSystem: MegaEvolutionSystem;
   reasoningLog: TurnReasoning[] = [];
   private turnBegun = false;
 
-  private constructor(engine: BattleEngine, teamA: Pokemon[], teamB: Pokemon[], activeA: Pokemon, activeB: Pokemon) {
+  private constructor(
+    engine: BattleEngine,
+    teamA: Pokemon[],
+    teamB: Pokemon[],
+    activeA: Pokemon,
+    activeB: Pokemon,
+    megaEvolutionSystem: MegaEvolutionSystem
+  ) {
     this.engine = engine;
     this.teamA = teamA;
     this.teamB = teamB;
     this.activeA = activeA;
     this.activeB = activeB;
+    this.megaEvolutionSystem = megaEvolutionSystem;
   }
 
   static async start(teamA: Pokemon[], teamB: Pokemon[], options: StartSessionOptions = {}): Promise<BattleSession> {
     const engine = options.engine ?? new BattleEngine();
+    const megaEvolutionSystem = options.megaEvolutionSystem ?? new MegaEvolutionSystem();
     const leadA = options.leadA ?? teamA[0];
     const leadB = options.leadB ?? teamB[0];
 
@@ -99,12 +113,12 @@ export class BattleSession {
       engine.switchIn(entry.pokemon, entry.team, entry.side);
     }
 
-    return new BattleSession(engine, teamA, teamB, leadA, leadB);
+    return new BattleSession(engine, teamA, teamB, leadA, leadB, megaEvolutionSystem);
   }
 
-  static fromSnapshot(snapshot: BattleSnapshot): BattleSession {
+  static fromSnapshot(snapshot: BattleSnapshot, megaEvolutionSystem: MegaEvolutionSystem = new MegaEvolutionSystem()): BattleSession {
     const { engine, teamA, teamB, activeA, activeB } = restoreBattle(snapshot);
-    return new BattleSession(engine, teamA, teamB, activeA, activeB);
+    return new BattleSession(engine, teamA, teamB, activeA, activeB, megaEvolutionSystem);
   }
 
   snapshot(): BattleSnapshot {
@@ -125,7 +139,7 @@ export class BattleSession {
   // 現在の状態から独立した別セッションを作る（分岐探索用）。
   // structuredCloneでスナップショットを複製してから復元するため、参照を共有しない。
   fork(): BattleSession {
-    const session = BattleSession.fromSnapshot(structuredClone(this.snapshot()));
+    const session = BattleSession.fromSnapshot(structuredClone(this.snapshot()), this.megaEvolutionSystem);
     session.reasoningLog = [...this.reasoningLog];
     return session;
   }
@@ -147,8 +161,8 @@ export class BattleSession {
 
   getContext(side: 0 | 1): BattleContext {
     return side === 0
-      ? buildContext(this.engine, 0, this.activeA, this.teamA, this.activeB, this.teamB)
-      : buildContext(this.engine, 1, this.activeB, this.teamB, this.activeA, this.teamA);
+      ? buildContext(this.engine, 0, this.activeA, this.teamA, this.activeB, this.teamB, this.megaEvolutionSystem.canMegaEvolve(this.activeA))
+      : buildContext(this.engine, 1, this.activeB, this.teamB, this.activeA, this.teamA, this.megaEvolutionSystem.canMegaEvolve(this.activeB));
   }
 
   // ターン開始処理（天候・トリックルームの残りターン消費）。1ターンにつき1回だけ効く。
@@ -172,6 +186,9 @@ export class BattleSession {
     }
 
     this.reasoningLog.push({ turn: this.engine.turn, side, pokemonName: fainted.name, reasoning: decision.reasoning });
+    fainted.resetStatStages(); // 能力ランクは場を離れるとリセットされる
+    fainted.resetToxicCounter(); // 猛毒の経過ターン数も場を離れるとリセットされる
+    fainted.resetSeeded(); // やどりぎのタネも場を離れると解除される
     this.engine.setActivePokemon(side, replacement);
     const switched = this.engine.switchIn(replacement, team, side);
 
@@ -206,10 +223,25 @@ export class BattleSession {
       switchEntries.push({ side: 1, pokemon: this.teamB[actionB.pokemonIndex], team: this.teamB });
     }
     for (const entry of this.engine.orderBySpeed(switchEntries)) {
+      const outgoing = entry.side === 0 ? this.activeA : this.activeB;
+      outgoing.resetStatStages(); // 能力ランクは場を離れるとリセットされる
+      outgoing.resetToxicCounter(); // 猛毒の経過ターン数も場を離れるとリセットされる
+      outgoing.resetSeeded(); // やどりぎのタネも場を離れると解除される
       this.engine.setActivePokemon(entry.side, entry.pokemon);
       const switched = this.engine.switchIn(entry.pokemon, entry.team, entry.side);
       if (entry.side === 0) this.activeA = switched;
       else this.activeB = switched;
+    }
+
+    // メガシンカは技の選択と同時に宣言される「無償の行動」。ダメージ計算前、
+    // かつすばやさ比較(素早さが変わりうる)より前に解決する。
+    if (actionA.type === 'move' && actionA.megaEvolve && this.megaEvolutionSystem.canMegaEvolve(this.activeA)) {
+      this.megaEvolutionSystem.megaEvolve(this.activeA);
+      this.engine.log.push(`${this.activeA.name}はメガシンカした！`);
+    }
+    if (actionB.type === 'move' && actionB.megaEvolve && this.megaEvolutionSystem.canMegaEvolve(this.activeB)) {
+      this.megaEvolutionSystem.megaEvolve(this.activeB);
+      this.engine.log.push(`${this.activeB.name}はメガシンカした！`);
     }
 
     const attackers: { side: 0 | 1; pokemon: Pokemon }[] = [];

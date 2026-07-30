@@ -24,7 +24,9 @@ const TYPE_NAMES = [
 
 const TypeNameSchema = z.enum(TYPE_NAMES);
 const MoveCategorySchema = z.enum(['physical', 'special', 'status']);
-const StatusConditionSchema = z.enum(['sleep', 'poison', 'burn', 'paralysis', 'freeze']);
+const StatusConditionSchema = z.enum(['sleep', 'poison', 'burn', 'paralysis', 'freeze', 'badly-poisoned']);
+const FieldEffectSchema = z.enum(['tailwind', 'trick-room', 'reflect']);
+const StatStageKeySchema = z.enum(['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED']);
 
 const BaseStatsSchema = z.object({
   HP: z.number().int().positive(),
@@ -46,6 +48,13 @@ const MoveInputSchema = z.object({
   status: StatusConditionSchema.nullable().optional(),
   priority: z.number().int().optional(),
   effectChance: z.number().nullable().optional(),
+  fieldEffect: FieldEffectSchema.nullable().optional(),
+  secondaryEffect: z.object({ status: StatusConditionSchema, chance: z.number().min(0).max(100) }).nullable().optional(),
+  selfStatChange: z.array(z.object({ stat: StatStageKeySchema, delta: z.number().int() })).nullable().optional(),
+  targetStatChange: z.array(z.object({ stat: StatStageKeySchema, delta: z.number().int(), chance: z.number().min(0).max(100) })).nullable().optional(),
+  inflictsSeed: z.boolean().optional(),
+  weatherHeal: z.boolean().optional(),
+  multiHit: z.boolean().optional(),
 });
 
 const PokemonInputSchema = z.object({
@@ -60,7 +69,11 @@ const PokemonInputSchema = z.object({
 });
 
 const ConcreteActionSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('move'), moveIndex: z.number().int().nonnegative() }),
+  z.object({
+    type: z.literal('move'),
+    moveIndex: z.number().int().nonnegative(),
+    megaEvolve: z.boolean().optional(),
+  }),
   z.object({ type: z.literal('switch'), pokemonIndex: z.number().int().nonnegative() }),
   z.object({ type: z.literal('forfeit') }),
 ]);
@@ -93,6 +106,9 @@ function pokemonView(pokemon: Pokemon) {
     ability: pokemon.ability,
     item: pokemon.item,
     status: pokemon.status,
+    statStages: { ...pokemon.statStages },
+    toxicCounter: pokemon.toxicCounter,
+    isSeeded: pokemon.isSeeded,
     isFainted: pokemon.isFainted,
     currentHP: pokemon.currentHP,
     maxHP: pokemon.maxHP,
@@ -119,10 +135,14 @@ function stateView(stored: StoredSession) {
     trickRoom: session.engine.trickRoom,
     trickRoomTurnsLeft: session.engine.trickRoomTurnsLeft,
     stealthRock: { ...session.engine.field.stealthRock },
+    tailwind: { ...session.engine.field.tailwind },
+    reflect: { ...session.engine.field.reflect },
     teamA: session.teamA.map(pokemonView),
     teamB: session.teamB.map(pokemonView),
     activeIndexA: session.teamA.indexOf(session.activeA),
     activeIndexB: session.teamB.indexOf(session.activeB),
+    canMegaEvolveSide0: session.megaEvolutionSystem.canMegaEvolve(session.activeA),
+    canMegaEvolveSide1: session.megaEvolutionSystem.canMegaEvolve(session.activeB),
     needsForcedSwitchSide0: session.needsForcedSwitch(0),
     needsForcedSwitchSide1: session.needsForcedSwitch(1),
     isFinished: session.isFinished(),
@@ -250,8 +270,9 @@ export function createBattleServer(): McpServer {
     {
       description:
         '両陣営の行動を同時に適用し、1ターン進める。行動には具体的な行動'
-        + '（{type:"move",moveIndex} / {type:"switch",pokemonIndex} / {type:"forfeit"}）か、'
+        + '（{type:"move",moveIndex,megaEvolve?} / {type:"switch",pokemonIndex} / {type:"forfeit"}）か、'
         + '"auto"（その陣営はRandomBattleAgentに任せる）を指定する。'
+        + 'megaEvolve:trueはcanMegaEvolveSide0/1がtrueの側でのみ有効で、その技と同時にメガシンカする。'
         + 'needsForcedSwitchSide0/1のいずれかがtrueの間は使えない（先にapply_forced_switchを呼ぶこと）。',
       inputSchema: {
         sessionId: z.string(),
