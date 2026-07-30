@@ -8,3 +8,6 @@ export type {
   MegaStatBoosts,
   PokemonDataFetcher,
 } from './mega-evolution.js';
+
+export { ABILITY_REGISTRY, getAbilityDefinition } from './abilities/registry.js';
+export type { AbilityDefinition, AbilitySwitchInContext } from './abilities/types.js';

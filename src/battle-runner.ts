@@ -88,10 +88,18 @@ export class BattleSession {
 
     engine.setActivePokemon(0, leadA);
     engine.setActivePokemon(1, leadB);
-    const activeA = engine.switchIn(leadA, teamA, 0);
-    const activeB = engine.switchIn(leadB, teamB, 1);
 
-    return new BattleSession(engine, teamA, teamB, activeA, activeB);
+    // 天候変化特性などのswitch-in効果は、すばやさが遅い側が後に発動して上書きする仕様のため、
+    // 速い順に(=遅い方を最後に)switchInする。
+    const order = engine.orderBySpeed([
+      { side: 0 as const, pokemon: leadA, team: teamA },
+      { side: 1 as const, pokemon: leadB, team: teamB },
+    ]);
+    for (const entry of order) {
+      engine.switchIn(entry.pokemon, entry.team, entry.side);
+    }
+
+    return new BattleSession(engine, teamA, teamB, leadA, leadB);
   }
 
   static fromSnapshot(snapshot: BattleSnapshot): BattleSession {
@@ -171,8 +179,9 @@ export class BattleSession {
     else this.activeB = switched;
   }
 
-  // 両陣営が同時に選んだ行動を適用する。交代は素早さに関係なく先に解決し、
-  // 技はその場に出ている側のcalculateSpeed順（トリックルーム込み）に実行する。
+  // 両陣営が同時に選んだ行動を適用する。交代は(switch-in効果の上書き順を除き)
+  // 移動より先に解決し、技はその場に出ている側のcalculateSpeed順（トリックルーム込み、
+  // 同速はランダム）に実行する。
   applyTurn(decisionA: AgentDecision, decisionB: AgentDecision): void {
     if (!this.turnBegun) {
       throw new Error('beginTurn()を先に呼んでください');
@@ -187,25 +196,26 @@ export class BattleSession {
     const actionA = decisionA.action;
     const actionB = decisionB.action;
 
+    // 両者が同時に交代する場合も、天候変化特性などのswitch-in効果はすばやさが遅い側が
+    // 後に発動して上書きする仕様のため、速い順(=遅い方を最後に)switchInする。
+    const switchEntries: { side: 0 | 1; pokemon: Pokemon; team: Pokemon[] }[] = [];
     if (actionA.type === 'switch') {
-      this.activeA = this.teamA[actionA.pokemonIndex];
-      this.engine.setActivePokemon(0, this.activeA);
-      this.activeA = this.engine.switchIn(this.activeA, this.teamA, 0);
+      switchEntries.push({ side: 0, pokemon: this.teamA[actionA.pokemonIndex], team: this.teamA });
     }
     if (actionB.type === 'switch') {
-      this.activeB = this.teamB[actionB.pokemonIndex];
-      this.engine.setActivePokemon(1, this.activeB);
-      this.activeB = this.engine.switchIn(this.activeB, this.teamB, 1);
+      switchEntries.push({ side: 1, pokemon: this.teamB[actionB.pokemonIndex], team: this.teamB });
+    }
+    for (const entry of this.engine.orderBySpeed(switchEntries)) {
+      this.engine.setActivePokemon(entry.side, entry.pokemon);
+      const switched = this.engine.switchIn(entry.pokemon, entry.team, entry.side);
+      if (entry.side === 0) this.activeA = switched;
+      else this.activeB = switched;
     }
 
-    const attackingSides: (0 | 1)[] = [];
-    if (actionA.type === 'move') attackingSides.push(0);
-    if (actionB.type === 'move') attackingSides.push(1);
-    attackingSides.sort(
-      (a, b) =>
-        this.engine.calculateSpeed(b === 0 ? this.activeA : this.activeB)
-        - this.engine.calculateSpeed(a === 0 ? this.activeA : this.activeB)
-    );
+    const attackers: { side: 0 | 1; pokemon: Pokemon }[] = [];
+    if (actionA.type === 'move') attackers.push({ side: 0, pokemon: this.activeA });
+    if (actionB.type === 'move') attackers.push({ side: 1, pokemon: this.activeB });
+    const attackingSides = this.engine.orderBySpeed(attackers).map(({ side }) => side);
 
     for (const side of attackingSides) {
       const attacker = side === 0 ? this.activeA : this.activeB;

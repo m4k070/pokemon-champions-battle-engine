@@ -221,6 +221,49 @@ describe('BattleEngine', () => {
     });
   });
 
+  describe('orderBySpeed', () => {
+    function makePokemonWithSpeed(name: string, speed: number): Pokemon {
+      return new Pokemon({
+        name,
+        types: ['normal'],
+        ability: 'run-away',
+        item: null,
+        baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: speed },
+      });
+    }
+
+    test('orders entries from fastest to slowest', () => {
+      const engine = new BattleEngine();
+      const fast = makePokemonWithSpeed('Fast', 150);
+      const slow = makePokemonWithSpeed('Slow', 50);
+
+      const ordered = engine.orderBySpeed([
+        { side: 1 as const, pokemon: slow },
+        { side: 0 as const, pokemon: fast },
+      ]);
+
+      expect(ordered.map((e) => e.pokemon.name)).toEqual(['Fast', 'Slow']);
+    });
+
+    test('breaks exact speed ties randomly instead of always preserving input order', () => {
+      const engine = new BattleEngine();
+      const a = makePokemonWithSpeed('A', 100);
+      const b = makePokemonWithSpeed('B', 100);
+
+      const firstNames = new Set<string>();
+      for (let i = 0; i < 50; i++) {
+        const ordered = engine.orderBySpeed([
+          { side: 0 as const, pokemon: a },
+          { side: 1 as const, pokemon: b },
+        ]);
+        firstNames.add(ordered[0].pokemon.name);
+      }
+
+      // 50回も回せば同速の乱数タイブレークにより両方が少なくとも1回は先頭に来るはず。
+      expect(firstNames.size).toBe(2);
+    });
+  });
+
   describe('Stealth Rock', () => {
     test('should damage a switching-in Pokemon based on rock-type effectiveness', () => {
       const engine = new BattleEngine();

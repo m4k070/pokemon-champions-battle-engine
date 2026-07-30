@@ -1,6 +1,7 @@
 import { EventEmitter } from './event-emitter.js';
 import { TYPE_CHART } from './type-chart.js';
 import { BattleField } from './battle-field.js';
+import { getAbilityDefinition } from './rules/abilities/registry.js';
 import type { Pokemon } from './pokemon.js';
 import type { MoveData, TypeName, WeatherType, TypeChart } from './types.js';
 
@@ -67,19 +68,8 @@ export class BattleEngine {
       if (!pokemon || typeof pokemon !== 'object') return;
       const p = pokemon as Pokemon;
 
-      if (p.ability === 'sand-stream' && this.weather !== 'sand') {
-        this.weather = 'sand';
-        this.weatherTurnsLeft = 5;
-        this.log.push(`${p.name}の特性「すなおこし」により砂嵐が発生した`);
-      }
-
-      if (p.ability === 'intimidate') {
-        const opponent = this.getOpponent(p);
-        if (opponent && !opponent.isFainted) {
-          opponent.stats.ATK = Math.floor(opponent.stats.ATK * 0.7);
-          this.log.push(`${p.name}の特性「いかく」により${opponent.name}の攻撃が下がった`);
-        }
-      }
+      const ability = getAbilityDefinition(p.ability);
+      ability?.onSwitchIn?.({ pokemon: p, engine: this });
     });
 
     this.events.on('end-turn', (data) => {
@@ -354,6 +344,24 @@ export class BattleEngine {
     }
 
     return this.trickRoom ? -speed : speed;
+  }
+
+  // すばやさが速い順に並べ替える。同速の場合はランダムに順序を決める
+  // （同速判定に依存せず公平な乱数にするため、先にシャッフルしてから安定ソートする）。
+  orderBySpeed<T extends { pokemon: Pokemon }>(entries: T[]): T[] {
+    return this.shuffle(entries)
+      .map((entry) => ({ entry, speed: this.calculateSpeed(entry.pokemon) }))
+      .sort((a, b) => b.speed - a.speed)
+      .map(({ entry }) => entry);
+  }
+
+  private shuffle<T>(items: T[]): T[] {
+    const result = [...items];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
   }
 
   getLog(): string {
