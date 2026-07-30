@@ -25,6 +25,7 @@ function makeContext(overrides: Partial<BattleContext> = {}): BattleContext {
     selfTeam: overrides.selfTeam ?? [self],
     opponent: overrides.opponent ?? makePokemon(),
     opponentTeam: overrides.opponentTeam ?? [overrides.opponent ?? makePokemon()],
+    canMegaEvolve: overrides.canMegaEvolve ?? false,
     field: overrides.field ?? {
       weather: null,
       weatherTurnsLeft: 0,
@@ -101,5 +102,15 @@ describe('RandomBattleAgent', () => {
     const decision = await agent.selectAction(makeContext({ self, selfTeam: [self] }));
 
     expect(decision.action).toEqual({ type: 'move', moveIndex: 0, target: 0 });
+  });
+
+  test('declares megaEvolve on its move when mega evolution is available', async () => {
+    const agent = new RandomBattleAgent();
+    const self = makePokemon();
+
+    const decision = await agent.selectAction(makeContext({ self, selfTeam: [self], canMegaEvolve: true }));
+
+    expect(decision.action.type).toBe('move');
+    expect((decision.action as { megaEvolve?: boolean }).megaEvolve).toBe(true);
   });
 });

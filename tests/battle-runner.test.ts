@@ -75,6 +75,42 @@ describe('BattleSession', () => {
     );
   });
 
+  test('switching out resets the toxic counter but leaves the badly-poisoned status intact', async () => {
+    const poisoned = makeAttacker('Poisoned');
+    poisoned.status = 'badly-poisoned';
+    poisoned.toxicCounter = 7;
+    const bench = makeAttacker('Bench');
+    const teamA = [poisoned, bench];
+    const teamB = [makeDefender()];
+
+    const session = await BattleSession.start(teamA, teamB, { leadA: poisoned });
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'switch', pokemonIndex: 1 } },
+      { action: { type: 'forfeit' } }
+    );
+
+    expect(poisoned.status).toBe('badly-poisoned'); // 交代しても状態異常自体は治らない
+    expect(poisoned.toxicCounter).toBe(0); // ただし経過ターン数はリセットされる
+  });
+
+  test('switching out cures the volatile Leech Seed status (unlike major status conditions)', async () => {
+    const seeded = makeAttacker('Seeded');
+    seeded.isSeeded = true;
+    const bench = makeAttacker('Bench');
+    const teamA = [seeded, bench];
+    const teamB = [makeDefender()];
+
+    const session = await BattleSession.start(teamA, teamB, { leadA: seeded });
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'switch', pokemonIndex: 1 } },
+      { action: { type: 'forfeit' } }
+    );
+
+    expect(seeded.isSeeded).toBe(false);
+  });
+
   test('applyForcedSwitch rejects a non-switch decision', async () => {
     const fainted = makeAttacker('Fainted');
     fainted.currentHP = 0;
@@ -83,6 +119,33 @@ describe('BattleSession', () => {
     const session = await BattleSession.start(teamA, teamB, { leadA: fainted });
 
     expect(() => session.applyForcedSwitch(0, { action: { type: 'forfeit' } })).toThrow('switch以外の行動');
+  });
+
+  test('a move action with megaEvolve:true mega evolves the caster before speed is compared', async () => {
+    const charizard = new Pokemon({
+      name: 'Charizard',
+      baseName: 'charizard',
+      types: ['fire', 'flying'],
+      ability: 'blaze',
+      item: 'charizardite-y',
+      baseStats: { HP: 78, ATK: 84, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 },
+      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
+    });
+    const defender = makeDefender();
+    const session = await BattleSession.start([charizard], [defender]);
+    session.beginTurn();
+
+    expect(session.megaEvolutionSystem.canMegaEvolve(charizard)).toBe(true);
+
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0, megaEvolve: true } },
+      { action: { type: 'forfeit' } }
+    );
+
+    expect(charizard.isMega).toBe(true);
+    expect(charizard.name).toBe('mega-charizard-y');
+    expect(charizard.ability).toBe('drought');
+    expect(session.megaEvolutionSystem.canMegaEvolve(charizard)).toBe(false); // 一度メガシンカしたら戻せない
   });
 
   test('start() lets the slower lead\'s weather-setting ability overwrite the faster one\'s', async () => {

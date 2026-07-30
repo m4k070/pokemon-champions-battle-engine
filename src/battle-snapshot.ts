@@ -1,7 +1,7 @@
 import { BattleEngine } from './battle-engine.js';
 import { Pokemon } from './pokemon.js';
 import type { BattleField, SideFlags, SideHazards } from './battle-field.js';
-import type { BaseStats, MoveData, Stats, StatusCondition, TypeName, WeatherType } from './types.js';
+import type { BaseStats, MoveData, Stats, StatStages, StatusCondition, TypeName, WeatherType } from './types.js';
 
 // Pokemon/BattleEngine/BattleFieldはミュータブルなクラス＋イベントハンドラ(関数)を持つため
 // structuredCloneでそのまま複製できない。盤面の「値」だけを抜き出したプレーンデータに変換し、
@@ -21,6 +21,9 @@ export interface PokemonSnapshot {
   status: StatusCondition | null;
   statusTurnsLeft: number;
   isMega: boolean;
+  statStages: StatStages;
+  toxicCounter: number;
+  isSeeded: boolean;
 }
 
 export interface FieldSnapshot {
@@ -64,6 +67,9 @@ export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
     status: pokemon.status,
     statusTurnsLeft: pokemon.statusTurnsLeft,
     isMega: pokemon.isMega,
+    statStages: { ...pokemon.statStages },
+    toxicCounter: pokemon.toxicCounter,
+    isSeeded: pokemon.isSeeded,
   };
 }
 
@@ -83,6 +89,9 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
     status: snapshot.status,
     statusTurnsLeft: snapshot.statusTurnsLeft,
     isMega: snapshot.isMega,
+    statStages: { ...snapshot.statStages },
+    toxicCounter: snapshot.toxicCounter,
+    isSeeded: snapshot.isSeeded,
   });
 }
 

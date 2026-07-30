@@ -65,6 +65,7 @@ export function buildBattlePrompt(context: BattleContext): string {
     '',
     '[自分の場のポケモン]',
     describePokemon(context.self, legalMoveIndices),
+    `  メガシンカ: ${context.canMegaEvolve ? '可能（技を選ぶ際にmegaEvolve=trueにすると同時に発動できる）' : '不可'}`,
     '',
     '[相手の場のポケモン]',
     describePokemon(context.opponent, null),
@@ -82,6 +83,7 @@ interface ChosenAction {
   actionType: 'move' | 'switch' | 'forfeit';
   moveIndex?: number;
   pokemonIndex?: number;
+  megaEvolve?: boolean;
 }
 
 const CHOOSE_ACTION_TOOL = {
@@ -96,6 +98,7 @@ const CHOOSE_ACTION_TOOL = {
         actionType: { type: 'string', enum: ['move', 'switch', 'forfeit'] },
         moveIndex: { type: 'integer', description: 'actionType=moveのとき、使用する技のインデックス' },
         pokemonIndex: { type: 'integer', description: 'actionType=switchのとき、交代先のインデックス' },
+        megaEvolve: { type: 'boolean', description: 'actionType=moveのとき、この技と同時にメガシンカするか（メガシンカ可能な場合のみ有効）' },
       },
       required: ['reasoning', 'actionType'],
     },
@@ -104,7 +107,7 @@ const CHOOSE_ACTION_TOOL = {
 
 function toAgentAction(chosen: ChosenAction): AgentAction {
   if (chosen.actionType === 'move') {
-    return { type: 'move', moveIndex: chosen.moveIndex!, target: 0 };
+    return { type: 'move', moveIndex: chosen.moveIndex!, target: 0, megaEvolve: chosen.megaEvolve };
   }
   if (chosen.actionType === 'switch') {
     return { type: 'switch', pokemonIndex: chosen.pokemonIndex! };

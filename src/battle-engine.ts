@@ -3,7 +3,7 @@ import { TYPE_CHART } from './type-chart.js';
 import { BattleField } from './battle-field.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
 import type { Pokemon } from './pokemon.js';
-import type { MoveData, TypeName, WeatherType, TypeChart } from './types.js';
+import type { MoveData, StatStageKey, TypeName, WeatherType, TypeChart } from './types.js';
 
 export interface UseMoveResult {
   success: boolean;
@@ -11,6 +11,34 @@ export interface UseMoveResult {
   effectiveness?: number;
   status?: string;
 }
+
+// 猛毒(どくどく)のダメージ増加は本編仕様に合わせて15ターン目で頭打ちにする。
+const TOXIC_MAX_COUNTER = 15;
+
+// ウェザーボールは天候下でタイプが変化する（無天候時はノーマル固定のまま）。
+const WEATHER_BALL_TYPE: Partial<Record<WeatherType, TypeName>> = {
+  rain: 'water',
+  sun: 'fire',
+  sand: 'rock',
+  hail: 'ice',
+};
+
+// あさのひざし等、天候依存の自己回復技の回復割合（本編仕様）。
+const WEATHER_HEAL_PERCENT: Record<'none' | WeatherType, number> = {
+  none: 0.5,
+  sun: 2 / 3,
+  rain: 0.25,
+  sand: 0.25,
+  hail: 0.25,
+};
+
+// 通常配分の多段技（スキルリンク等は非対応）のヒット数分布。
+const MULTI_HIT_TABLE: { hits: number; weight: number }[] = [
+  { hits: 2, weight: 0.375 },
+  { hits: 3, weight: 0.375 },
+  { hits: 4, weight: 0.125 },
+  { hits: 5, weight: 0.125 },
+];
 
 export class BattleEngine {
   events: EventEmitter;
@@ -25,6 +53,9 @@ export class BattleEngine {
 
   private activePokemon0: Pokemon | null = null;
   private activePokemon1: Pokemon | null = null;
+  // いのちのたまの反動は「そのターンにダメージを与えた攻撃者」だけに発動するため、
+  // ターンをまたいで参照できるようendTurn()で記録・end-turnイベント処理後にリセットする。
+  private attackersDealtDamageThisTurn: Set<Pokemon> = new Set();
 
   constructor() {
     this.events = new EventEmitter();
@@ -62,6 +93,12 @@ export class BattleEngine {
     return null;
   }
 
+  private getSide(pokemon: Pokemon): 0 | 1 | null {
+    if (this.activePokemon0 === pokemon) return 0;
+    if (this.activePokemon1 === pokemon) return 1;
+    return null;
+  }
+
   private setupEventHandlers(): void {
     this.events.on('switch-in', (data) => {
       const pokemon = data.pokemon;
@@ -87,7 +124,7 @@ export class BattleEngine {
           this.log.push(`${p.name}はたべのこしで${heal}回復した`);
         }
 
-        if (p.item === 'life-orb') {
+        if (p.item === 'life-orb' && this.attackersDealtDamageThisTurn.has(p)) {
           const damage = Math.floor(p.maxHP / 10);
           p.takeDamage(damage, this);
           this.log.push(`${p.name}はいのちのたまの反動で${damage}のダメージを受けた`);
@@ -119,7 +156,8 @@ export class BattleEngine {
   }
 
   calculateAttack(attacker: Pokemon, move: { category: string }): number {
-    let attack = move.category === 'physical' ? attacker.stats.ATK : attacker.stats.SPATK;
+    const statKey: StatStageKey = move.category === 'physical' ? 'ATK' : 'SPATK';
+    let attack = Math.floor(attacker.stats[statKey] * attacker.getStatStageMultiplier(statKey));
 
     if (attacker.status === 'burn' && move.category === 'physical') {
       attack = Math.floor(attack / 2);
@@ -131,7 +169,8 @@ export class BattleEngine {
   }
 
   calculateDefense(defender: Pokemon, move: { category: string }): number {
-    const defense = move.category === 'physical' ? defender.stats.DEF : defender.stats.SPDEF;
+    const statKey: StatStageKey = move.category === 'physical' ? 'DEF' : 'SPDEF';
+    const defense = Math.floor(defender.stats[statKey] * defender.getStatStageMultiplier(statKey));
 
     this.events.emit('calculate-defense', { defender, move, defense });
 
@@ -172,7 +211,12 @@ export class BattleEngine {
 
   applyModifiers(baseDamage: number, attacker: Pokemon, defender: Pokemon, move: MoveData): { finalDamage: number; effectiveness: number } {
     const effectiveness = this.getTypeEffectiveness(move.type, defender.types);
-    const finalDamage = Math.floor(baseDamage * effectiveness);
+    let finalDamage = Math.floor(baseDamage * effectiveness);
+
+    const defenderSide = this.getSide(defender);
+    if (move.category === 'physical' && defenderSide !== null && this.field.reflect[this.sideKey(defenderSide)] > 0) {
+      finalDamage = Math.floor(finalDamage / 2);
+    }
 
     this.events.emit('apply-modifiers', { attacker, defender, move, finalDamage, effectiveness });
 
@@ -200,6 +244,62 @@ export class BattleEngine {
       }
     }
 
+    if (move.fieldEffect === 'trick-room') {
+      if (this.trickRoom) {
+        this.trickRoom = false;
+        this.trickRoomTurnsLeft = 0;
+        this.log.push('トリックルームが解除された');
+      } else {
+        this.trickRoom = true;
+        this.trickRoomTurnsLeft = 5;
+        this.log.push(`${attacker.name}のトリックルームで時空がゆがんだ！`);
+      }
+      return { success: true };
+    }
+
+    if (move.fieldEffect === 'tailwind') {
+      const side = this.getSide(attacker);
+      if (side !== null) {
+        this.field.tailwind[this.sideKey(side)] = 4;
+        this.log.push(`${attacker.name}側の場に「おいかぜ」が吹き始めた`);
+      }
+      return { success: true };
+    }
+
+    if (move.fieldEffect === 'reflect') {
+      const side = this.getSide(attacker);
+      if (side !== null) {
+        this.field.reflect[this.sideKey(side)] = 5;
+        this.log.push(`${attacker.name}側の場に「リフレクター」の壁ができた`);
+      }
+      return { success: true };
+    }
+
+    if (move.weatherHeal) {
+      const percent = WEATHER_HEAL_PERCENT[this.weather ?? 'none'];
+      const heal = Math.floor(attacker.maxHP * percent);
+      attacker.heal(heal);
+      this.log.push(`${attacker.name}は${move.name}で${heal}回復した`);
+      return { success: true };
+    }
+
+    if (move.inflictsSeed) {
+      if (defender.types.includes('grass')) {
+        this.log.push('くさタイプには効果がない');
+      } else if (defender.isSeeded) {
+        this.log.push(`${defender.name}にはすでにやどりぎのタネが植えられている`);
+      } else {
+        defender.isSeeded = true;
+        this.log.push(`${defender.name}にやどりぎのタネを植え付けた`);
+      }
+      return { success: true };
+    }
+
+    if (move.selfStatChange && move.power === 0) {
+      this.applySelfStatChange(attacker, move.selfStatChange);
+      return { success: true };
+    }
+
     if (move.status) {
       const applied = defender.applyStatus(move.status);
       if (applied) {
@@ -210,9 +310,14 @@ export class BattleEngine {
       return { success: true, status: move.status };
     }
 
+    // ウェザーボールは天候下でタイプが変化する。
+    const effectiveType = move.name === 'weather-ball' && this.weather && WEATHER_BALL_TYPE[this.weather]
+      ? WEATHER_BALL_TYPE[this.weather]!
+      : move.type;
+
     let power = move.power;
 
-    if (attacker.types && attacker.types.includes(move.type)) {
+    if (attacker.types && attacker.types.includes(effectiveType)) {
       power *= 1.5;
     }
 
@@ -220,30 +325,92 @@ export class BattleEngine {
       power *= 1.3;
     }
 
-    const moveWithStab: MoveData = { ...move, power };
+    const moveWithStab: MoveData = { ...move, power, type: effectiveType };
 
-    const attack = this.calculateAttack(attacker, moveWithStab);
-    const defense = this.calculateDefense(defender, moveWithStab);
-    const baseDamage = this.calculateBaseDamage(attack, defense, moveWithStab);
-    const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, moveWithStab);
+    // ロックブラスト等の多段技は命中判定こそ1回だが、当たった後の実ヒット数は乱数（本編仕様）。
+    const hitCount = move.multiHit ? this.rollMultiHitCount() : 1;
+    let totalDamage = 0;
+    let lastEffectiveness = 1;
 
-    this.applyDamage(defender, finalDamage);
+    for (let hit = 0; hit < hitCount && !defender.isFainted; hit++) {
+      const attack = this.calculateAttack(attacker, moveWithStab);
+      const defense = this.calculateDefense(defender, moveWithStab);
+      const baseDamage = this.calculateBaseDamage(attack, defense, moveWithStab);
+      const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, moveWithStab);
 
-    if (effectiveness > 1) {
+      this.applyDamage(defender, finalDamage);
+      totalDamage += finalDamage;
+      lastEffectiveness = effectiveness;
+
+      if (finalDamage > 0) {
+        this.attackersDealtDamageThisTurn.add(attacker);
+      }
+    }
+
+    if (move.multiHit) {
+      this.log.push(`${hitCount}回攻撃した！`);
+    }
+
+    if (lastEffectiveness > 1) {
       this.log.push('効果は抜群だ！');
-    } else if (effectiveness < 1 && effectiveness > 0) {
+    } else if (lastEffectiveness < 1 && lastEffectiveness > 0) {
       this.log.push('効果はいまひとつのようだ');
-    } else if (effectiveness === 0) {
+    } else if (lastEffectiveness === 0) {
       this.log.push('効果がなかった');
     }
 
-    this.log.push(`${defender.name}に${finalDamage}のダメージ`);
+    this.log.push(`${defender.name}に${totalDamage}のダメージ`);
 
     if (defender.isFainted) {
       this.log.push(`${defender.name}は戦闘不能になった`);
+    } else {
+      if (move.secondaryEffect && Math.random() * 100 < move.secondaryEffect.chance) {
+        const applied = defender.applyStatus(move.secondaryEffect.status);
+        if (applied) {
+          this.log.push(`${defender.name}は${move.secondaryEffect.status}状態になった`);
+        }
+      }
+      if (move.targetStatChange) {
+        this.applyTargetStatChange(defender, move.targetStatChange);
+      }
     }
 
-    return { success: true, damage: finalDamage, effectiveness };
+    // リーフストームのような「威力を持つが使用者自身の能力も変化する」技。
+    if (move.selfStatChange) {
+      this.applySelfStatChange(attacker, move.selfStatChange);
+    }
+
+    return { success: true, damage: totalDamage, effectiveness: lastEffectiveness };
+  }
+
+  // 通常配分（2発37.5%/3発37.5%/4発12.5%/5発12.5%）でヒット数を決める。
+  private rollMultiHitCount(): number {
+    const roll = Math.random();
+    let cumulative = 0;
+    for (const { hits, weight } of MULTI_HIT_TABLE) {
+      cumulative += weight;
+      if (roll < cumulative) return hits;
+    }
+    return MULTI_HIT_TABLE[MULTI_HIT_TABLE.length - 1].hits;
+  }
+
+  private applyTargetStatChange(pokemon: Pokemon, changes: NonNullable<MoveData['targetStatChange']>): void {
+    for (const change of changes) {
+      if (Math.random() * 100 >= change.chance) continue;
+      const applied = pokemon.modifyStatStage(change.stat, change.delta);
+      if (applied === 0) continue;
+      const direction = applied > 0 ? '上がった' : '下がった';
+      this.log.push(`${pokemon.name}の${change.stat}が${direction}`);
+    }
+  }
+
+  private applySelfStatChange(pokemon: Pokemon, changes: NonNullable<MoveData['selfStatChange']>): void {
+    for (const change of changes) {
+      const applied = pokemon.modifyStatStage(change.stat, change.delta);
+      if (applied === 0) continue;
+      const direction = applied > 0 ? '上がった' : '下がった';
+      this.log.push(`${pokemon.name}の${change.stat}が${direction}`);
+    }
   }
 
   startTurn(): void {
@@ -265,13 +432,47 @@ export class BattleEngine {
         this.trickRoom = false;
       }
     }
+
+    for (const side of [0, 1] as const) {
+      const key = this.sideKey(side);
+      if (this.field.tailwind[key] > 0) {
+        this.field.tailwind[key]--;
+        if (this.field.tailwind[key] === 0) {
+          this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側のおいかぜが止んだ`);
+        }
+      }
+      if (this.field.reflect[key] > 0) {
+        this.field.reflect[key]--;
+        if (this.field.reflect[key] === 0) {
+          this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側のリフレクターが消えた`);
+        }
+      }
+    }
   }
 
   endTurn(teamA: Pokemon[], teamB: Pokemon[]): void {
     this.applyStatusEffects(teamA);
     this.applyStatusEffects(teamB);
+    this.applyLeechSeed(teamA, teamB);
     this.applyWeatherDamage([...teamA, ...teamB]);
     this.events.emit('end-turn', { team: [...teamA, ...teamB], engine: this });
+    this.attackersDealtDamageThisTurn.clear();
+  }
+
+  // やどりぎのタネ: 吸われている側から吸っている相手（本来のオーナーではなく、
+  // 現在その陣営に出ているポケモン）へ毎ターンHPを移す。
+  applyLeechSeed(teamA: Pokemon[], teamB: Pokemon[]): void {
+    for (const pokemon of [...teamA, ...teamB]) {
+      if (pokemon.isFainted || !pokemon.isSeeded) continue;
+
+      const opponent = this.getOpponent(pokemon);
+      if (!opponent || opponent.isFainted) continue;
+
+      const drained = Math.floor(pokemon.maxHP / 8);
+      pokemon.takeDamage(drained, this);
+      opponent.heal(drained);
+      this.log.push(`${pokemon.name}はやどりぎのタネで${drained}のダメージを受け、${opponent.name}のHPが回復した`);
+    }
   }
 
   applyWeatherDamage(team: Pokemon[]): void {
@@ -304,6 +505,11 @@ export class BattleEngine {
         const damage = Math.floor(pokemon.maxHP / 8);
         pokemon.takeDamage(damage, this);
         this.log.push(`${pokemon.name}は毒ダメージで${damage}のダメージを受けた`);
+      } else if (pokemon.status === 'badly-poisoned') {
+        pokemon.toxicCounter = Math.min(pokemon.toxicCounter + 1, TOXIC_MAX_COUNTER);
+        const damage = Math.floor((pokemon.maxHP * pokemon.toxicCounter) / 16);
+        pokemon.takeDamage(damage, this);
+        this.log.push(`${pokemon.name}は猛毒ダメージで${damage}のダメージを受けた（${pokemon.toxicCounter}ターン目）`);
       } else if (pokemon.status === 'sleep') {
         pokemon.statusTurnsLeft--;
         if (pokemon.statusTurnsLeft <= 0) {
@@ -333,7 +539,7 @@ export class BattleEngine {
   }
 
   calculateSpeed(pokemon: Pokemon): number {
-    let speed = pokemon.stats.SPEED;
+    let speed = Math.floor(pokemon.stats.SPEED * pokemon.getStatStageMultiplier('SPEED'));
 
     if (pokemon.item === 'choice-scarf') {
       speed = Math.floor(speed * 1.5);
@@ -341,6 +547,11 @@ export class BattleEngine {
 
     if (pokemon.status === 'paralysis') {
       speed = Math.floor(speed / 2);
+    }
+
+    const side = this.getSide(pokemon);
+    if (side !== null && this.field.tailwind[this.sideKey(side)] > 0) {
+      speed *= 2;
     }
 
     return this.trickRoom ? -speed : speed;

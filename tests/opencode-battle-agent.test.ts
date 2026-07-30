@@ -28,6 +28,7 @@ function makeContext(overrides: Partial<BattleContext> = {}): BattleContext {
     selfTeam: overrides.selfTeam ?? [self, bench],
     opponent: overrides.opponent ?? makePokemon(),
     opponentTeam: overrides.opponentTeam ?? [overrides.opponent ?? makePokemon()],
+    canMegaEvolve: overrides.canMegaEvolve ?? false,
     field: overrides.field ?? {
       weather: 'sand',
       weatherTurnsLeft: 3,
