@@ -1,5 +1,12 @@
-import type { BaseStats, MoveData, StatusCondition, Stats, StatKey, TypeName } from './types.js';
+import type { BaseStats, MoveData, StatusCondition, Stats, StatStageKey, StatStages, TypeName } from './types.js';
 import type { BattleEngine } from './battle-engine.js';
+
+const STAT_STAGE_MIN = -6;
+const STAT_STAGE_MAX = 6;
+
+function zeroStatStages(): StatStages {
+  return { ATK: 0, DEF: 0, SPATK: 0, SPDEF: 0, SPEED: 0 };
+}
 
 export interface PokémonConstructorData {
   name: string;
@@ -17,6 +24,9 @@ export interface PokémonConstructorData {
   isMega?: boolean;
   itemUsed?: boolean;
   lockedMove?: number | null;
+  statStages?: StatStages;
+  toxicCounter?: number;
+  isSeeded?: boolean;
 }
 
 export class Pokemon {
@@ -35,6 +45,11 @@ export class Pokemon {
   statusTurnsLeft: number;
   baseName: string;
   isMega: boolean;
+  statStages: StatStages;
+  // 猛毒(どくどく)の経過ターン数。ダメージがターンごとにfloor(maxHP*n/16)と増加していくためのカウンタ。
+  toxicCounter: number;
+  // やどりぎのタネ: trueの間、毎ターン相手からHPを吸われる（交代で治る揮発性の状態）。
+  isSeeded: boolean;
 
   constructor(data: PokémonConstructorData) {
     this.name = data.name;
@@ -49,6 +64,9 @@ export class Pokemon {
     this.statusTurnsLeft = data.statusTurnsLeft ?? 0;
     this.baseName = data.baseName ?? data.name;
     this.isMega = data.isMega ?? false;
+    this.statStages = data.statStages ? { ...data.statStages } : zeroStatStages();
+    this.toxicCounter = data.toxicCounter ?? 0;
+    this.isSeeded = data.isSeeded ?? false;
 
     if (data.stats) {
       this.stats = { ...data.stats };
@@ -57,6 +75,28 @@ export class Pokemon {
     }
     this.maxHP = this.stats.HP;
     this.currentHP = data.currentHP ?? this.maxHP;
+  }
+
+  // 能力ランクを変更する。-6〜+6でクランプし、実際に変化した段階数を返す
+  // （「これ以上下がらない」等のログ判定に使う）。
+  // あまのじゃく(contrary)持ちは変化の向きそのものを反転させる。自分の技(リーフストーム等)にも
+  // 相手からの効果(いかく等)にも同じ理屈で効くため、変化元を問わずここ一箇所で反転させる。
+  modifyStatStage(stat: StatStageKey, delta: number): number {
+    const effectiveDelta = this.ability === 'contrary' ? -delta : delta;
+    const before = this.statStages[stat];
+    const after = Math.max(STAT_STAGE_MIN, Math.min(STAT_STAGE_MAX, before + effectiveDelta));
+    this.statStages[stat] = after;
+    return after - before;
+  }
+
+  getStatStageMultiplier(stat: StatStageKey): number {
+    const stage = this.statStages[stat];
+    return stage >= 0 ? (2 + stage) / 2 : 2 / (2 - stage);
+  }
+
+  // 交代で場を離れると能力ランクはリセットされる（本編仕様）。
+  resetStatStages(): void {
+    this.statStages = zeroStatStages();
   }
 
   // currentHPから導出する（保存フィールドにすると直接代入時に同期が崩れるため）。
@@ -95,12 +135,27 @@ export class Pokemon {
     if (status === 'sleep') {
       this.statusTurnsLeft = Math.floor(Math.random() * 3) + 1;
     }
+    if (status === 'badly-poisoned') {
+      this.toxicCounter = 0;
+    }
     return true;
   }
 
   removeStatus(): void {
     this.status = null;
     this.statusTurnsLeft = 0;
+    this.toxicCounter = 0;
+  }
+
+  // 交代で場を離れると猛毒の経過ターン数はリセットされる（本編仕様）。
+  // ※猛毒状態自体は交代しても治らないため、statusはそのままにする。
+  resetToxicCounter(): void {
+    this.toxicCounter = 0;
+  }
+
+  // やどりぎのタネは（能力ランクと違い）交代すると状態自体が解除される揮発性の状態。
+  resetSeeded(): void {
+    this.isSeeded = false;
   }
 
   canUseMove(moveIndex: number): boolean {

@@ -1,4 +1,13 @@
-import type { MoveCategory, TypeName, StatusCondition, MoveData } from './types.js';
+import type {
+  MoveCategory,
+  TypeName,
+  StatusCondition,
+  MoveData,
+  FieldEffect,
+  SecondaryStatusEffect,
+  SelfStatChange,
+  TargetStatChange,
+} from './types.js';
 
 export interface MoveConstructorData {
   name: string;
@@ -11,6 +20,13 @@ export interface MoveConstructorData {
   status?: StatusCondition | null;
   priority?: number;
   effectChance?: number | null;
+  fieldEffect?: FieldEffect | null;
+  secondaryEffect?: SecondaryStatusEffect | null;
+  selfStatChange?: SelfStatChange[] | null;
+  targetStatChange?: TargetStatChange[] | null;
+  inflictsSeed?: boolean;
+  weatherHeal?: boolean;
+  multiHit?: boolean;
 }
 
 export class Move implements MoveData {
@@ -24,6 +40,13 @@ export class Move implements MoveData {
   status: StatusCondition | null;
   priority: number;
   effectChance: number | null;
+  fieldEffect: FieldEffect | null;
+  secondaryEffect: SecondaryStatusEffect | null;
+  selfStatChange: SelfStatChange[] | null;
+  targetStatChange: TargetStatChange[] | null;
+  inflictsSeed: boolean;
+  weatherHeal: boolean;
+  multiHit: boolean;
 
   constructor(data: MoveConstructorData) {
     this.name = data.name;
@@ -36,5 +59,12 @@ export class Move implements MoveData {
     this.status = data.status ?? null;
     this.priority = data.priority ?? 0;
     this.effectChance = data.effectChance ?? null;
+    this.fieldEffect = data.fieldEffect ?? null;
+    this.secondaryEffect = data.secondaryEffect ?? null;
+    this.selfStatChange = data.selfStatChange ?? null;
+    this.targetStatChange = data.targetStatChange ?? null;
+    this.inflictsSeed = data.inflictsSeed ?? false;
+    this.weatherHeal = data.weatherHeal ?? false;
+    this.multiHit = data.multiHit ?? false;
   }
 }

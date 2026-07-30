@@ -6,7 +6,11 @@ export const INTIMIDATE: AbilityDefinition = {
     const opponent = engine.getOpponent(pokemon);
     if (!opponent || opponent.isFainted) return;
 
-    opponent.stats.ATK = Math.floor(opponent.stats.ATK * 0.7);
-    engine.log.push(`${pokemon.name}の特性「いかく」により${opponent.name}の攻撃が下がった`);
+    const applied = opponent.modifyStatStage('ATK', -1);
+    if (applied !== 0) {
+      engine.log.push(`${pokemon.name}の特性「いかく」により${opponent.name}の攻撃が下がった`);
+    } else {
+      engine.log.push(`${pokemon.name}の特性「いかく」が発動したが、${opponent.name}の攻撃はこれ以上下がらない`);
+    }
   },
 };

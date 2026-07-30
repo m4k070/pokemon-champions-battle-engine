@@ -20,6 +20,7 @@ export interface BattleContext {
   selfTeam: Pokemon[];
   opponent: Pokemon;
   opponentTeam: Pokemon[];
+  canMegaEvolve: boolean;
   field: BattleFieldView;
   recentLog: string[];
 }
@@ -37,6 +38,7 @@ export interface BattleAgent {
 export interface LegalActions {
   moves: { index: number; move: Pokemon['moves'][number] }[];
   switches: { index: number; pokemon: Pokemon }[];
+  canMegaEvolve: boolean;
 }
 
 // PP切れ・こだわり系拘束・瀕死を踏まえた合法手の一覧。
@@ -53,7 +55,7 @@ export function getLegalActions(context: BattleContext): LegalActions {
     .map((pokemon, index) => ({ pokemon, index }))
     .filter(({ pokemon }) => !pokemon.isFainted && pokemon !== context.self);
 
-  return { moves, switches };
+  return { moves, switches, canMegaEvolve: context.canMegaEvolve };
 }
 
 // PP切れ・こだわり系拘束を踏まえて合法手からランダムに選ぶ既定のエージェント。
@@ -64,7 +66,7 @@ export class RandomBattleAgent implements BattleAgent {
   }
 
   async selectAction(context: BattleContext): Promise<AgentDecision> {
-    const { moves, switches } = getLegalActions(context);
+    const { moves, switches, canMegaEvolve } = getLegalActions(context);
 
     if (moves.length === 0) {
       if (switches.length === 0) {
@@ -74,6 +76,8 @@ export class RandomBattleAgent implements BattleAgent {
     }
 
     const { index } = moves[Math.floor(Math.random() * moves.length)];
-    return { action: { type: 'move', moveIndex: index, target: 0 } };
+    // メガシンカできるならまず進化しておく、というシンプルな既定方針
+    // （高速・決定論的な検証用途のためタイミングの駆け引きまでは考慮しない）。
+    return { action: { type: 'move', moveIndex: index, target: 0, megaEvolve: canMegaEvolve || undefined } };
   }
 }
