@@ -85,6 +85,29 @@ describe('BattleSession', () => {
     expect(() => session.applyForcedSwitch(0, { action: { type: 'forfeit' } })).toThrow('switch以外の行動');
   });
 
+  test('start() lets the slower lead\'s weather-setting ability overwrite the faster one\'s', async () => {
+    // teamA(ひでり)の方がteamB(あめふらし)より速いので、実際の対戦仕様では
+    // 後から発動する遅い側(teamB)のあめふらしが最終的な天候として残るはず。
+    const fastDrought = new Pokemon({
+      name: 'FastDrought',
+      types: ['fire'],
+      ability: 'drought',
+      item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 150 },
+    });
+    const slowDrizzle = new Pokemon({
+      name: 'SlowDrizzle',
+      types: ['water'],
+      ability: 'drizzle',
+      item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 50 },
+    });
+
+    const session = await BattleSession.start([fastDrought], [slowDrizzle]);
+
+    expect(session.engine.weather).toBe('rain');
+  });
+
   test('applyTurn throws if beginTurn() was not called first', async () => {
     const teamA = [makeAttacker()];
     const teamB = [makeDefender()];

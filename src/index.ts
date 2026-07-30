@@ -43,6 +43,9 @@ export type {
   PokemonDataFetcher,
 } from './rules/index.js';
 
+export { ABILITY_REGISTRY, getAbilityDefinition } from './rules/index.js';
+export type { AbilityDefinition, AbilitySwitchInContext } from './rules/index.js';
+
 export { SelectionAI } from './ai/selection-ai.js';
 export type { TeamAnalysis } from './ai/selection-ai.js';
 
