@@ -25,10 +25,21 @@
 - ステルスロック（`BattleField`によるサイド別設置状態管理、交代時ダメージ）
 - 天候ダメージ（砂嵐・あられの毎ターンダメージ、耐性タイプの判定）
 
+### 特性（`src/rules/abilities/`のレジストリで管理）
+- 天候変化（すなおこし、あめふらし、ひでり、ゆきふらし）
+- いかく（相手の攻撃ランク-1）
+- あまのじゃく（能力変化の向きを反転。`Pokemon.modifyStatStage()`で一括適用）
+- ぼうだん（たま・ばくだん系の技を無効化）
+
 ### Event Handler実装
-- 特性（すなおこし、いかく）
-- 道具（たべのこし、いのちのたま、オボンのみ、きあいのタスキ、こだわりスカーフ）
+- 道具（たべのこし、いのちのたま、オボンのみ、きあいのタスキ、こだわり系3種）
 - 天候（砂嵐、雨、晴れ、あられ）
+
+### 技の挙動
+- 能力ランク変化（自分・相手／確率付き）、状態異常（追加効果含む）、猛毒の累積ダメージ
+- 場の効果（おいかぜ・リフレクター・トリックルーム）、やどりぎのタネ
+- 天候依存の自己回復（あさのひざし等）、ウェザーボールのタイプ変化、多段技
+- pivot技（とんぼがえり・ボルトチェンジ・クイックターン）: 攻撃後に使用者が交代する
 
 ### Champions固有ルール
 - 能力ポイントシステム（1能力最大32、合計66）
@@ -40,13 +51,21 @@
 - `BattleAgent`インターフェースの実装を差し替えることで、行動選択の方式を切り替えられる
   - `RandomBattleAgent`: 合法手からランダムに選ぶ既定実装（無料・オフライン・大量検証向け）
   - `OpenCodeBattleAgent`: OpenCode Go（`https://opencode.ai/zen/go/v1`）経由でLLMに行動と思考理由を選ばせる
-- `BattleSession`は1ターンずつ進行できる状態機械（`beginTurn` → 必要なら`applyForcedSwitch` → `applyTurn` → `endTurn`）
+- `BattleSession`は1ターンずつ進行できる状態機械（`beginTurn` → 必要なら`applyForcedSwitch` → `applyTurn` → 必要なら`applyPivotSwitch` → `endTurn`）
+  - pivot技（とんぼがえり等）が成立すると`applyTurn`は**技フェーズの途中で中断**し、`needsPivotSwitch(side)`がtrueになる。
+    交代先を`applyPivotSwitch()`で渡すと、そこからターンの残りが再開される。
+    本編と同じく**技の結果（ダメージ・撃破の有無・相手の行動）を見てから交代先を選べる**のが狙い
+  - 中断中は`isTurnComplete()`がfalseになり、`endTurn()`は例外を投げる
+  - 瀕死交代とpivot交代はどちらも`BattleContext.mustSwitch`として表現され、`getLegalActions()`が技を返さなくなる
 - `snapshot()`/`restore()`/`fork()`により、`BattleHistory`でのundo/redoや同一局面からの分岐探索に対応
+  - ターン進行状態（`beginTurn`済みか・技フェーズの途中か）も`BattleSnapshot.session`に含まれるため、
+    中断状態のままsnapshot/restore/forkできる
 
 ### MCPサーバー
 - `src/mcp-battle-server.ts`の`createBattleServer()`が、行動の決定を一切行わない「ルール適用専任」のMCPサーバーを構築する
-- 公開ツール: `start_battle` / `get_battle_state` / `apply_forced_switch` / `apply_turn` / `undo` / `redo` / `fork_battle` / `get_battle_log` / `list_battles`
+- 公開ツール: `start_battle` / `get_battle_state` / `apply_forced_switch` / `apply_turn` / `apply_pivot_switch` / `undo` / `redo` / `fork_battle` / `get_battle_log` / `list_battles`
 - `apply_turn`の`actionA`/`actionB`には具体的な行動（`{type:"move",moveIndex}`等）か`"auto"`（その陣営はサーバー内蔵の`RandomBattleAgent`に任せる）を渡せる
+- pivot技で中断した場合は`isTurnComplete:false` / `needsPivotSwitchSide0|1:true`で返るので、`apply_pivot_switch`で交代先を指定して再開する
 - 起動: `npm run mcp:dev`（開発）/ `npm run mcp`（ビルド後）。stdioトランスポートで動作するため、Claude Codeなど任意のMCPクライアントからstdio起動で接続できる
 
 ## クイックスタート

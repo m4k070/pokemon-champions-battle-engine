@@ -49,7 +49,7 @@ export type {
   PokemonDataFetcher,
 } from './rules/index.js';
 
-export { ABILITY_REGISTRY, getAbilityDefinition } from './rules/index.js';
+export { ABILITY_REGISTRY, getAbilityDefinition, BULLETPROOF, isBallOrBombMove } from './rules/index.js';
 export type { AbilityDefinition, AbilitySwitchInContext } from './rules/index.js';
 
 export { SelectionAI } from './ai/selection-ai.js';
@@ -62,7 +62,7 @@ export { OpenCodeBattleAgent, buildBattlePrompt } from './ai/opencode-battle-age
 export type { OpenCodeBattleAgentOptions } from './ai/opencode-battle-agent.js';
 
 export { snapshotBattle, restoreBattle, snapshotPokemon, restorePokemon } from './battle-snapshot.js';
-export type { BattleSnapshot, PokemonSnapshot, FieldSnapshot, RestoredBattle } from './battle-snapshot.js';
+export type { BattleSnapshot, PokemonSnapshot, FieldSnapshot, SessionSnapshot, PendingTurn, RestoredBattle } from './battle-snapshot.js';
 
 export { BattleSession, BattleHistory, runBattle } from './battle-runner.js';
 export type { StartSessionOptions, RunBattleOptions, BattleResult, TurnReasoning } from './battle-runner.js';

@@ -1119,3 +1119,106 @@ describe('Multi-hit moves (ロックブラスト等)', () => {
     }
   });
 });
+
+describe('こだわり系アイテムの威力補正', () => {
+  function makeAttacker(item: string | null): Pokemon {
+    return new Pokemon({
+      name: 'Attacker',
+      types: ['normal'],
+      ability: 'none',
+      item,
+      baseStats: { HP: 100, ATK: 120, DEF: 80, SPATK: 120, SPDEF: 80, SPEED: 80 },
+    });
+  }
+
+  function makeDefender(): Pokemon {
+    return new Pokemon({
+      name: 'Stakataka',
+      types: ['rock', 'steel'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 61, ATK: 131, DEF: 211, SPATK: 53, SPDEF: 101, SPEED: 13 },
+    });
+  }
+
+  test('こだわりハチマキは物理技の威力を1.5倍にする', () => {
+    const engine = new BattleEngine();
+    const makeMove = () => new Move({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, category: 'physical' });
+
+    const plain = engine.useMove(makeAttacker(null), makeDefender(), makeMove());
+    const banded = engine.useMove(makeAttacker('choice-band'), makeDefender(), makeMove());
+
+    expect(banded.damage).toBeGreaterThan(plain.damage!);
+  });
+
+  test('こだわりメガネは特殊技の威力を1.5倍にするが物理技には効かない', () => {
+    const engine = new BattleEngine();
+    const makePhysical = () => new Move({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, category: 'physical' });
+    const makeSpecial = () => new Move({ name: 'hyper-voice', type: 'normal', power: 90, accuracy: 100, category: 'special' });
+
+    const plainSpecial = engine.useMove(makeAttacker(null), makeDefender(), makeSpecial());
+    const specsSpecial = engine.useMove(makeAttacker('choice-specs'), makeDefender(), makeSpecial());
+    expect(specsSpecial.damage).toBeGreaterThan(plainSpecial.damage!);
+
+    const plainPhysical = engine.useMove(makeAttacker(null), makeDefender(), makePhysical());
+    const specsPhysical = engine.useMove(makeAttacker('choice-specs'), makeDefender(), makePhysical());
+    expect(specsPhysical.damage).toBe(plainPhysical.damage);
+  });
+});
+
+describe('pivot技 (とんぼがえり/ボルトチェンジ/クイックターン)', () => {
+  function makeAttacker(): Pokemon {
+    return new Pokemon({
+      name: 'Scizor',
+      types: ['bug', 'steel'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 70, ATK: 130, DEF: 100, SPATK: 55, SPDEF: 80, SPEED: 65 },
+    });
+  }
+
+  function makeDefender(): Pokemon {
+    return new Pokemon({
+      name: 'Blissey',
+      types: ['normal'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 255, ATK: 10, DEF: 10, SPATK: 75, SPDEF: 135, SPEED: 55 },
+    });
+  }
+
+  test('pivot技が成功するとpivot=trueを返す', () => {
+    const engine = new BattleEngine();
+
+    const result = engine.useMove(makeAttacker(), makeDefender(), new Move({
+      name: 'u-turn', type: 'bug', power: 70, accuracy: 100, category: 'physical', pivot: true,
+    }));
+
+    expect(result.success).toBe(true);
+    expect(result.pivot).toBe(true);
+  });
+
+  test('通常の技はpivot=falseを返す', () => {
+    const engine = new BattleEngine();
+
+    const result = engine.useMove(makeAttacker(), makeDefender(), new Move({
+      name: 'bullet-punch', type: 'steel', power: 40, accuracy: 100, category: 'physical',
+    }));
+
+    expect(result.pivot).toBe(false);
+  });
+
+  test('技を外した場合はpivotが立たない', () => {
+    const engine = new BattleEngine();
+    const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.99);
+
+    const result = engine.useMove(makeAttacker(), makeDefender(), new Move({
+      name: 'u-turn', type: 'bug', power: 70, accuracy: 50, category: 'physical', pivot: true,
+    }));
+
+    expect(result.success).toBe(false);
+    expect(result.pivot).toBeUndefined();
+
+    randomSpy.mockRestore();
+  });
+});

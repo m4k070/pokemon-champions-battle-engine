@@ -11,3 +11,4 @@ export type {
 
 export { ABILITY_REGISTRY, getAbilityDefinition } from './abilities/registry.js';
 export type { AbilityDefinition, AbilitySwitchInContext } from './abilities/types.js';
+export { BULLETPROOF, isBallOrBombMove } from './abilities/bulletproof.js';

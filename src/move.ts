@@ -27,6 +27,7 @@ export interface MoveConstructorData {
   inflictsSeed?: boolean;
   weatherHeal?: boolean;
   multiHit?: boolean;
+  pivot?: boolean;
 }
 
 export class Move implements MoveData {
@@ -47,6 +48,7 @@ export class Move implements MoveData {
   inflictsSeed: boolean;
   weatherHeal: boolean;
   multiHit: boolean;
+  pivot: boolean;
 
   constructor(data: MoveConstructorData) {
     this.name = data.name;
@@ -66,5 +68,6 @@ export class Move implements MoveData {
     this.inflictsSeed = data.inflictsSeed ?? false;
     this.weatherHeal = data.weatherHeal ?? false;
     this.multiHit = data.multiHit ?? false;
+    this.pivot = data.pivot ?? false;
   }
 }

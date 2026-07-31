@@ -21,6 +21,8 @@ export interface BattleContext {
   opponent: Pokemon;
   opponentTeam: Pokemon[];
   canMegaEvolve: boolean;
+  // 技を選べず交代先だけを選ぶ場面（瀕死による強制交代 / pivot技の攻撃後交代）。
+  mustSwitch: boolean;
   field: BattleFieldView;
   recentLog: string[];
 }
@@ -41,10 +43,11 @@ export interface LegalActions {
   canMegaEvolve: boolean;
 }
 
-// PP切れ・こだわり系拘束・瀕死を踏まえた合法手の一覧。
+// PP切れ・こだわり系拘束・交代必須状況を踏まえた合法手の一覧。
 // RandomBattleAgentとLLM系エージェント双方が同じ判定ロジックに乗るための共通ヘルパー。
 export function getLegalActions(context: BattleContext): LegalActions {
-  const moves = context.self.isFainted
+  // mustSwitchの場面（瀕死交代・pivot技の攻撃後交代）では技を選べない。
+  const moves = context.mustSwitch
     ? []
     : context.self.moves
         .map((move, index) => ({ move, index }))

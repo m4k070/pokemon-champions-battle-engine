@@ -1,7 +1,7 @@
 import { BattleEngine } from './battle-engine.js';
 import { Pokemon } from './pokemon.js';
 import type { BattleField, SideFlags, SideHazards } from './battle-field.js';
-import type { BaseStats, MoveData, Stats, StatStages, StatusCondition, TypeName, WeatherType } from './types.js';
+import type { AgentAction, BaseStats, MoveData, Stats, StatStages, StatusCondition, TypeName, WeatherType } from './types.js';
 
 // Pokemon/BattleEngine/BattleFieldはミュータブルなクラス＋イベントハンドラ(関数)を持つため
 // structuredCloneでそのまま複製できない。盤面の「値」だけを抜き出したプレーンデータに変換し、
@@ -37,6 +37,22 @@ export interface FieldSnapshot {
   tailwind: SideHazards;
 }
 
+// ターンの技フェーズの進行状態。pivot技で「交代先の入力待ち」に入ったとき、
+// 中断地点から再開できるようにするために保持する。
+export interface PendingTurn {
+  actionA: AgentAction;
+  actionB: AgentAction;
+  remainingSides: (0 | 1)[]; // まだ技を出していない側（すばやさ順）
+  awaitingPivotSide: 0 | 1 | null; // pivot技の交代先の入力を待っている側
+}
+
+// BattleSessionが持つターン進行状態。盤面（BattleEngine/Pokemon）とは別に保存しないと、
+// ターン途中でsnapshot/restore/forkしたときに進行状態が失われる。
+export interface SessionSnapshot {
+  turnBegun: boolean;
+  pendingTurn: PendingTurn | null;
+}
+
 export interface BattleSnapshot {
   turn: number;
   weather: WeatherType | null;
@@ -49,6 +65,9 @@ export interface BattleSnapshot {
   teamB: PokemonSnapshot[];
   activeIndexA: number;
   activeIndexB: number;
+  // snapshotBattle()は盤面だけを扱うため、ここはBattleSession.snapshot()が付与する。
+  // 省略されている場合は「ターン境界の状態」として復元される。
+  session?: SessionSnapshot;
 }
 
 export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {

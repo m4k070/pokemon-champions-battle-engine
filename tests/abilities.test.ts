@@ -1,5 +1,6 @@
 import { BattleEngine } from '../src/battle-engine.js';
 import { Pokemon } from '../src/pokemon.js';
+import { Move } from '../src/move.js';
 import { ABILITY_REGISTRY, getAbilityDefinition } from '../src/rules/abilities/registry.js';
 
 function makeWeatherSetter(ability: string): Pokemon {
@@ -51,5 +52,72 @@ describe('Ability registry', () => {
 
     expect(() => engine.switchIn(plain, [plain])).not.toThrow();
     expect(engine.weather).toBeNull();
+  });
+});
+
+describe('ぼうだん (Bulletproof)', () => {
+  function makeBulletproofDefender(): Pokemon {
+    return new Pokemon({
+      name: 'Chesnaught',
+      types: ['grass', 'fighting'],
+      ability: 'bulletproof',
+      item: null,
+      baseStats: { HP: 88, ATK: 107, DEF: 122, SPATK: 74, SPDEF: 75, SPEED: 64 },
+    });
+  }
+
+  function makeAttacker(): Pokemon {
+    return new Pokemon({
+      name: 'Mega Raichu',
+      types: ['electric'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 60, ATK: 90, DEF: 55, SPATK: 140, SPDEF: 90, SPEED: 130 },
+    });
+  }
+
+  test('blocksMove reports ball/bomb moves only', () => {
+    const bulletproof = getAbilityDefinition('bulletproof');
+
+    expect(bulletproof?.blocksMove?.(new Move({ name: 'focus-blast', type: 'fighting', power: 120, category: 'special' }))).toBe(true);
+    expect(bulletproof?.blocksMove?.(new Move({ name: 'shadow-ball', type: 'ghost', power: 80, category: 'special' }))).toBe(true);
+    expect(bulletproof?.blocksMove?.(new Move({ name: 'thunderbolt', type: 'electric', power: 90, category: 'special' }))).toBe(false);
+  });
+
+  test('a ball/bomb move deals no damage to a Bulletproof Pokemon', () => {
+    const engine = new BattleEngine();
+    const attacker = makeAttacker();
+    const defender = makeBulletproofDefender();
+    const hpBefore = defender.currentHP;
+
+    const result = engine.useMove(attacker, defender, new Move({
+      name: 'focus-blast', type: 'fighting', power: 120, accuracy: 100, category: 'special',
+    }));
+
+    expect(result.success).toBe(false);
+    expect(defender.currentHP).toBe(hpBefore);
+    expect(engine.log.some((line) => line.includes('bulletproof'))).toBe(true);
+  });
+
+  test('a non ball/bomb move still damages a Bulletproof Pokemon', () => {
+    const engine = new BattleEngine();
+    const attacker = makeAttacker();
+    const defender = makeBulletproofDefender();
+
+    const result = engine.useMove(attacker, defender, new Move({
+      name: 'thunderbolt', type: 'electric', power: 90, accuracy: 100, category: 'special',
+    }));
+
+    expect(result.success).toBe(true);
+    expect(result.damage).toBeGreaterThan(0);
+  });
+
+  test('PP is consumed even when the move is blocked', () => {
+    const engine = new BattleEngine();
+    const move = new Move({ name: 'focus-blast', type: 'fighting', power: 120, accuracy: 100, category: 'special', pp: 5, maxPP: 5 });
+
+    engine.useMove(makeAttacker(), makeBulletproofDefender(), move);
+
+    expect(move.pp).toBe(4);
   });
 });

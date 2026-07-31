@@ -31,14 +31,20 @@ function describePokemon(pokemon: Pokemon, legalMoveIndices: Set<number> | null)
     .map((move, index) => {
       const usable = legalMoveIndices === null || legalMoveIndices.has(index);
       const flag = legalMoveIndices !== null && !usable ? '（選択不可）' : '';
-      return `  [${index}] ${move.name} (タイプ:${move.type} 分類:${move.category} 威力:${move.power} 命中:${move.accuracy} PP:${move.pp}/${move.maxPP})${flag}`;
+      const pivotFlag = move.pivot ? '（攻撃後に交代する技）' : '';
+      return `  [${index}] ${move.name} (タイプ:${move.type} 分類:${move.category} 威力:${move.power} 命中:${move.accuracy} PP:${move.pp}/${move.maxPP})${pivotFlag}${flag}`;
     })
     .join('\n');
+
+  const lockLine = pokemon.lockedMove !== null
+    ? `  こだわり固定: [${pokemon.lockedMove}] ${pokemon.moves[pokemon.lockedMove]?.name ?? '不明'}（交代するまで他の技は選べない）`
+    : null;
 
   return [
     `${pokemon.name} (${pokemon.isFainted ? '戦闘不能' : `HP ${hpPercent}% (${pokemon.currentHP}/${pokemon.maxHP})`})`,
     `  タイプ: ${pokemon.types.join('/')} / 特性: ${pokemon.ability} / 道具: ${pokemon.item ?? 'なし'} / 状態異常: ${status}`,
     moves,
+    ...(lockLine !== null ? [lockLine] : []),
   ].join('\n');
 }
 
@@ -57,8 +63,14 @@ export function buildBattlePrompt(context: BattleContext): string {
     .map(({ index, pokemon }) => `  [${index}] ${pokemon.name} (HP ${Math.round((pokemon.currentHP / pokemon.maxHP) * 100)}%)`)
     .join('\n') || '  （交代可能なポケモンなし）';
 
+  // 瀕死交代とpivot技の攻撃後交代は「技を選べず交代先だけを選ぶ」場面。
+  // どちらもcontext.mustSwitchで表現されるため、指示文もここで切り替える。
+  const headline = context.mustSwitch
+    ? `ターン${context.turn}。交代先のポケモンを選んでください（技は選べません。actionType="switch"で回答すること）。`
+    : `ターン${context.turn}。あなたの行動を選んでください。`;
+
   return [
-    `ターン${context.turn}。あなたの行動を選んでください。`,
+    headline,
     '',
     '[盤面]',
     fieldLines,
