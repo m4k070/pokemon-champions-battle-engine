@@ -66,6 +66,8 @@ export interface MoveData {
   weatherHeal?: boolean;
   // ロックブラスト等、通常配分（2発37.5%/3発37.5%/4発12.5%/5発12.5%）の多段技。
   multiHit?: boolean;
+  // とんぼがえり・ボルトチェンジ・クイックターン等、攻撃後に使用者が自動で交代する技。
+  pivot?: boolean;
 }
 
 export type TypeChart = Record<TypeName, Partial<Record<TypeName, number>>>;
@@ -92,6 +94,10 @@ export interface MoveAction {
   target: number;
   // メガシンカは技の選択に添えて宣言する（交代・降参とは同時にできないため）。
   megaEvolve?: boolean;
+  // とんぼがえり等のpivot技で攻撃後に交代する先。
+  // 本編では技の解決後に交代先を選ぶが、applyTurnが同期処理でエージェントに問い合わせられないため、
+  // 技の選択と同時に宣言する仕様にしている（未指定・不正indexなら交代せずその場に留まる）。
+  pivotSwitchIndex?: number;
 }
 
 export interface SwitchAction {

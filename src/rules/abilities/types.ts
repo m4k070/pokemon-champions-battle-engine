@@ -1,5 +1,6 @@
 import type { Pokemon } from '../../pokemon.js';
 import type { BattleEngine } from '../../battle-engine.js';
+import type { MoveData } from '../../types.js';
 
 export interface AbilitySwitchInContext {
   pokemon: Pokemon;
@@ -12,4 +13,7 @@ export interface AbilitySwitchInContext {
 export interface AbilityDefinition {
   name: string;
   onSwitchIn?(context: AbilitySwitchInContext): void;
+  // ぼうだん・ぼうおん等、特定の技そのものを無効化する特性。
+  // trueを返すと命中判定より前に「効果がないようだ」で終わる。
+  blocksMove?(move: MoveData): boolean;
 }

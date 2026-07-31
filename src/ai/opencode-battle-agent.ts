@@ -31,14 +31,20 @@ function describePokemon(pokemon: Pokemon, legalMoveIndices: Set<number> | null)
     .map((move, index) => {
       const usable = legalMoveIndices === null || legalMoveIndices.has(index);
       const flag = legalMoveIndices !== null && !usable ? '（選択不可）' : '';
-      return `  [${index}] ${move.name} (タイプ:${move.type} 分類:${move.category} 威力:${move.power} 命中:${move.accuracy} PP:${move.pp}/${move.maxPP})${flag}`;
+      const pivotFlag = move.pivot ? '（攻撃後に交代する技）' : '';
+      return `  [${index}] ${move.name} (タイプ:${move.type} 分類:${move.category} 威力:${move.power} 命中:${move.accuracy} PP:${move.pp}/${move.maxPP})${pivotFlag}${flag}`;
     })
     .join('\n');
+
+  const lockLine = pokemon.lockedMove !== null
+    ? `  こだわり固定: [${pokemon.lockedMove}] ${pokemon.moves[pokemon.lockedMove]?.name ?? '不明'}（交代するまで他の技は選べない）`
+    : null;
 
   return [
     `${pokemon.name} (${pokemon.isFainted ? '戦闘不能' : `HP ${hpPercent}% (${pokemon.currentHP}/${pokemon.maxHP})`})`,
     `  タイプ: ${pokemon.types.join('/')} / 特性: ${pokemon.ability} / 道具: ${pokemon.item ?? 'なし'} / 状態異常: ${status}`,
     moves,
+    ...(lockLine !== null ? [lockLine] : []),
   ].join('\n');
 }
 
@@ -66,6 +72,7 @@ export function buildBattlePrompt(context: BattleContext): string {
     '[自分の場のポケモン]',
     describePokemon(context.self, legalMoveIndices),
     `  メガシンカ: ${context.canMegaEvolve ? '可能（技を選ぶ際にmegaEvolve=trueにすると同時に発動できる）' : '不可'}`,
+    '  ※「攻撃後に交代する技」を選ぶ場合はpivotSwitchIndexで退場先も同時に指定すること（未指定ならその場に留まる）。',
     '',
     '[相手の場のポケモン]',
     describePokemon(context.opponent, null),
@@ -84,6 +91,7 @@ interface ChosenAction {
   moveIndex?: number;
   pokemonIndex?: number;
   megaEvolve?: boolean;
+  pivotSwitchIndex?: number;
 }
 
 const CHOOSE_ACTION_TOOL = {
@@ -99,6 +107,7 @@ const CHOOSE_ACTION_TOOL = {
         moveIndex: { type: 'integer', description: 'actionType=moveのとき、使用する技のインデックス' },
         pokemonIndex: { type: 'integer', description: 'actionType=switchのとき、交代先のインデックス' },
         megaEvolve: { type: 'boolean', description: 'actionType=moveのとき、この技と同時にメガシンカするか（メガシンカ可能な場合のみ有効）' },
+        pivotSwitchIndex: { type: 'integer', description: 'とんぼがえり等「攻撃後に交代する技」を選んだとき、攻撃後に出す控えのインデックス' },
       },
       required: ['reasoning', 'actionType'],
     },
@@ -107,7 +116,13 @@ const CHOOSE_ACTION_TOOL = {
 
 function toAgentAction(chosen: ChosenAction): AgentAction {
   if (chosen.actionType === 'move') {
-    return { type: 'move', moveIndex: chosen.moveIndex!, target: 0, megaEvolve: chosen.megaEvolve };
+    return {
+      type: 'move',
+      moveIndex: chosen.moveIndex!,
+      target: 0,
+      megaEvolve: chosen.megaEvolve,
+      pivotSwitchIndex: chosen.pivotSwitchIndex,
+    };
   }
   if (chosen.actionType === 'switch') {
     return { type: 'switch', pokemonIndex: chosen.pokemonIndex! };

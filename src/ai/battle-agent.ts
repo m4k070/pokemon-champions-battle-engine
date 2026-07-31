@@ -75,9 +75,13 @@ export class RandomBattleAgent implements BattleAgent {
       return { action: { type: 'switch', pokemonIndex: switches[0].index } };
     }
 
-    const { index } = moves[Math.floor(Math.random() * moves.length)];
+    const { index, move } = moves[Math.floor(Math.random() * moves.length)];
     // メガシンカできるならまず進化しておく、というシンプルな既定方針
     // （高速・決定論的な検証用途のためタイミングの駆け引きまでは考慮しない）。
-    return { action: { type: 'move', moveIndex: index, target: 0, megaEvolve: canMegaEvolve || undefined } };
+    // pivot技も同様に、交代先が残っていれば先頭の控えへ機械的に退場する。
+    const pivotSwitchIndex = move.pivot === true && switches.length > 0 ? switches[0].index : undefined;
+    return {
+      action: { type: 'move', moveIndex: index, target: 0, megaEvolve: canMegaEvolve || undefined, pivotSwitchIndex },
+    };
   }
 }

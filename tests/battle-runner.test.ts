@@ -1,5 +1,5 @@
 import { BattleSession, BattleHistory, runBattle } from '../src/battle-runner.js';
-import { RandomBattleAgent } from '../src/ai/battle-agent.js';
+import { RandomBattleAgent, getLegalActions } from '../src/ai/battle-agent.js';
 import { Pokemon } from '../src/pokemon.js';
 import { Move } from '../src/move.js';
 
@@ -285,5 +285,201 @@ describe('runBattle', () => {
 
     expect(result.winner).toBeNull();
     expect(result.turns).toBe(3);
+  });
+});
+
+describe('こだわり系の技固定', () => {
+  function makeChooser(item: string | null): Pokemon {
+    return new Pokemon({
+      name: 'Chooser',
+      types: ['normal'],
+      ability: 'none',
+      item,
+      baseStats: { HP: 100, ATK: 100, DEF: 80, SPATK: 80, SPDEF: 80, SPEED: 100 },
+      moves: [
+        new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' }),
+        new Move({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, pp: 10, category: 'physical' }),
+      ],
+    });
+  }
+
+  function makeTank(name = 'Tank'): Pokemon {
+    return new Pokemon({
+      name,
+      types: ['normal'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 255, ATK: 10, DEF: 200, SPATK: 10, SPDEF: 200, SPEED: 1 },
+      moves: [new Move({ name: 'splash', type: 'normal', power: 0, accuracy: 100, pp: 10, category: 'status' })],
+    });
+  }
+
+  test('こだわり系を持っていると使った技に固定され、合法手がその技だけになる', async () => {
+    const chooser = makeChooser('choice-band');
+    const teamA = [chooser, makeTank('BenchA')];
+    const teamB = [makeTank()];
+    const session = await BattleSession.start(teamA, teamB);
+
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 1, target: 0 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } }
+    );
+    session.endTurn();
+
+    expect(chooser.lockedMove).toBe(1);
+    expect(getLegalActions(session.getContext(0)).moves.map((m) => m.index)).toEqual([1]);
+  });
+
+  test('こだわり系を持っていなければ技は固定されない', async () => {
+    const chooser = makeChooser(null);
+    const teamA = [chooser, makeTank('BenchA')];
+    const teamB = [makeTank()];
+    const session = await BattleSession.start(teamA, teamB);
+
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 1, target: 0 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } }
+    );
+    session.endTurn();
+
+    expect(chooser.lockedMove).toBeNull();
+    expect(getLegalActions(session.getContext(0)).moves).toHaveLength(2);
+  });
+
+  test('交代で場を離れると技固定は解除される', async () => {
+    const chooser = makeChooser('choice-band');
+    const teamA = [chooser, makeTank('BenchA')];
+    const teamB = [makeTank()];
+    const session = await BattleSession.start(teamA, teamB);
+
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 1, target: 0 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } }
+    );
+    session.endTurn();
+    expect(chooser.lockedMove).toBe(1);
+
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'switch', pokemonIndex: 1 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } }
+    );
+    session.endTurn();
+
+    expect(chooser.lockedMove).toBeNull();
+  });
+});
+
+describe('pivot技による攻撃後の交代', () => {
+  function makePivoter(): Pokemon {
+    return new Pokemon({
+      name: 'Pivoter',
+      types: ['bug'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 100, ATK: 60, DEF: 80, SPATK: 50, SPDEF: 80, SPEED: 200 },
+      moves: [new Move({ name: 'u-turn', type: 'bug', power: 70, accuracy: 100, pp: 10, category: 'physical', pivot: true })],
+    });
+  }
+
+  function makeBench(): Pokemon {
+    return new Pokemon({
+      name: 'Bench',
+      types: ['normal'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 150, ATK: 60, DEF: 80, SPATK: 50, SPDEF: 80, SPEED: 50 },
+      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
+    });
+  }
+
+  function makeSlowAttacker(): Pokemon {
+    return new Pokemon({
+      name: 'SlowAttacker',
+      types: ['normal'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 200, ATK: 120, DEF: 100, SPATK: 50, SPDEF: 100, SPEED: 1 },
+      moves: [new Move({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, pp: 10, category: 'physical' })],
+    });
+  }
+
+  test('pivot技で交代し、相手の攻撃は交代後のポケモンが受ける', async () => {
+    const pivoter = makePivoter();
+    const bench = makeBench();
+    const teamA = [pivoter, bench];
+    const teamB = [makeSlowAttacker()];
+    const session = await BattleSession.start(teamA, teamB);
+
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0, pivotSwitchIndex: 1 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } }
+    );
+    session.endTurn();
+
+    expect(session.activeA).toBe(bench);
+    expect(bench.currentHP).toBeLessThan(bench.maxHP);
+    expect(pivoter.currentHP).toBe(pivoter.maxHP);
+  });
+
+  test('pivotSwitchIndexを指定しなければその場に留まる', async () => {
+    const pivoter = makePivoter();
+    const teamA = [pivoter, makeBench()];
+    const teamB = [makeSlowAttacker()];
+    const session = await BattleSession.start(teamA, teamB);
+
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } }
+    );
+    session.endTurn();
+
+    expect(session.activeA).toBe(pivoter);
+    expect(pivoter.currentHP).toBeLessThan(pivoter.maxHP);
+  });
+
+  test('交代先が瀕死ならpivot交代は起きない', async () => {
+    const pivoter = makePivoter();
+    const bench = makeBench();
+    bench.currentHP = 0;
+    const teamA = [pivoter, bench];
+    const teamB = [makeSlowAttacker()];
+    const session = await BattleSession.start(teamA, teamB);
+
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0, pivotSwitchIndex: 1 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } }
+    );
+    session.endTurn();
+
+    expect(session.activeA).toBe(pivoter);
+  });
+
+  test('pivot交代でも能力ランク・こだわり固定はリセットされる', async () => {
+    const pivoter = makePivoter();
+    pivoter.item = 'choice-band';
+    const bench = makeBench();
+    const teamA = [pivoter, bench];
+    const teamB = [makeSlowAttacker()];
+    const session = await BattleSession.start(teamA, teamB);
+
+    pivoter.modifyStatStage('ATK', 2);
+
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0, pivotSwitchIndex: 1 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } }
+    );
+    session.endTurn();
+
+    expect(session.activeA).toBe(bench);
+    expect(pivoter.statStages.ATK).toBe(0);
+    expect(pivoter.lockedMove).toBeNull();
   });
 });

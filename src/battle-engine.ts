@@ -10,6 +10,9 @@ export interface UseMoveResult {
   damage?: number;
   effectiveness?: number;
   status?: string;
+  // とんぼがえり等のpivot技が成立し、使用者が交代すべき状態になったことを呼び出し元へ伝える。
+  // 交代先の決定と実行はチーム情報を持つBattleSession側の責務。
+  pivot?: boolean;
 }
 
 // 猛毒(どくどく)のダメージ増加は本編仕様に合わせて15ターン目で頭打ちにする。
@@ -237,6 +240,13 @@ export class BattleEngine {
 
     this.log.push(`${attacker.name}の${move.name}`);
 
+    // ぼうだん等の技無効化特性は命中判定より前に解決する（本編仕様）。
+    const defenderAbility = getAbilityDefinition(defender.ability);
+    if (defenderAbility?.blocksMove?.(move)) {
+      this.log.push(`${defender.name}の${defender.ability}で効果がないようだ`);
+      return { success: false };
+    }
+
     if (move.accuracy < 100) {
       if (Math.random() * 100 > move.accuracy) {
         this.log.push('技は外れた');
@@ -325,6 +335,13 @@ export class BattleEngine {
       power *= 1.3;
     }
 
+    // こだわりハチマキ/メガネは該当カテゴリの威力を1.5倍にする（技は使用後に固定される）。
+    if (attacker.item === 'choice-band' && move.category === 'physical') {
+      power *= 1.5;
+    } else if (attacker.item === 'choice-specs' && move.category === 'special') {
+      power *= 1.5;
+    }
+
     const moveWithStab: MoveData = { ...move, power, type: effectiveType };
 
     // ロックブラスト等の多段技は命中判定こそ1回だが、当たった後の実ヒット数は乱数（本編仕様）。
@@ -380,7 +397,11 @@ export class BattleEngine {
       this.applySelfStatChange(attacker, move.selfStatChange);
     }
 
-    return { success: true, damage: totalDamage, effectiveness: lastEffectiveness };
+    // とんぼがえり等は攻撃が通った後に使用者が退場する。
+    // 相手を倒しきった場合も本編では交代が発生するが、使用者自身が倒れていたら交代はしない。
+    const pivot = move.pivot === true && !attacker.isFainted;
+
+    return { success: true, damage: totalDamage, effectiveness: lastEffectiveness, pivot };
   }
 
   // 通常配分（2発37.5%/3発37.5%/4発12.5%/5発12.5%）でヒット数を決める。

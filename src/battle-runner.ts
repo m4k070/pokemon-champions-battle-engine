@@ -186,9 +186,18 @@ export class BattleSession {
     }
 
     this.reasoningLog.push({ turn: this.engine.turn, side, pokemonName: fainted.name, reasoning: decision.reasoning });
-    fainted.resetStatStages(); // 能力ランクは場を離れるとリセットされる
-    fainted.resetToxicCounter(); // 猛毒の経過ターン数も場を離れるとリセットされる
-    fainted.resetSeeded(); // やどりぎのタネも場を離れると解除される
+    this.switchTo(side, replacement, team);
+  }
+
+  // 場を離れるポケモンの状態をリセットしてから交代先を場に出す。
+  // 通常交代・強制交代・pivot技による交代のすべてがこの一箇所を通る。
+  private switchTo(side: 0 | 1, replacement: Pokemon, team: Pokemon[]): void {
+    const outgoing = side === 0 ? this.activeA : this.activeB;
+    outgoing.resetStatStages(); // 能力ランクは場を離れるとリセットされる
+    outgoing.resetToxicCounter(); // 猛毒の経過ターン数も場を離れるとリセットされる
+    outgoing.resetSeeded(); // やどりぎのタネも場を離れると解除される
+    outgoing.resetLockedMove(); // こだわり系の技固定も場を離れると解除される
+
     this.engine.setActivePokemon(side, replacement);
     const switched = this.engine.switchIn(replacement, team, side);
 
@@ -223,14 +232,7 @@ export class BattleSession {
       switchEntries.push({ side: 1, pokemon: this.teamB[actionB.pokemonIndex], team: this.teamB });
     }
     for (const entry of this.engine.orderBySpeed(switchEntries)) {
-      const outgoing = entry.side === 0 ? this.activeA : this.activeB;
-      outgoing.resetStatStages(); // 能力ランクは場を離れるとリセットされる
-      outgoing.resetToxicCounter(); // 猛毒の経過ターン数も場を離れるとリセットされる
-      outgoing.resetSeeded(); // やどりぎのタネも場を離れると解除される
-      this.engine.setActivePokemon(entry.side, entry.pokemon);
-      const switched = this.engine.switchIn(entry.pokemon, entry.team, entry.side);
-      if (entry.side === 0) this.activeA = switched;
-      else this.activeB = switched;
+      this.switchTo(entry.side, entry.pokemon, entry.team);
     }
 
     // メガシンカは技の選択と同時に宣言される「無償の行動」。ダメージ計算前、
@@ -257,9 +259,30 @@ export class BattleSession {
       const action = side === 0 ? actionA : actionB;
       if (action.type !== 'move') continue;
 
-      this.engine.useMove(attacker, defender, attacker.moves[action.moveIndex]);
+      const result = this.engine.useMove(attacker, defender, attacker.moves[action.moveIndex]);
+      // こだわり系は「技を出した時点」で固定される（外した場合も固定される）。
+      attacker.lockMove(action.moveIndex);
+
       if (this.isFinished()) break;
+      if (result.pivot) {
+        this.applyPivotSwitch(side, action.pivotSwitchIndex);
+      }
     }
+  }
+
+  // とんぼがえり等で攻撃後に使用者を退場させる。相手が行動する前に解決する必要があるため、
+  // 交代先はMoveAction.pivotSwitchIndexとして技と同時に宣言してもらう。
+  // 未指定・瀕死・自分自身などindexが不正な場合は、交代せずその場に留まる。
+  private applyPivotSwitch(side: 0 | 1, pivotSwitchIndex: number | undefined): void {
+    if (pivotSwitchIndex === undefined) return;
+
+    const team = side === 0 ? this.teamA : this.teamB;
+    const active = side === 0 ? this.activeA : this.activeB;
+    const replacement = team[pivotSwitchIndex];
+
+    if (!replacement || replacement.isFainted || replacement === active) return;
+
+    this.switchTo(side, replacement, team);
   }
 
   // ターン終了処理（状態異常・天候ダメージ・持ち物）。次のbeginTurn()に備える。

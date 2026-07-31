@@ -113,4 +113,39 @@ describe('RandomBattleAgent', () => {
     expect(decision.action.type).toBe('move');
     expect((decision.action as { megaEvolve?: boolean }).megaEvolve).toBe(true);
   });
+
+  test('declares pivotSwitchIndex when the chosen move is a pivot move and a bench is available', async () => {
+    const agent = new RandomBattleAgent();
+    const self = makePokemon({
+      moves: [new Move({ name: 'u-turn', type: 'bug', power: 70, accuracy: 100, pp: 10, pivot: true })],
+    });
+    const bench = makePokemon();
+
+    const decision = await agent.selectAction(makeContext({ self, selfTeam: [self, bench] }));
+
+    expect(decision.action).toEqual({ type: 'move', moveIndex: 0, target: 0, pivotSwitchIndex: 1 });
+  });
+
+  test('omits pivotSwitchIndex when there is no bench to switch into', async () => {
+    const agent = new RandomBattleAgent();
+    const self = makePokemon({
+      moves: [new Move({ name: 'u-turn', type: 'bug', power: 70, accuracy: 100, pp: 10, pivot: true })],
+    });
+
+    const decision = await agent.selectAction(makeContext({ self, selfTeam: [self] }));
+
+    expect((decision.action as { pivotSwitchIndex?: number }).pivotSwitchIndex).toBeUndefined();
+  });
+
+  test('omits pivotSwitchIndex for a non-pivot move', async () => {
+    const agent = new RandomBattleAgent();
+    const self = makePokemon({
+      moves: [new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10 })],
+    });
+    const bench = makePokemon();
+
+    const decision = await agent.selectAction(makeContext({ self, selfTeam: [self, bench] }));
+
+    expect((decision.action as { pivotSwitchIndex?: number }).pivotSwitchIndex).toBeUndefined();
+  });
 });

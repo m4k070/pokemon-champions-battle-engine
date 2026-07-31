@@ -55,6 +55,7 @@ const MoveInputSchema = z.object({
   inflictsSeed: z.boolean().optional(),
   weatherHeal: z.boolean().optional(),
   multiHit: z.boolean().optional(),
+  pivot: z.boolean().optional(),
 });
 
 const PokemonInputSchema = z.object({
@@ -73,6 +74,7 @@ const ConcreteActionSchema = z.discriminatedUnion('type', [
     type: z.literal('move'),
     moveIndex: z.number().int().nonnegative(),
     megaEvolve: z.boolean().optional(),
+    pivotSwitchIndex: z.number().int().nonnegative().optional(),
   }),
   z.object({ type: z.literal('switch'), pokemonIndex: z.number().int().nonnegative() }),
   z.object({ type: z.literal('forfeit') }),
@@ -109,6 +111,7 @@ function pokemonView(pokemon: Pokemon) {
     statStages: { ...pokemon.statStages },
     toxicCounter: pokemon.toxicCounter,
     isSeeded: pokemon.isSeeded,
+    lockedMove: pokemon.lockedMove,
     isFainted: pokemon.isFainted,
     currentHP: pokemon.currentHP,
     maxHP: pokemon.maxHP,
@@ -122,6 +125,7 @@ function pokemonView(pokemon: Pokemon) {
       accuracy: move.accuracy,
       pp: move.pp,
       maxPP: move.maxPP,
+      pivot: move.pivot ?? false,
     })),
   };
 }
@@ -270,9 +274,10 @@ export function createBattleServer(): McpServer {
     {
       description:
         '両陣営の行動を同時に適用し、1ターン進める。行動には具体的な行動'
-        + '（{type:"move",moveIndex,megaEvolve?} / {type:"switch",pokemonIndex} / {type:"forfeit"}）か、'
+        + '（{type:"move",moveIndex,megaEvolve?,pivotSwitchIndex?} / {type:"switch",pokemonIndex} / {type:"forfeit"}）か、'
         + '"auto"（その陣営はRandomBattleAgentに任せる）を指定する。'
         + 'megaEvolve:trueはcanMegaEvolveSide0/1がtrueの側でのみ有効で、その技と同時にメガシンカする。'
+        + 'pivotSwitchIndexはpivot:trueの技（とんぼがえり等）を選んだときの攻撃後の交代先で、未指定ならその場に留まる。'
         + 'needsForcedSwitchSide0/1のいずれかがtrueの間は使えない（先にapply_forced_switchを呼ぶこと）。',
       inputSchema: {
         sessionId: z.string(),
