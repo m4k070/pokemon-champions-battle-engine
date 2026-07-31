@@ -62,7 +62,7 @@ export { OpenCodeBattleAgent, buildBattlePrompt } from './ai/opencode-battle-age
 export type { OpenCodeBattleAgentOptions } from './ai/opencode-battle-agent.js';
 
 export { snapshotBattle, restoreBattle, snapshotPokemon, restorePokemon } from './battle-snapshot.js';
-export type { BattleSnapshot, PokemonSnapshot, FieldSnapshot, RestoredBattle } from './battle-snapshot.js';
+export type { BattleSnapshot, PokemonSnapshot, FieldSnapshot, SessionSnapshot, PendingTurn, RestoredBattle } from './battle-snapshot.js';
 
 export { BattleSession, BattleHistory, runBattle } from './battle-runner.js';
 export type { StartSessionOptions, RunBattleOptions, BattleResult, TurnReasoning } from './battle-runner.js';

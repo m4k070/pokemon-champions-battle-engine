@@ -71,6 +71,20 @@ const action = {
 engine.handleForfeit(team);
 ```
 
+### 補足: 技を選べず交代だけを選ぶ場面
+
+以下の2つの場面では、エージェントは技を選べず `type: 'switch'` だけを返す必要があります。
+`BattleContext.mustSwitch` が `true` になり、`getLegalActions()` も技を返しません。
+
+| 場面 | 判定 |
+|------|------|
+| 瀕死による強制交代 | `session.needsForcedSwitch(side)` |
+| pivot技（とんぼがえり等）の攻撃後交代 | `session.needsPivotSwitch(side)` |
+
+pivot技の場合は**技の解決後に問い合わせが来る**ため、ダメージ量・撃破の有無・
+（自分が後攻なら）相手の行動を見たうえで退場先を選べます。
+`session.isTurnComplete()` が `true` になるまで `applyPivotSwitch()` を呼び続けてください。
+
 ## バトルエンジンの役割
 
 バトルエンジンが自動的に処理する項目：

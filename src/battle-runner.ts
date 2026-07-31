@@ -1,9 +1,10 @@
 import { BattleEngine } from './battle-engine.js';
 import { MegaEvolutionSystem } from './rules/mega-evolution.js';
 import type { Pokemon } from './pokemon.js';
+import type { AgentAction } from './types.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './ai/battle-agent.js';
 import { snapshotBattle, restoreBattle } from './battle-snapshot.js';
-import type { BattleSnapshot } from './battle-snapshot.js';
+import type { BattleSnapshot, PendingTurn } from './battle-snapshot.js';
 
 export interface TurnReasoning {
   turn: number;
@@ -30,7 +31,8 @@ function buildContext(
   selfTeam: Pokemon[],
   opponent: Pokemon,
   opponentTeam: Pokemon[],
-  canMegaEvolve: boolean
+  canMegaEvolve: boolean,
+  mustSwitch: boolean
 ): BattleContext {
   return {
     turn: engine.turn,
@@ -39,6 +41,7 @@ function buildContext(
     opponent,
     opponentTeam,
     canMegaEvolve,
+    mustSwitch,
     field: {
       weather: engine.weather,
       weatherTurnsLeft: engine.weatherTurnsLeft,
@@ -77,6 +80,9 @@ export class BattleSession {
   megaEvolutionSystem: MegaEvolutionSystem;
   reasoningLog: TurnReasoning[] = [];
   private turnBegun = false;
+  // 技の実行途中でpivot技の交代先入力を待つために、ターンの進行状態をここに保持する。
+  // nullならターンの技フェーズは実行中でない（=未開始または完了済み）。
+  private pendingTurn: PendingTurn | null = null;
 
   private constructor(
     engine: BattleEngine,
@@ -118,11 +124,19 @@ export class BattleSession {
 
   static fromSnapshot(snapshot: BattleSnapshot, megaEvolutionSystem: MegaEvolutionSystem = new MegaEvolutionSystem()): BattleSession {
     const { engine, teamA, teamB, activeA, activeB } = restoreBattle(snapshot);
-    return new BattleSession(engine, teamA, teamB, activeA, activeB, megaEvolutionSystem);
+    const session = new BattleSession(engine, teamA, teamB, activeA, activeB, megaEvolutionSystem);
+    session.restoreSessionState(snapshot);
+    return session;
   }
 
   snapshot(): BattleSnapshot {
-    return snapshotBattle(this.engine, this.teamA, this.teamB, this.activeA, this.activeB);
+    return {
+      ...snapshotBattle(this.engine, this.teamA, this.teamB, this.activeA, this.activeB),
+      session: {
+        turnBegun: this.turnBegun,
+        pendingTurn: this.pendingTurn === null ? null : structuredClone(this.pendingTurn),
+      },
+    };
   }
 
   // 現在の状態にsnapshotを反映する（undo/redoの実体）。
@@ -133,7 +147,15 @@ export class BattleSession {
     this.teamB = teamB;
     this.activeA = activeA;
     this.activeB = activeB;
-    this.turnBegun = false;
+    this.restoreSessionState(snapshot);
+  }
+
+  // ターン進行状態(beginTurn済みか・技フェーズの途中か)はBattleSnapshot.sessionに載る。
+  // sessionを持たない古いスナップショットは「ターン境界」として復元する。
+  private restoreSessionState(snapshot: BattleSnapshot): void {
+    this.turnBegun = snapshot.session?.turnBegun ?? false;
+    const pendingTurn = snapshot.session?.pendingTurn ?? null;
+    this.pendingTurn = pendingTurn === null ? null : structuredClone(pendingTurn);
   }
 
   // 現在の状態から独立した別セッションを作る（分岐探索用）。
@@ -159,10 +181,29 @@ export class BattleSession {
     return active.isFainted && !this.isFinished();
   }
 
+  // pivot技を使った側が、攻撃後の交代先の入力を待っている状態か。
+  needsPivotSwitch(side: 0 | 1): boolean {
+    return this.pendingTurn?.awaitingPivotSide === side;
+  }
+
+  // 入力待ちの側（いなければnull）。呼び出し側がループを回すために使う。
+  pendingPivotSide(): 0 | 1 | null {
+    return this.pendingTurn?.awaitingPivotSide ?? null;
+  }
+
+  // 技フェーズが完了しているか。falseの間はendTurn()を呼べない。
+  isTurnComplete(): boolean {
+    return this.pendingTurn === null;
+  }
+
   getContext(side: 0 | 1): BattleContext {
+    const canMegaEvolve = this.megaEvolutionSystem.canMegaEvolve(side === 0 ? this.activeA : this.activeB);
+    // 瀕死交代とpivot交代はどちらも「技を選べず交代先だけを選ぶ場面」なので同じフラグに集約する。
+    const mustSwitch = this.needsForcedSwitch(side) || this.needsPivotSwitch(side);
+
     return side === 0
-      ? buildContext(this.engine, 0, this.activeA, this.teamA, this.activeB, this.teamB, this.megaEvolutionSystem.canMegaEvolve(this.activeA))
-      : buildContext(this.engine, 1, this.activeB, this.teamB, this.activeA, this.teamA, this.megaEvolutionSystem.canMegaEvolve(this.activeB));
+      ? buildContext(this.engine, 0, this.activeA, this.teamA, this.activeB, this.teamB, canMegaEvolve, mustSwitch)
+      : buildContext(this.engine, 1, this.activeB, this.teamB, this.activeA, this.teamA, canMegaEvolve, mustSwitch);
   }
 
   // ターン開始処理（天候・トリックルームの残りターン消費）。1ターンにつき1回だけ効く。
@@ -249,14 +290,29 @@ export class BattleSession {
     const attackers: { side: 0 | 1; pokemon: Pokemon }[] = [];
     if (actionA.type === 'move') attackers.push({ side: 0, pokemon: this.activeA });
     if (actionB.type === 'move') attackers.push({ side: 1, pokemon: this.activeB });
-    const attackingSides = this.engine.orderBySpeed(attackers).map(({ side }) => side);
 
-    for (const side of attackingSides) {
+    this.pendingTurn = {
+      actionA,
+      actionB,
+      remainingSides: this.engine.orderBySpeed(attackers).map(({ side }) => side),
+      awaitingPivotSide: null,
+    };
+    this.runRemainingMoves();
+  }
+
+  // 技フェーズを進める。pivot技が成立したらそこで中断して交代先の入力を待つ
+  // （呼び出し側がapplyPivotSwitchで再開する）。最後まで進んだらpendingTurnをnullに戻す。
+  private runRemainingMoves(): void {
+    const pending = this.pendingTurn;
+    if (pending === null || pending.awaitingPivotSide !== null) return;
+
+    while (pending.remainingSides.length > 0) {
+      const side = pending.remainingSides.shift()!;
       const attacker = side === 0 ? this.activeA : this.activeB;
       const defender = side === 0 ? this.activeB : this.activeA;
       if (attacker.isFainted || defender.isFainted) continue;
 
-      const action = side === 0 ? actionA : actionB;
+      const action = side === 0 ? pending.actionA : pending.actionB;
       if (action.type !== 'move') continue;
 
       const result = this.engine.useMove(attacker, defender, attacker.moves[action.moveIndex]);
@@ -264,29 +320,54 @@ export class BattleSession {
       attacker.lockMove(action.moveIndex);
 
       if (this.isFinished()) break;
-      if (result.pivot) {
-        this.applyPivotSwitch(side, action.pivotSwitchIndex);
+
+      // pivot技は交代先を「技の解決を見てから」選べるのが強みなので、ここで中断して入力を待つ。
+      // 控えが全員瀕死なら交代しようがないため、そのまま続行する（本編仕様）。
+      if (result.pivot && this.hasAvailableBench(side)) {
+        pending.awaitingPivotSide = side;
+        return;
       }
     }
+
+    this.pendingTurn = null;
   }
 
-  // とんぼがえり等で攻撃後に使用者を退場させる。相手が行動する前に解決する必要があるため、
-  // 交代先はMoveAction.pivotSwitchIndexとして技と同時に宣言してもらう。
-  // 未指定・瀕死・自分自身などindexが不正な場合は、交代せずその場に留まる。
-  private applyPivotSwitch(side: 0 | 1, pivotSwitchIndex: number | undefined): void {
-    if (pivotSwitchIndex === undefined) return;
+  private hasAvailableBench(side: 0 | 1): boolean {
+    const team = side === 0 ? this.teamA : this.teamB;
+    const active = side === 0 ? this.activeA : this.activeB;
+    return team.some((pokemon) => !pokemon.isFainted && pokemon !== active);
+  }
+
+  // pivot技を使った側の交代先を適用し、ターンの残りを再開する。
+  // needsPivotSwitch(side)がtrueの間だけ有効。
+  applyPivotSwitch(side: 0 | 1, decision: AgentDecision): void {
+    if (!this.needsPivotSwitch(side)) {
+      throw new Error(`side=${side}はpivot技による交代先の入力待ちではありません`);
+    }
+    if (decision.action.type !== 'switch') {
+      throw new Error(`side=${side}はpivot交代が必要ですが、switch以外の行動が渡されました: ${JSON.stringify(decision.action)}`);
+    }
 
     const team = side === 0 ? this.teamA : this.teamB;
     const active = side === 0 ? this.activeA : this.activeB;
-    const replacement = team[pivotSwitchIndex];
+    const replacement = team[decision.action.pokemonIndex];
 
-    if (!replacement || replacement.isFainted || replacement === active) return;
+    if (!replacement || replacement.isFainted || replacement === active) {
+      throw new Error(`side=${side}のpivot交代先が不正です: index=${decision.action.pokemonIndex}`);
+    }
 
+    this.reasoningLog.push({ turn: this.engine.turn, side, pokemonName: active.name, reasoning: decision.reasoning });
     this.switchTo(side, replacement, team);
+
+    this.pendingTurn!.awaitingPivotSide = null;
+    this.runRemainingMoves();
   }
 
   // ターン終了処理（状態異常・天候ダメージ・持ち物）。次のbeginTurn()に備える。
   endTurn(): void {
+    if (!this.isTurnComplete()) {
+      throw new Error('技フェーズが完了していません。applyPivotSwitchを先に呼んでください');
+    }
     this.engine.endTurn(this.teamA, this.teamB);
     this.turnBegun = false;
   }
@@ -314,6 +395,16 @@ export class BattleSession {
     ]);
 
     this.applyTurn(decisionA, decisionB);
+
+    // pivot技は交代先を技の解決後に選ぶため、完了するまで該当エージェントに問い合わせる
+    // （両者がpivot技を選ぶと1ターンに2回発生しうる）。
+    let pivotSide = this.pendingPivotSide();
+    while (pivotSide !== null) {
+      const agent = pivotSide === 0 ? agentA : agentB;
+      this.applyPivotSwitch(pivotSide, await agent.selectAction(this.getContext(pivotSide)));
+      pivotSide = this.pendingPivotSide();
+    }
+
     this.endTurn();
   }
 }

@@ -373,6 +373,7 @@ describe('こだわり系の技固定', () => {
   });
 });
 
+
 describe('pivot技による攻撃後の交代', () => {
   function makePivoter(): Pokemon {
     return new Pokemon({
@@ -385,9 +386,9 @@ describe('pivot技による攻撃後の交代', () => {
     });
   }
 
-  function makeBench(): Pokemon {
+  function makeBench(name = 'Bench'): Pokemon {
     return new Pokemon({
-      name: 'Bench',
+      name,
       types: ['normal'],
       ability: 'none',
       item: null,
@@ -407,79 +408,170 @@ describe('pivot技による攻撃後の交代', () => {
     });
   }
 
-  test('pivot技で交代し、相手の攻撃は交代後のポケモンが受ける', async () => {
-    const pivoter = makePivoter();
-    const bench = makeBench();
-    const teamA = [pivoter, bench];
-    const teamB = [makeSlowAttacker()];
-    const session = await BattleSession.start(teamA, teamB);
+  const moveAction = { action: { type: 'move', moveIndex: 0, target: 0 } } as const;
+
+  test('pivot技が成立するとターンが中断し、交代先の入力待ちになる', async () => {
+    const session = await BattleSession.start([makePivoter(), makeBench()], [makeSlowAttacker()]);
 
     session.beginTurn();
-    session.applyTurn(
-      { action: { type: 'move', moveIndex: 0, target: 0, pivotSwitchIndex: 1 } },
-      { action: { type: 'move', moveIndex: 0, target: 0 } }
-    );
-    session.endTurn();
+    session.applyTurn(moveAction, moveAction);
 
+    expect(session.isTurnComplete()).toBe(false);
+    expect(session.pendingPivotSide()).toBe(0);
+    expect(session.needsPivotSwitch(0)).toBe(true);
+    expect(session.needsPivotSwitch(1)).toBe(false);
+  });
+
+  test('中断中は技の結果を見てから交代先を選べる（相手はまだ行動していない）', async () => {
+    const teamB = [makeSlowAttacker()];
+    const session = await BattleSession.start([makePivoter(), makeBench()], teamB);
+
+    session.beginTurn();
+    session.applyTurn(moveAction, moveAction);
+
+    // pivot使用者の技は解決済みだが、遅い相手はまだ動いていない。
+    expect(teamB[0].currentHP).toBeLessThan(teamB[0].maxHP);
+    expect(session.activeA.currentHP).toBe(session.activeA.maxHP);
+  });
+
+  test('中断中は技を選べず、交代先だけが合法手になる', async () => {
+    const session = await BattleSession.start([makePivoter(), makeBench()], [makeSlowAttacker()]);
+
+    session.beginTurn();
+    session.applyTurn(moveAction, moveAction);
+
+    const context = session.getContext(0);
+    expect(context.mustSwitch).toBe(true);
+    expect(getLegalActions(context).moves).toHaveLength(0);
+    expect(getLegalActions(context).switches.map((s) => s.index)).toEqual([1]);
+  });
+
+  test('applyPivotSwitchで交代してターンが再開し、相手の攻撃は交代後が受ける', async () => {
+    const pivoter = makePivoter();
+    const bench = makeBench();
+    const session = await BattleSession.start([pivoter, bench], [makeSlowAttacker()]);
+
+    session.beginTurn();
+    session.applyTurn(moveAction, moveAction);
+    session.applyPivotSwitch(0, { action: { type: 'switch', pokemonIndex: 1 } });
+
+    expect(session.isTurnComplete()).toBe(true);
     expect(session.activeA).toBe(bench);
     expect(bench.currentHP).toBeLessThan(bench.maxHP);
     expect(pivoter.currentHP).toBe(pivoter.maxHP);
+
+    session.endTurn();
   });
 
-  test('pivotSwitchIndexを指定しなければその場に留まる', async () => {
+  test('控えが全員瀕死なら中断せずその場に留まる', async () => {
     const pivoter = makePivoter();
-    const teamA = [pivoter, makeBench()];
-    const teamB = [makeSlowAttacker()];
-    const session = await BattleSession.start(teamA, teamB);
+    const bench = makeBench();
+    bench.currentHP = 0;
+    const session = await BattleSession.start([pivoter, bench], [makeSlowAttacker()]);
 
     session.beginTurn();
-    session.applyTurn(
-      { action: { type: 'move', moveIndex: 0, target: 0 } },
-      { action: { type: 'move', moveIndex: 0, target: 0 } }
-    );
-    session.endTurn();
+    session.applyTurn(moveAction, moveAction);
 
+    expect(session.isTurnComplete()).toBe(true);
     expect(session.activeA).toBe(pivoter);
     expect(pivoter.currentHP).toBeLessThan(pivoter.maxHP);
   });
 
-  test('交代先が瀕死ならpivot交代は起きない', async () => {
-    const pivoter = makePivoter();
-    const bench = makeBench();
-    bench.currentHP = 0;
-    const teamA = [pivoter, bench];
-    const teamB = [makeSlowAttacker()];
-    const session = await BattleSession.start(teamA, teamB);
+  test('pivot技で相手を全滅させた場合は中断しない', async () => {
+    const frail = makeSlowAttacker();
+    frail.currentHP = 1;
+    const session = await BattleSession.start([makePivoter(), makeBench()], [frail]);
 
     session.beginTurn();
-    session.applyTurn(
-      { action: { type: 'move', moveIndex: 0, target: 0, pivotSwitchIndex: 1 } },
-      { action: { type: 'move', moveIndex: 0, target: 0 } }
-    );
-    session.endTurn();
+    session.applyTurn(moveAction, moveAction);
 
-    expect(session.activeA).toBe(pivoter);
+    expect(session.isTurnComplete()).toBe(true);
+    expect(session.isFinished()).toBe(true);
+  });
+
+  test('両者がpivot技を使うと1ターンに2回中断する', async () => {
+    const slowPivoter = makePivoter();
+    slowPivoter.stats.SPEED = 1;
+    const benchA = makeBench('BenchA');
+    const benchB = makeBench('BenchB');
+    const session = await BattleSession.start([makePivoter(), benchA], [slowPivoter, benchB]);
+
+    session.beginTurn();
+    session.applyTurn(moveAction, moveAction);
+
+    expect(session.pendingPivotSide()).toBe(0);
+    session.applyPivotSwitch(0, { action: { type: 'switch', pokemonIndex: 1 } });
+
+    expect(session.pendingPivotSide()).toBe(1);
+    session.applyPivotSwitch(1, { action: { type: 'switch', pokemonIndex: 1 } });
+
+    expect(session.isTurnComplete()).toBe(true);
+    expect(session.activeA).toBe(benchA);
+    expect(session.activeB).toBe(benchB);
   });
 
   test('pivot交代でも能力ランク・こだわり固定はリセットされる', async () => {
     const pivoter = makePivoter();
     pivoter.item = 'choice-band';
     const bench = makeBench();
-    const teamA = [pivoter, bench];
-    const teamB = [makeSlowAttacker()];
-    const session = await BattleSession.start(teamA, teamB);
+    const session = await BattleSession.start([pivoter, bench], [makeSlowAttacker()]);
 
     pivoter.modifyStatStage('ATK', 2);
 
     session.beginTurn();
-    session.applyTurn(
-      { action: { type: 'move', moveIndex: 0, target: 0, pivotSwitchIndex: 1 } },
-      { action: { type: 'move', moveIndex: 0, target: 0 } }
-    );
-    session.endTurn();
+    session.applyTurn(moveAction, moveAction);
+    session.applyPivotSwitch(0, { action: { type: 'switch', pokemonIndex: 1 } });
 
     expect(session.activeA).toBe(bench);
     expect(pivoter.statStages.ATK).toBe(0);
     expect(pivoter.lockedMove).toBeNull();
+  });
+
+  test('中断中にendTurnを呼ぶとエラーになる', async () => {
+    const session = await BattleSession.start([makePivoter(), makeBench()], [makeSlowAttacker()]);
+
+    session.beginTurn();
+    session.applyTurn(moveAction, moveAction);
+
+    expect(() => session.endTurn()).toThrow('技フェーズが完了していません');
+  });
+
+  test('入力待ちでない側にapplyPivotSwitchを呼ぶとエラーになる', async () => {
+    const session = await BattleSession.start([makePivoter(), makeBench()], [makeSlowAttacker()]);
+
+    session.beginTurn();
+    session.applyTurn(moveAction, moveAction);
+
+    expect(() => session.applyPivotSwitch(1, { action: { type: 'switch', pokemonIndex: 0 } })).toThrow();
+  });
+
+  test('中断状態はsnapshot/restoreで保存・復元される', async () => {
+    const session = await BattleSession.start([makePivoter(), makeBench()], [makeSlowAttacker()]);
+
+    session.beginTurn();
+    session.applyTurn(moveAction, moveAction);
+
+    const snapshot = structuredClone(session.snapshot());
+    expect(snapshot.session?.pendingTurn?.awaitingPivotSide).toBe(0);
+
+    const restored = BattleSession.fromSnapshot(snapshot);
+    expect(restored.needsPivotSwitch(0)).toBe(true);
+
+    // 復元したセッションでもそのまま続きを進められる。
+    restored.applyPivotSwitch(0, { action: { type: 'switch', pokemonIndex: 1 } });
+    expect(restored.isTurnComplete()).toBe(true);
+    expect(restored.activeA.name).toBe('Bench');
+    restored.endTurn();
+  });
+
+  test('playTurnはpivotの中断をエージェントに委ねて自動で解決する', async () => {
+    const teamA = [makePivoter(), makeBench()];
+    const session = await BattleSession.start(teamA, [makeSlowAttacker()]);
+    const random = new RandomBattleAgent();
+
+    await session.playTurn(random, random);
+
+    expect(session.isTurnComplete()).toBe(true);
+    expect(session.activeA).toBe(teamA[1]);
   });
 });

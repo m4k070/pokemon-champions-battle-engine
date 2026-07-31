@@ -1,4 +1,4 @@
-import { RandomBattleAgent } from '../src/ai/battle-agent.js';
+import { RandomBattleAgent, getLegalActions } from '../src/ai/battle-agent.js';
 import type { BattleContext } from '../src/ai/battle-agent.js';
 import { Pokemon } from '../src/pokemon.js';
 import { Move } from '../src/move.js';
@@ -26,6 +26,7 @@ function makeContext(overrides: Partial<BattleContext> = {}): BattleContext {
     opponent: overrides.opponent ?? makePokemon(),
     opponentTeam: overrides.opponentTeam ?? [overrides.opponent ?? makePokemon()],
     canMegaEvolve: overrides.canMegaEvolve ?? false,
+    mustSwitch: overrides.mustSwitch ?? false,
     field: overrides.field ?? {
       weather: null,
       weatherTurnsLeft: 0,
@@ -114,38 +115,23 @@ describe('RandomBattleAgent', () => {
     expect((decision.action as { megaEvolve?: boolean }).megaEvolve).toBe(true);
   });
 
-  test('declares pivotSwitchIndex when the chosen move is a pivot move and a bench is available', async () => {
+  test('mustSwitchのときは技を選ばず交代を返す', async () => {
     const agent = new RandomBattleAgent();
-    const self = makePokemon({
-      moves: [new Move({ name: 'u-turn', type: 'bug', power: 70, accuracy: 100, pp: 10, pivot: true })],
-    });
+    const self = makePokemon();
     const bench = makePokemon();
 
-    const decision = await agent.selectAction(makeContext({ self, selfTeam: [self, bench] }));
+    const decision = await agent.selectAction(makeContext({ self, selfTeam: [self, bench], mustSwitch: true }));
 
-    expect(decision.action).toEqual({ type: 'move', moveIndex: 0, target: 0, pivotSwitchIndex: 1 });
+    expect(decision.action).toEqual({ type: 'switch', pokemonIndex: 1 });
   });
 
-  test('omits pivotSwitchIndex when there is no bench to switch into', async () => {
-    const agent = new RandomBattleAgent();
-    const self = makePokemon({
-      moves: [new Move({ name: 'u-turn', type: 'bug', power: 70, accuracy: 100, pp: 10, pivot: true })],
-    });
-
-    const decision = await agent.selectAction(makeContext({ self, selfTeam: [self] }));
-
-    expect((decision.action as { pivotSwitchIndex?: number }).pivotSwitchIndex).toBeUndefined();
-  });
-
-  test('omits pivotSwitchIndex for a non-pivot move', async () => {
-    const agent = new RandomBattleAgent();
-    const self = makePokemon({
-      moves: [new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10 })],
-    });
+  test('mustSwitchでもPPの残った技は合法手にならない', async () => {
+    const self = makePokemon();
     const bench = makePokemon();
 
-    const decision = await agent.selectAction(makeContext({ self, selfTeam: [self, bench] }));
+    const legal = getLegalActions(makeContext({ self, selfTeam: [self, bench], mustSwitch: true }));
 
-    expect((decision.action as { pivotSwitchIndex?: number }).pivotSwitchIndex).toBeUndefined();
+    expect(legal.moves).toHaveLength(0);
+    expect(legal.switches.map((s) => s.index)).toEqual([1]);
   });
 });

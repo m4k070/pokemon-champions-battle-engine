@@ -63,8 +63,14 @@ export function buildBattlePrompt(context: BattleContext): string {
     .map(({ index, pokemon }) => `  [${index}] ${pokemon.name} (HP ${Math.round((pokemon.currentHP / pokemon.maxHP) * 100)}%)`)
     .join('\n') || '  （交代可能なポケモンなし）';
 
+  // 瀕死交代とpivot技の攻撃後交代は「技を選べず交代先だけを選ぶ」場面。
+  // どちらもcontext.mustSwitchで表現されるため、指示文もここで切り替える。
+  const headline = context.mustSwitch
+    ? `ターン${context.turn}。交代先のポケモンを選んでください（技は選べません。actionType="switch"で回答すること）。`
+    : `ターン${context.turn}。あなたの行動を選んでください。`;
+
   return [
-    `ターン${context.turn}。あなたの行動を選んでください。`,
+    headline,
     '',
     '[盤面]',
     fieldLines,
@@ -72,7 +78,6 @@ export function buildBattlePrompt(context: BattleContext): string {
     '[自分の場のポケモン]',
     describePokemon(context.self, legalMoveIndices),
     `  メガシンカ: ${context.canMegaEvolve ? '可能（技を選ぶ際にmegaEvolve=trueにすると同時に発動できる）' : '不可'}`,
-    '  ※「攻撃後に交代する技」を選ぶ場合はpivotSwitchIndexで退場先も同時に指定すること（未指定ならその場に留まる）。',
     '',
     '[相手の場のポケモン]',
     describePokemon(context.opponent, null),
@@ -91,7 +96,6 @@ interface ChosenAction {
   moveIndex?: number;
   pokemonIndex?: number;
   megaEvolve?: boolean;
-  pivotSwitchIndex?: number;
 }
 
 const CHOOSE_ACTION_TOOL = {
@@ -107,7 +111,6 @@ const CHOOSE_ACTION_TOOL = {
         moveIndex: { type: 'integer', description: 'actionType=moveのとき、使用する技のインデックス' },
         pokemonIndex: { type: 'integer', description: 'actionType=switchのとき、交代先のインデックス' },
         megaEvolve: { type: 'boolean', description: 'actionType=moveのとき、この技と同時にメガシンカするか（メガシンカ可能な場合のみ有効）' },
-        pivotSwitchIndex: { type: 'integer', description: 'とんぼがえり等「攻撃後に交代する技」を選んだとき、攻撃後に出す控えのインデックス' },
       },
       required: ['reasoning', 'actionType'],
     },
@@ -116,13 +119,7 @@ const CHOOSE_ACTION_TOOL = {
 
 function toAgentAction(chosen: ChosenAction): AgentAction {
   if (chosen.actionType === 'move') {
-    return {
-      type: 'move',
-      moveIndex: chosen.moveIndex!,
-      target: 0,
-      megaEvolve: chosen.megaEvolve,
-      pivotSwitchIndex: chosen.pivotSwitchIndex,
-    };
+    return { type: 'move', moveIndex: chosen.moveIndex!, target: 0, megaEvolve: chosen.megaEvolve };
   }
   if (chosen.actionType === 'switch') {
     return { type: 'switch', pokemonIndex: chosen.pokemonIndex! };

@@ -94,10 +94,6 @@ export interface MoveAction {
   target: number;
   // メガシンカは技の選択に添えて宣言する（交代・降参とは同時にできないため）。
   megaEvolve?: boolean;
-  // とんぼがえり等のpivot技で攻撃後に交代する先。
-  // 本編では技の解決後に交代先を選ぶが、applyTurnが同期処理でエージェントに問い合わせられないため、
-  // 技の選択と同時に宣言する仕様にしている（未指定・不正indexなら交代せずその場に留まる）。
-  pivotSwitchIndex?: number;
 }
 
 export interface SwitchAction {

@@ -177,4 +177,57 @@ describe('MCP battle server (client-driven actions)', () => {
     const { result } = await callTool(client, 'get_battle_state', { sessionId: 'does-not-exist' });
     expect(result.isError).toBe(true);
   });
+
+  test('pivot技はapply_turnを中断し、apply_pivot_switchでターンが再開する', async () => {
+    const { client } = await setup();
+    const pivoter = {
+      ...attacker('Pivoter'),
+      moves: [{ name: 'u-turn', type: 'bug', power: 70, accuracy: 100, pp: 10, category: 'physical', pivot: true }],
+    };
+    const bench = attacker('Bench');
+    // pivot使用者より遅く、1発では落ちない相手にする（中断状態を観測するため）。
+    const opponent = {
+      ...attacker('Opponent'),
+      baseStats: { HP: 200, ATK: 100, DEF: 100, SPATK: 50, SPDEF: 100, SPEED: 1 },
+    };
+
+    const { data: started } = await callTool(client, 'start_battle', { teamA: [pivoter, bench], teamB: [opponent] });
+    const sessionId = started.sessionId;
+
+    const { data: paused } = await callTool(client, 'apply_turn', {
+      sessionId,
+      actionA: { type: 'move', moveIndex: 0 },
+      actionB: { type: 'move', moveIndex: 0 },
+    });
+
+    expect(paused.isTurnComplete).toBe(false);
+    expect(paused.needsPivotSwitchSide0).toBe(true);
+    expect(paused.needsPivotSwitchSide1).toBe(false);
+    expect(paused.activeIndexA).toBe(0); // まだ交代していない
+
+    const { data: resumed } = await callTool(client, 'apply_pivot_switch', {
+      sessionId,
+      side: 0,
+      pokemonIndex: 1,
+      reasoning: 'とんぼがえりで削ってから受け出しに繋ぐ',
+    });
+
+    expect(resumed.isTurnComplete).toBe(true);
+    expect(resumed.needsPivotSwitchSide0).toBe(false);
+    expect(resumed.activeIndexA).toBe(1);
+    expect(resumed.teamA[1].currentHP).toBeLessThan(resumed.teamA[1].maxHP); // 交代後が攻撃を受けた
+  });
+
+  test('入力待ちでない側へのapply_pivot_switchはエラーになる', async () => {
+    const { client } = await setup();
+    const { data: started } = await callTool(client, 'start_battle', { teamA: [attacker()], teamB: [defender()] });
+
+    const { result } = await callTool(client, 'apply_pivot_switch', {
+      sessionId: started.sessionId,
+      side: 0,
+      pokemonIndex: 0,
+    });
+
+    expect(result.isError).toBe(true);
+  });
 });
