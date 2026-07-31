@@ -66,6 +66,8 @@ export interface MoveData {
   weatherHeal?: boolean;
   // ロックブラスト等、通常配分（2発37.5%/3発37.5%/4発12.5%/5発12.5%）の多段技。
   multiHit?: boolean;
+  // とんぼがえり・ボルトチェンジ・クイックターン等、攻撃後に使用者が自動で交代する技。
+  pivot?: boolean;
 }
 
 export type TypeChart = Record<TypeName, Partial<Record<TypeName, number>>>;

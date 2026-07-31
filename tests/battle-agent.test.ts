@@ -1,4 +1,4 @@
-import { RandomBattleAgent } from '../src/ai/battle-agent.js';
+import { RandomBattleAgent, getLegalActions } from '../src/ai/battle-agent.js';
 import type { BattleContext } from '../src/ai/battle-agent.js';
 import { Pokemon } from '../src/pokemon.js';
 import { Move } from '../src/move.js';
@@ -26,6 +26,7 @@ function makeContext(overrides: Partial<BattleContext> = {}): BattleContext {
     opponent: overrides.opponent ?? makePokemon(),
     opponentTeam: overrides.opponentTeam ?? [overrides.opponent ?? makePokemon()],
     canMegaEvolve: overrides.canMegaEvolve ?? false,
+    mustSwitch: overrides.mustSwitch ?? false,
     field: overrides.field ?? {
       weather: null,
       weatherTurnsLeft: 0,
@@ -112,5 +113,25 @@ describe('RandomBattleAgent', () => {
 
     expect(decision.action.type).toBe('move');
     expect((decision.action as { megaEvolve?: boolean }).megaEvolve).toBe(true);
+  });
+
+  test('mustSwitchのときは技を選ばず交代を返す', async () => {
+    const agent = new RandomBattleAgent();
+    const self = makePokemon();
+    const bench = makePokemon();
+
+    const decision = await agent.selectAction(makeContext({ self, selfTeam: [self, bench], mustSwitch: true }));
+
+    expect(decision.action).toEqual({ type: 'switch', pokemonIndex: 1 });
+  });
+
+  test('mustSwitchでもPPの残った技は合法手にならない', async () => {
+    const self = makePokemon();
+    const bench = makePokemon();
+
+    const legal = getLegalActions(makeContext({ self, selfTeam: [self, bench], mustSwitch: true }));
+
+    expect(legal.moves).toHaveLength(0);
+    expect(legal.switches.map((s) => s.index)).toEqual([1]);
   });
 });

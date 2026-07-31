@@ -55,6 +55,7 @@ const MoveInputSchema = z.object({
   inflictsSeed: z.boolean().optional(),
   weatherHeal: z.boolean().optional(),
   multiHit: z.boolean().optional(),
+  pivot: z.boolean().optional(),
 });
 
 const PokemonInputSchema = z.object({
@@ -109,6 +110,7 @@ function pokemonView(pokemon: Pokemon) {
     statStages: { ...pokemon.statStages },
     toxicCounter: pokemon.toxicCounter,
     isSeeded: pokemon.isSeeded,
+    lockedMove: pokemon.lockedMove,
     isFainted: pokemon.isFainted,
     currentHP: pokemon.currentHP,
     maxHP: pokemon.maxHP,
@@ -122,6 +124,7 @@ function pokemonView(pokemon: Pokemon) {
       accuracy: move.accuracy,
       pp: move.pp,
       maxPP: move.maxPP,
+      pivot: move.pivot ?? false,
     })),
   };
 }
@@ -145,6 +148,9 @@ function stateView(stored: StoredSession) {
     canMegaEvolveSide1: session.megaEvolutionSystem.canMegaEvolve(session.activeB),
     needsForcedSwitchSide0: session.needsForcedSwitch(0),
     needsForcedSwitchSide1: session.needsForcedSwitch(1),
+    needsPivotSwitchSide0: session.needsPivotSwitch(0),
+    needsPivotSwitchSide1: session.needsPivotSwitch(1),
+    isTurnComplete: session.isTurnComplete(),
     isFinished: session.isFinished(),
     winner: session.isFinished() ? session.winner() : null,
     canUndo: stored.history.canUndo(),
@@ -273,7 +279,10 @@ export function createBattleServer(): McpServer {
         + '（{type:"move",moveIndex,megaEvolve?} / {type:"switch",pokemonIndex} / {type:"forfeit"}）か、'
         + '"auto"（その陣営はRandomBattleAgentに任せる）を指定する。'
         + 'megaEvolve:trueはcanMegaEvolveSide0/1がtrueの側でのみ有効で、その技と同時にメガシンカする。'
-        + 'needsForcedSwitchSide0/1のいずれかがtrueの間は使えない（先にapply_forced_switchを呼ぶこと）。',
+        + 'needsForcedSwitchSide0/1のいずれかがtrueの間は使えない（先にapply_forced_switchを呼ぶこと）。'
+        + 'pivot:trueの技（とんぼがえり等）が成立するとターンはそこで中断し、'
+        + 'needsPivotSwitchSide0/1がtrue・isTurnCompleteがfalseで返る。'
+        + 'その場合はapply_pivot_switchで交代先を指定するとターンの残りが再開される。',
       inputSchema: {
         sessionId: z.string(),
         actionA: ActionInputSchema,
@@ -300,7 +309,40 @@ export function createBattleServer(): McpServer {
         ]);
 
         session.applyTurn(decisionA, decisionB);
-        session.endTurn();
+        // pivot技で中断した場合はターンを閉じない（apply_pivot_switchが続きを進める）。
+        if (session.isTurnComplete()) {
+          session.endTurn();
+        }
+
+        return stateView(stored);
+      })
+  );
+
+  server.registerTool(
+    'apply_pivot_switch',
+    {
+      description:
+        'とんぼがえり等のpivot技で攻撃後に退場する側の交代先を指定し、中断していたターンを再開する。'
+        + 'needsPivotSwitchSide0/1がtrueの側でのみ有効。'
+        + '本編と同じく、技の結果（ダメージ・撃破の有無・相手の行動）を見てから交代先を選べる。'
+        + '再開後に相手もpivot技を使っていた場合は再びneedsPivotSwitchが立つため、'
+        + 'isTurnCompleteがtrueになるまで繰り返し呼ぶこと。',
+      inputSchema: {
+        sessionId: z.string(),
+        side: z.union([z.literal(0), z.literal(1)]),
+        pokemonIndex: z.number().int().nonnegative(),
+        reasoning: z.string().optional(),
+      },
+    },
+    ({ sessionId, side, pokemonIndex, reasoning }) =>
+      handle(() => {
+        const stored = requireSession(sessionId);
+        const { session } = stored.history;
+
+        session.applyPivotSwitch(side, { action: { type: 'switch', pokemonIndex }, reasoning });
+        if (session.isTurnComplete()) {
+          session.endTurn();
+        }
 
         return stateView(stored);
       })
