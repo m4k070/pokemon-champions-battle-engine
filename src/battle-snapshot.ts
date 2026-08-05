@@ -2,6 +2,7 @@ import { BattleEngine } from './battle-engine.js';
 import { Pokemon } from './pokemon.js';
 import type { BattleField, SideFlags, SideHazards } from './battle-field.js';
 import type { AgentAction, BaseStats, MoveData, Stats, StatStages, StatusCondition, TypeName, WeatherType } from './types.js';
+import type { NatureInput, StatPointsInput } from './rules/stat-point-system.js';
 
 // Pokemon/BattleEngine/BattleFieldはミュータブルなクラス＋イベントハンドラ(関数)を持つため
 // structuredCloneでそのまま複製できない。盤面の「値」だけを抜き出したプレーンデータに変換し、
@@ -15,6 +16,9 @@ export interface PokemonSnapshot {
   itemUsed: boolean;
   lockedMove: number | null;
   baseStats: BaseStats;
+  // メガシンカ時の実数値再計算に必要なため、statsとは別に配分の由来も保存する。
+  statPoints: StatPointsInput;
+  nature: NatureInput;
   stats: Stats;
   moves: MoveData[];
   currentHP: number;
@@ -80,6 +84,10 @@ export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
     itemUsed: pokemon.itemUsed,
     lockedMove: pokemon.lockedMove,
     baseStats: { ...pokemon.baseStats },
+    statPoints: { ...pokemon.statPoints },
+    nature: typeof pokemon.nature === 'object' && pokemon.nature !== null
+      ? { ...pokemon.nature }
+      : pokemon.nature,
     stats: { ...pokemon.stats },
     moves: pokemon.moves.map((move) => ({ ...move })),
     currentHP: pokemon.currentHP,
@@ -102,6 +110,10 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
     itemUsed: snapshot.itemUsed,
     lockedMove: snapshot.lockedMove,
     baseStats: { ...snapshot.baseStats },
+    statPoints: { ...snapshot.statPoints },
+    nature: typeof snapshot.nature === 'object' && snapshot.nature !== null
+      ? { ...snapshot.nature }
+      : snapshot.nature,
     stats: { ...snapshot.stats },
     moves: snapshot.moves.map((move) => ({ ...move })),
     currentHP: snapshot.currentHP,
