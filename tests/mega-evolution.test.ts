@@ -118,6 +118,29 @@ describe('MegaEvolutionSystem', () => {
     expect(garchomp.baseStats.SPEED).toBe(102 - 10);
   });
 
+  test('性格補正持ちは上昇後の種族値から再計算される（補正後に加算しない）', () => {
+    const system = new MegaEvolutionSystem();
+    const charizard = new Pokemon({
+      name: 'charizard',
+      baseName: 'charizard',
+      types: ['fire', 'flying'],
+      ability: 'blaze',
+      item: 'charizardite-x',
+      baseStats: { HP: 78, ATK: 84, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 },
+      statPoints: { ATK: 32, SPEED: 32 },
+      nature: 'いじっぱり',
+    });
+
+    // メガ前: 補正前 84+20+32=136 → floor(136*1.1)=149
+    expect(charizard.stats.ATK).toBe(149);
+
+    system.megaEvolve(charizard);
+
+    // メガ後: 補正前 (84+46)+20+32=182 → floor(182*1.1)=200
+    // 補正後に加算していると 149+46=195 になり、5ずれる。
+    expect(charizard.stats.ATK).toBe(200);
+  });
+
   test('mega evolution never changes HP', () => {
     const system = new MegaEvolutionSystem();
     const garchomp = new Pokemon({

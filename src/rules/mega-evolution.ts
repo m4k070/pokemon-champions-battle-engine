@@ -1,6 +1,9 @@
 import type { Pokemon } from '../pokemon.js';
 import type { TypeName } from '../types.js';
 import type { PokeApiPokemonData } from '../api/pokemon-api.js';
+import { StatPointSystem } from './stat-point-system.js';
+
+const statPointSystem = new StatPointSystem();
 
 const MEGA_STAT_KEYS = ['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED'] as const;
 export type MegaStatKey = (typeof MEGA_STAT_KEYS)[number];
@@ -142,11 +145,29 @@ export class MegaEvolutionSystem {
     pokemon.isMega = true;
 
     // メガシンカはHPを変化させない（本編仕様のため対象から除外）。
-    // Lv.50固定では計算式の種族値項の係数が(2*50/100=1)になるため、
-    // 種族値への加算をLv.50時点の実数値へそのまま加算しても結果が一致する。
     for (const stat of MEGA_STAT_KEYS) {
       pokemon.baseStats[stat] += stone.statBoosts[stat];
-      pokemon.stats[stat] += stone.statBoosts[stat];
+    }
+
+    if (pokemon.nature === null) {
+      // 無補正なら Lv.50固定では計算式の種族値項の係数が(2*50/100=1)になるため、
+      // 種族値への加算をそのまま実数値へ加算しても結果が一致する。
+      // stats を直接指定して生成されたポケモンでもこの経路なら値が壊れない。
+      for (const stat of MEGA_STAT_KEYS) {
+        pokemon.stats[stat] += stone.statBoosts[stat];
+      }
+      return true;
+    }
+
+    // 性格補正がある場合は floor(実数値 * 補正) + 上昇分 ≠ floor((実数値 + 上昇分) * 補正) となるため、
+    // 上昇後の種族値から計算し直す（HPは変化しないので据え置く）。
+    const recalculated = statPointSystem.calculateStats(
+      pokemon.baseStats,
+      pokemon.statPoints,
+      pokemon.nature,
+    );
+    for (const stat of MEGA_STAT_KEYS) {
+      pokemon.stats[stat] = recalculated[stat];
     }
 
     return true;

@@ -1,5 +1,11 @@
 import type { BaseStats, MoveData, StatusCondition, Stats, StatStageKey, StatStages, TypeName } from './types.js';
 import type { BattleEngine } from './battle-engine.js';
+import type { NatureInput, StatPointsInput } from './rules/stat-point-system.js';
+import { StatPointSystem } from './rules/stat-point-system.js';
+
+// 実数値計算はChampions固有ルールの一部なのでStatPointSystemに集約する
+// （Pokemon側に独自実装を持たせると能力ポイント・性格の反映漏れが起きるため）。
+const statPointSystem = new StatPointSystem();
 
 const STAT_STAGE_MIN = -6;
 const STAT_STAGE_MAX = 6;
@@ -15,6 +21,10 @@ export interface PokémonConstructorData {
   item: string | null;
   baseStats: BaseStats;
   stats?: Stats;
+  // 能力ポイント（1ポイント=実数値1）。省略時は無振り。statsを直接渡した場合は使われない。
+  statPoints?: StatPointsInput;
+  // 性格。省略時は無補正。statsを直接渡した場合は使われない。
+  nature?: NatureInput;
   moves?: MoveData[];
   level?: number;
   currentHP?: number;
@@ -37,6 +47,8 @@ export class Pokemon {
   itemUsed: boolean;
   lockedMove: number | null;
   baseStats: BaseStats;
+  statPoints: StatPointsInput;
+  nature: NatureInput;
   stats: Stats;
   moves: MoveData[];
   currentHP: number;
@@ -68,10 +80,18 @@ export class Pokemon {
     this.toxicCounter = data.toxicCounter ?? 0;
     this.isSeeded = data.isSeeded ?? false;
 
+    this.statPoints = data.statPoints ?? {};
+    this.nature = data.nature ?? null;
+
     if (data.stats) {
       this.stats = { ...data.stats };
     } else {
-      this.stats = Pokemon.calculateStats(data.baseStats, data.level ?? 50);
+      this.stats = statPointSystem.calculateStats(
+        data.baseStats,
+        this.statPoints,
+        this.nature,
+        data.level ?? 50,
+      );
     }
     this.maxHP = this.stats.HP;
     this.currentHP = data.currentHP ?? this.maxHP;
@@ -104,15 +124,13 @@ export class Pokemon {
     return this.currentHP <= 0;
   }
 
-  static calculateStats(baseStats: BaseStats, level: number): Stats {
-    return {
-      HP: Math.floor(((baseStats.HP * 2 + 31) * level) / 100) + level + 10,
-      ATK: Math.floor(((baseStats.ATK * 2 + 31) * level) / 100) + 5,
-      DEF: Math.floor(((baseStats.DEF * 2 + 31) * level) / 100) + 5,
-      SPATK: Math.floor(((baseStats.SPATK * 2 + 31) * level) / 100) + 5,
-      SPDEF: Math.floor(((baseStats.SPDEF * 2 + 31) * level) / 100) + 5,
-      SPEED: Math.floor(((baseStats.SPEED * 2 + 31) * level) / 100) + 5,
-    };
+  static calculateStats(
+    baseStats: BaseStats,
+    level: number,
+    statPoints: StatPointsInput = {},
+    nature: NatureInput = null,
+  ): Stats {
+    return statPointSystem.calculateStats(baseStats, statPoints, nature, level);
   }
 
   takeDamage(damage: number, engine?: BattleEngine): void {
