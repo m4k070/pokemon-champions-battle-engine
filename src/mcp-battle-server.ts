@@ -37,6 +37,16 @@ const BaseStatsSchema = z.object({
   SPEED: z.number().int().nonnegative(),
 });
 
+// 上限（1能力32・合計66）はStatPointSystem.validateStatPointsが検証するため、ここでは非負整数のみ見る。
+const StatPointsSchema = z.object({
+  HP: z.number().int().nonnegative().optional(),
+  ATK: z.number().int().nonnegative().optional(),
+  DEF: z.number().int().nonnegative().optional(),
+  SPATK: z.number().int().nonnegative().optional(),
+  SPDEF: z.number().int().nonnegative().optional(),
+  SPEED: z.number().int().nonnegative().optional(),
+});
+
 const MoveInputSchema = z.object({
   name: z.string(),
   type: TypeNameSchema,
@@ -64,6 +74,10 @@ const PokemonInputSchema = z.object({
   ability: z.string(),
   item: z.string().nullable(),
   baseStats: BaseStatsSchema,
+  // 能力ポイント（1ポイント=実数値1。1能力32・合計66が上限）。省略した能力は無振り。
+  statPoints: StatPointsSchema.optional(),
+  // 性格名（「わんぱく」等のひらがな表記、「腕白」等の漢字表記のどちらでも可）。省略時は無補正。
+  nature: z.string().nullable().optional(),
   moves: z.array(MoveInputSchema).min(1).max(4),
   currentHP: z.number().int().nonnegative().optional(),
   status: StatusConditionSchema.nullable().optional(),
@@ -94,6 +108,8 @@ function buildPokemon(spec: z.infer<typeof PokemonInputSchema>): Pokemon {
     ability: spec.ability,
     item: spec.item,
     baseStats: spec.baseStats,
+    statPoints: spec.statPoints,
+    nature: spec.nature ?? null,
     currentHP: spec.currentHP,
     status: spec.status ?? null,
     moves: spec.moves.map((move) => new Move(move)),

@@ -66,24 +66,40 @@ engine.switchIn(hippowdon, [hippowdon]);
 
 ### 能力ポイントシステム
 
-```javascript
-const { StatPointSystem } = require('./battle_engine_v2.js');
+能力ポイントは **1ポイント = 実数値1** であり、本編の努力値（4ポイントで実数値1）とは別物である。
+加算は性格補正の**前**に行う。
+
+```
+HP     = floor((種族値*2 + 31) * Lv/100) + Lv + 10 + ポイント
+HP以外 = floor( ( floor((種族値*2 + 31) * Lv/100) + 5 + ポイント ) * 性格補正 )
+```
+
+```ts
+import { StatPointSystem } from './rules/stat-point-system.js';
 
 const statSystem = new StatPointSystem();
 
-// 能力ポイント配分
-const statPoints = {
-  HP: 0,
-  ATK: 0,
-  DEF: 32,  // 最大32
-  SPATK: 0,
-  SPDEF: 0,
-  SPEED: 32  // 最大32
-};
+// 能力ポイント配分（省略した能力は無振り）
+const statPoints = { DEF: 32, SPEED: 32 };  // 1能力最大32・合計66
 
-// 実数値計算（Lv.50固定）
+// 実数値計算（Lv.50固定・カバルドンの種族値）
 const stats = statSystem.calculateStats(baseStats, statPoints);
-// => { HP: 183, ATK: 132, DEF: 142, SPATK: 88, SPDEF: 92, SPEED: 71 }
+// => { HP: 183, ATK: 132, DEF: 170, SPATK: 88, SPDEF: 92, SPEED: 99 }
+
+// 性格を指定する場合（第3引数。ひらがな表記・漢字表記のどちらでも可）
+const withNature = statSystem.calculateStats(baseStats, statPoints, 'わんぱく');
+// => DEF が 1.1倍、SPATK が 0.9倍される
+```
+
+`Pokemon` 生成時にも渡せる。省略時は無振り・無補正。
+
+```ts
+const hippowdon = new Pokemon({
+  name: 'hippowdon', types: ['ground'], ability: 'sand-stream', item: null,
+  baseStats,
+  statPoints: { HP: 32, DEF: 2, SPDEF: 2 },
+  nature: 'わんぱく',
+});
 ```
 
 ### メガシンカ
