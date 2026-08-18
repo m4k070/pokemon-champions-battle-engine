@@ -142,6 +142,27 @@ export class BattleEngine {
           }
         }
 
+        // カゴのみ: ねむり状態を回復する（1回限り）。
+        if (p.item === 'chesto-berry' && !p.itemUsed && p.status === 'sleep') {
+          p.removeStatus();
+          p.itemUsed = true;
+          this.log.push(`${p.name}はカゴのみでねむりから目覚めた`);
+        }
+
+        // ラムのみ: 状態異常を回復する（1回限り）。
+        if (p.item === 'lum-berry' && !p.itemUsed && p.status) {
+          p.removeStatus();
+          p.itemUsed = true;
+          this.log.push(`${p.name}はラムのみで状態異常が回復した`);
+        }
+
+        // どくどくだま: ターン終了時に猛毒状態になる（1回限り）。
+        if (p.item === 'toxic-orb' && !p.itemUsed && !p.status) {
+          p.applyStatus('badly-poisoned');
+          p.itemUsed = true;
+          this.log.push(`${p.name}はどくどくだまの毒に侵された`);
+        }
+
         // 特性のターン終了時フック（かそく等）。
         const ability = getAbilityDefinition(p.ability);
         ability?.onEndTurn?.({ pokemon: p, engine: this });
@@ -260,6 +281,13 @@ export class BattleEngine {
       const ability = getAbilityDefinition(defender.ability);
       const adjusted = ability?.onDamaged?.({ defender, attacker, move, damage, engine: this });
       if (typeof adjusted === 'number') effectiveDamage = adjusted;
+    }
+
+    // シュカのみ: 地面技のダメージを半減する（1回限り）。
+    if (defender.item === 'shuca-berry' && !defender.itemUsed && move?.type === 'ground') {
+      effectiveDamage = Math.floor(effectiveDamage / 2);
+      defender.itemUsed = true;
+      this.log.push(`${defender.name}はシュカのみで地面技のダメージを半減した`);
     }
 
     this.events.emit('apply-damage', { defender, damage: effectiveDamage, attacker, move, engine: this });

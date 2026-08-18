@@ -1,5 +1,6 @@
 import { BattleEngine } from './battle-engine.js';
 import { MegaEvolutionSystem } from './rules/mega-evolution.js';
+import { getAbilityDefinition } from './rules/abilities/registry.js';
 import type { Pokemon } from './pokemon.js';
 import type { AgentAction } from './types.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './ai/battle-agent.js';
@@ -238,6 +239,10 @@ export class BattleSession {
     outgoing.resetToxicCounter(); // 猛毒の経過ターン数も場を離れるとリセットされる
     outgoing.resetSeeded(); // やどりぎのタネも場を離れると解除される
     outgoing.resetLockedMove(); // こだわり系の技固定も場を離れると解除される
+
+    // 場を離れるときの特性フック（さいせいりょく等）。
+    const ability = getAbilityDefinition(outgoing.ability);
+    ability?.onSwitchOut?.({ pokemon: outgoing, engine: this.engine });
 
     this.engine.setActivePokemon(side, replacement);
     const switched = this.engine.switchIn(replacement, team, side);
