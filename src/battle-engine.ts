@@ -359,6 +359,16 @@ export class BattleEngine {
       return { success: true };
     }
 
+    // キングシールド等: バトルスイッチ持ち（ギルガルド）がシールドフォルムに戻る。
+    if (move.restoresShieldForm) {
+      const ability = getAbilityDefinition(attacker.ability);
+      if (ability?.name === 'battle-switch' && attacker.form !== 'shield') {
+        attacker.setForm('shield');
+        this.log.push(`${attacker.name}はシールドフォルムに戻った`);
+      }
+      return { success: true };
+    }
+
     if (move.inflictsSeed) {
       if (defender.types.includes('grass')) {
         this.log.push('くさタイプには効果がない');

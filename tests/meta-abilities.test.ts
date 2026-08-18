@@ -103,7 +103,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(thickFat.currentHP).toBe(50);
   });
 
-  test('バトルスイッチ: 攻撃技でブレード、ターン終了でシールドに戻る', () => {
+  test('バトルスイッチ: 攻撃技でブレード、キングシールドでシールドに戻る', () => {
     const formStats = {
       shield: { HP: 60, ATK: 50, DEF: 150, SPATK: 50, SPDEF: 150, SPEED: 60 },
       blade: { HP: 60, ATK: 150, DEF: 50, SPATK: 150, SPDEF: 50, SPEED: 60 },
@@ -126,7 +126,11 @@ describe('上位構築向け特性（meta-abilities）', () => {
     engine.useMove(aegislash, defender, move({ name: 'Iron Head', type: 'steel', power: 80 }));
     expect(aegislash.form).toBe('blade');
 
+    // ターン終了ではシールドに戻らない（戻るのはキングシールド使用時）。
     engine.events.emit('end-turn', { team: [aegislash] });
+    expect(aegislash.form).toBe('blade');
+
+    engine.useMove(aegislash, defender, move({ name: 'King Shield', type: 'steel', power: 0, restoresShieldForm: true }));
     expect(aegislash.form).toBe('shield');
   });
 
