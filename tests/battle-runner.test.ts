@@ -634,4 +634,33 @@ describe('pivot技による攻撃後の交代', () => {
     );
     expect(session.activeB).toBe(ghostBench); // 交代できている
   });
+
+  test('かげふみ: きれいなぬけがら持ちは交代できる', async () => {
+    const shadowTag = new Pokemon({
+      name: 'ShadowTag',
+      types: ['ghost'],
+      ability: 'shadow-tag',
+      item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+    });
+    const shedShell = new Pokemon({
+      name: 'ShedShell',
+      types: ['normal'],
+      ability: 'none',
+      item: 'shed-shell',
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+    });
+    const opponent = makeAttacker('Opponent');
+    const session = await BattleSession.start([shadowTag], [opponent, shedShell]);
+
+    session.beginTurn();
+    // side=1 がきれいなぬけがら持ちの shedShell に交代する。交代阻止を無視して成功する。
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+      { action: { type: 'switch', pokemonIndex: 1 } },
+    );
+    expect(session.activeB).toBe(shedShell); // 交代できている
+  });
 });

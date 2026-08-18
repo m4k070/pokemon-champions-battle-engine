@@ -242,6 +242,8 @@ export class BattleSession {
     if (opponent.ability !== 'shadow-tag') return false;
     if (opponentAction.type === 'switch') return false; // 両者交代なら阻止しない
     if (replacement.types.includes('ghost')) return false;
+    // きれいなぬけがら: かげふみ・ありじごく等の交代阻止を無視できる。
+    if (replacement.item === 'shed-shell') return false;
     return true;
   }
 

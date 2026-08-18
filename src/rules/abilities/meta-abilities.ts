@@ -140,6 +140,29 @@ export const SHADOW_TAG: AbilityDefinition = {
   name: 'shadow-tag',
 };
 
+// ピンチ時1.5倍特性（げきりゅう/しんりょく/もうか）: HPが1/3以下のとき、
+// 対応タイプの技の威力が1.5倍になる。
+// 対応タイプは name から引けるように PINCH_TYPE_MAP を export する。
+export const PINCH_TYPE_MAP: Record<string, MoveData['type']> = {
+  'torrent': 'water',
+  'overgrow': 'grass',
+  'blaze': 'fire',
+};
+
+const makePinchAbility = (name: string, type: MoveData['type']): AbilityDefinition => ({
+  name,
+  modifyMovePower: ({ pokemon, move, value }) => {
+    if (pokemon.currentHP <= Math.floor(pokemon.maxHP / 3) && move.type === type) {
+      return Math.floor(value * 1.5);
+    }
+    return value;
+  },
+});
+
+export const TORRENT: AbilityDefinition = makePinchAbility('torrent', 'water');
+export const OVERGROW: AbilityDefinition = makePinchAbility('overgrow', 'grass');
+export const BLAZE: AbilityDefinition = makePinchAbility('blaze', 'fire');
+
 export const META_ABILITIES: AbilityDefinition[] = [
   UNAWARE,
   REGENERATOR,
@@ -158,4 +181,7 @@ export const META_ABILITIES: AbilityDefinition[] = [
   BATTLE_SWITCH,
   MIRROR_ARMOR,
   SHADOW_TAG,
+  TORRENT,
+  OVERGROW,
+  BLAZE,
 ];
