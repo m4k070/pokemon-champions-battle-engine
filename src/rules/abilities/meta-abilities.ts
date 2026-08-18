@@ -115,6 +115,36 @@ export const SYNCHRONIZE: AbilityDefinition = {
   name: 'synchronize',
 };
 
+// バトルスイッチ: 攻撃技を使うとブレードフォルム、ターン終了時にシールドフォルムに戻る。
+// フォルム別の種族値は Pokemon.formStats 側で指定する（ギルガルド: shield/blade）。
+export const BATTLE_SWITCH: AbilityDefinition = {
+  name: 'battle-switch',
+  onMoveUsed: ({ attacker, engine }) => {
+    if (attacker.form !== 'blade') {
+      attacker.setForm('blade');
+      engine.log.push(`${attacker.name}はブレードフォルムになった`);
+    }
+  },
+  onEndTurn: ({ pokemon, engine }) => {
+    if (pokemon.form === 'blade') {
+      pokemon.setForm('shield');
+      engine.log.push(`${pokemon.name}はシールドフォルムに戻った`);
+    }
+  },
+};
+
+// ミラーアーマー: 相手から受ける能力低下をその相手に反射する。
+// 反射処理は battle-engine の applyTargetStatChange 側で name 判定して行う。
+export const MIRROR_ARMOR: AbilityDefinition = {
+  name: 'mirror-armor',
+};
+
+// かげふみ: 相手の交代を阻止する（ゴーストタイプは無効、瀕死交代・pivot交代は防げない）。
+// 判定は battle-runner の通常交代処理側で name 判定して行う。
+export const SHADOW_TAG: AbilityDefinition = {
+  name: 'shadow-tag',
+};
+
 export const META_ABILITIES: AbilityDefinition[] = [
   UNAWARE,
   REGENERATOR,
@@ -130,4 +160,7 @@ export const META_ABILITIES: AbilityDefinition[] = [
   SHELL_ARMOR,
   INSOMNIA,
   SYNCHRONIZE,
+  BATTLE_SWITCH,
+  MIRROR_ARMOR,
+  SHADOW_TAG,
 ];

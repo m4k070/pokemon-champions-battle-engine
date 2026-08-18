@@ -450,6 +450,10 @@ export class BattleEngine {
 
     this.log.push(`${defender.name}に${totalDamage}のダメージ`);
 
+    // 特性の「ダメージ技を命中させた後」フック（バトルスイッチ等）。
+    const attackerAbility = getAbilityDefinition(attacker.ability);
+    attackerAbility?.onMoveUsed?.({ attacker, defender, move, engine: this });
+
     if (defender.isFainted) {
       this.log.push(`${defender.name}は戦闘不能になった`);
     } else {
@@ -460,7 +464,7 @@ export class BattleEngine {
         }
       }
       if (move.targetStatChange) {
-        this.applyTargetStatChange(defender, move.targetStatChange);
+        this.applyTargetStatChange(attacker, defender, move.targetStatChange);
       }
     }
 
@@ -487,9 +491,17 @@ export class BattleEngine {
     return MULTI_HIT_TABLE[MULTI_HIT_TABLE.length - 1].hits;
   }
 
-  private applyTargetStatChange(pokemon: Pokemon, changes: NonNullable<MoveData['targetStatChange']>): void {
+  private applyTargetStatChange(attacker: Pokemon, pokemon: Pokemon, changes: NonNullable<MoveData['targetStatChange']>): void {
     for (const change of changes) {
       if (Math.random() * 100 >= change.chance) continue;
+      // ミラーアーマー: 相手から受ける能力低下をその相手に反射する。
+      if (change.delta < 0 && pokemon.ability === 'mirror-armor') {
+        const applied = attacker.modifyStatStage(change.stat, change.delta);
+        if (applied === 0) continue;
+        const direction = applied > 0 ? '上がった' : '下がった';
+        this.log.push(`${attacker.name}の${change.stat}が${direction}（${pokemon.name}のミラーアーマー）`);
+        continue;
+      }
       const applied = pokemon.modifyStatStage(change.stat, change.delta);
       if (applied === 0) continue;
       const direction = applied > 0 ? '上がった' : '下がった';

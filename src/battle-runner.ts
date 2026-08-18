@@ -231,6 +231,20 @@ export class BattleSession {
     this.switchTo(side, replacement, team);
   }
 
+  // かげふみによる交代阻止の判定。通常交代（applyTurn内のswitch）でのみ呼ばれる。
+  // - 相手（場に残る側）が shadow-tag 持ち
+  // - 相手も同時に交代する場合は場を離れるため発動しない（両者交代は成立）
+  // - 交代先がゴーストタイプなら無効（かげふみはゴーストに効かない）
+  // - 瀕死交代（applyForcedSwitch）・pivot交代はこの経路を通らないため防げない
+  private isBlockedByShadowTag(side: 0 | 1, replacement: Pokemon, opponentAction: AgentDecision['action']): boolean {
+    const opponent = side === 0 ? this.activeB : this.activeA;
+    if (!opponent || opponent.isFainted) return false;
+    if (opponent.ability !== 'shadow-tag') return false;
+    if (opponentAction.type === 'switch') return false; // 両者交代なら阻止しない
+    if (replacement.types.includes('ghost')) return false;
+    return true;
+  }
+
   // 場を離れるポケモンの状態をリセットしてから交代先を場に出す。
   // 通常交代・強制交代・pivot技による交代のすべてがこの一箇所を通る。
   private switchTo(side: 0 | 1, replacement: Pokemon, team: Pokemon[]): void {
@@ -272,10 +286,18 @@ export class BattleSession {
     // 後に発動して上書きする仕様のため、速い順(=遅い方を最後に)switchInする。
     const switchEntries: { side: 0 | 1; pokemon: Pokemon; team: Pokemon[] }[] = [];
     if (actionA.type === 'switch') {
-      switchEntries.push({ side: 0, pokemon: this.teamA[actionA.pokemonIndex], team: this.teamA });
+      if (this.isBlockedByShadowTag(0, this.teamA[actionA.pokemonIndex], actionB)) {
+        this.engine.log.push(`${this.activeB.name}のかげふみで交代できない！`);
+      } else {
+        switchEntries.push({ side: 0, pokemon: this.teamA[actionA.pokemonIndex], team: this.teamA });
+      }
     }
     if (actionB.type === 'switch') {
-      switchEntries.push({ side: 1, pokemon: this.teamB[actionB.pokemonIndex], team: this.teamB });
+      if (this.isBlockedByShadowTag(1, this.teamB[actionB.pokemonIndex], actionA)) {
+        this.engine.log.push(`${this.activeA.name}のかげふみで交代できない！`);
+      } else {
+        switchEntries.push({ side: 1, pokemon: this.teamB[actionB.pokemonIndex], team: this.teamB });
+      }
     }
     for (const entry of this.engine.orderBySpeed(switchEntries)) {
       this.switchTo(entry.side, entry.pokemon, entry.team);
