@@ -163,6 +163,24 @@ export const TORRENT: AbilityDefinition = makePinchAbility('torrent', 'water');
 export const OVERGROW: AbilityDefinition = makePinchAbility('overgrow', 'grass');
 export const BLAZE: AbilityDefinition = makePinchAbility('blaze', 'fire');
 
+// マジシャン: 攻撃技を命中させた相手の持ち物を奪う（自分の持ち物が空のときのみ）。
+export const MAGICIAN: AbilityDefinition = {
+  name: 'magician',
+  onMoveUsed: ({ attacker, defender, engine }) => {
+    if (attacker.item === null && defender.item !== null) {
+      const stolen = defender.item;
+      attacker.item = defender.item;
+      defender.item = null;
+      engine.log.push(`${attacker.name}はマジシャンで${stolen}を奪った`);
+    }
+  },
+};
+
+// せいしんりょく: ひるまない（エンジンにひるみ機構が無いため現状は定義のみ）。
+export const INNER_FOCUS: AbilityDefinition = {
+  name: 'inner-focus',
+};
+
 export const META_ABILITIES: AbilityDefinition[] = [
   UNAWARE,
   REGENERATOR,
@@ -184,4 +202,6 @@ export const META_ABILITIES: AbilityDefinition[] = [
   TORRENT,
   OVERGROW,
   BLAZE,
+  MAGICIAN,
+  INNER_FOCUS,
 ];

@@ -197,4 +197,25 @@ describe('上位構築向け特性（meta-abilities）', () => {
 
     expect(engine.calculateSpeed(slow)).toBe(50);
   });
+
+  test('マジシャン: 攻撃を当てた相手の持ち物を奪う', () => {
+    const magician = makePokemon('Magician', 'magician', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    magician.item = null;
+    const defender = makePokemon('Defender', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    defender.item = 'leftovers';
+    engine.setActivePokemon(0, magician);
+    engine.setActivePokemon(1, defender);
+
+    engine.useMove(magician, defender, move({ name: 'Tackle', type: 'normal', power: 40 }));
+    expect(magician.item).toBe('leftovers'); // 奪った
+    expect(defender.item).toBeNull(); // 相手は失う
+
+    // 持ち物を持っている相手からは奪えない
+    const defender2 = makePokemon('Defender2', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    defender2.item = 'life-orb';
+    engine.setActivePokemon(1, defender2);
+    engine.useMove(magician, defender2, move({ name: 'Tackle', type: 'normal', power: 40 }));
+    expect(magician.item).toBe('leftovers'); // すでに持っているので奪わない
+    expect(defender2.item).toBe('life-orb');
+  });
 });
