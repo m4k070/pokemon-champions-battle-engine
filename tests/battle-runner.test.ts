@@ -574,4 +574,64 @@ describe('pivot技による攻撃後の交代', () => {
     expect(session.isTurnComplete()).toBe(true);
     expect(session.activeA).toBe(teamA[1]);
   });
+
+  test('かげふみ: 相手の通常交代を阻止する', async () => {
+    const shadowTag = new Pokemon({
+      name: 'ShadowTag',
+      types: ['ghost'],
+      ability: 'shadow-tag',
+      item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+    });
+    const bench = new Pokemon({
+      name: 'Bench',
+      types: ['normal'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+    });
+    const opponent = makeAttacker('Opponent');
+    const teamA = [shadowTag, bench];
+    const teamB = [opponent];
+    const session = await BattleSession.start(teamA, teamB);
+
+    session.beginTurn();
+    // side=1 が交代を試みるが、side=0 の shadow-tag に阻まれて交代できない。
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+      { action: { type: 'switch', pokemonIndex: 0 } }, // 自分自身への交代は通常なら弾かれるが、チームに1体しかいないため対象外
+    );
+    expect(session.activeB).toBe(opponent); // 交代できていない
+  });
+
+  test('かげふみ: ゴーストタイプは交代できる', async () => {
+    const shadowTag = new Pokemon({
+      name: 'ShadowTag',
+      types: ['ghost'],
+      ability: 'shadow-tag',
+      item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+    });
+    const ghostBench = new Pokemon({
+      name: 'GhostBench',
+      types: ['ghost'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+    });
+    const opponent = makeAttacker('Opponent');
+    const session = await BattleSession.start([shadowTag], [opponent, ghostBench]);
+
+    session.beginTurn();
+    // side=1 がゴーストタイプの ghostBench に交代する。かげふみはゴーストに効かないので成功する。
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+      { action: { type: 'switch', pokemonIndex: 1 } },
+    );
+    expect(session.activeB).toBe(ghostBench); // 交代できている
+  });
 });

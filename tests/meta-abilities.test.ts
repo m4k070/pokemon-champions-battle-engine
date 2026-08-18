@@ -102,4 +102,46 @@ describe('上位構築向け特性（meta-abilities）', () => {
     engine.applyDamage(thickFat, 100, attacker, move({ name: 'Flamethrower', type: 'fire', power: 90 }));
     expect(thickFat.currentHP).toBe(50);
   });
+
+  test('バトルスイッチ: 攻撃技でブレード、ターン終了でシールドに戻る', () => {
+    const formStats = {
+      shield: { HP: 60, ATK: 50, DEF: 150, SPATK: 50, SPDEF: 150, SPEED: 60 },
+      blade: { HP: 60, ATK: 150, DEF: 50, SPATK: 150, SPDEF: 50, SPEED: 60 },
+    };
+    const aegislash = new Pokemon({
+      name: 'Aegislash',
+      types: ['steel', 'ghost'],
+      ability: 'battle-switch',
+      item: null,
+      baseStats: formStats.shield,
+      stats: { ...FIXED_STATS },
+      moves: [move({ name: 'Iron Head', type: 'steel', power: 80 })],
+      form: 'shield',
+      formStats,
+    });
+    const defender = makePokemon('Defender', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    engine.setActivePokemon(0, aegislash);
+    engine.setActivePokemon(1, defender);
+
+    engine.useMove(aegislash, defender, move({ name: 'Iron Head', type: 'steel', power: 80 }));
+    expect(aegislash.form).toBe('blade');
+
+    engine.events.emit('end-turn', { team: [aegislash] });
+    expect(aegislash.form).toBe('shield');
+  });
+
+  test('ミラーアーマー: 相手の能力低下を反射する', () => {
+    const mirrorArmor = makePokemon('MirrorArmor', 'mirror-armor', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, mirrorArmor);
+
+    engine.useMove(
+      attacker,
+      mirrorArmor,
+      move({ name: 'Lunge', type: 'bug', power: 80, targetStatChange: [{ stat: 'ATK', delta: -1, chance: 100 }] }),
+    );
+    expect(mirrorArmor.statStages.ATK).toBe(0); // 低下は反射されるので自分は下がらない
+    expect(attacker.statStages.ATK).toBe(-1); // 攻撃者側に反射される
+  });
 });
