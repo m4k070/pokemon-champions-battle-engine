@@ -512,6 +512,12 @@ export class BattleEngine {
         this.log.push(`${attacker.name}の${change.stat}が${direction}（${pokemon.name}のミラーアーマー）`);
         continue;
       }
+      // しろいハーブ: 能力低下を1回だけ防ぐ（消費される）。
+      if (change.delta < 0 && pokemon.item === 'white-herb' && !pokemon.itemUsed) {
+        pokemon.itemUsed = true;
+        this.log.push(`${pokemon.name}はしろいハーブで能力低下を防いだ`);
+        continue;
+      }
       const applied = pokemon.modifyStatStage(change.stat, change.delta);
       if (applied === 0) continue;
       const direction = applied > 0 ? '上がった' : '下がった';
@@ -658,6 +664,11 @@ export class BattleEngine {
 
     if (pokemon.item === 'choice-scarf') {
       speed = Math.floor(speed * 1.5);
+    }
+
+    // くろいてっきゅう: 素早さが半減する（じめん技が当たるようになる効果は未実装）。
+    if (pokemon.item === 'iron-ball') {
+      speed = Math.floor(speed / 2);
     }
 
     if (pokemon.status === 'paralysis') {

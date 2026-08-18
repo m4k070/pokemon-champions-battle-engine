@@ -148,4 +148,53 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(mirrorArmor.statStages.ATK).toBe(0); // 低下は反射されるので自分は下がらない
     expect(attacker.statStages.ATK).toBe(-1); // 攻撃者側に反射される
   });
+
+  test('げきりゅう: HP1/3以下でみず技の威力が1.5倍になる', () => {
+    const torrent = makePokemon('Torrent', 'torrent', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    engine.setActivePokemon(0, torrent);
+    const { TORRENT } = require('../src/rules/abilities/meta-abilities.js') as typeof import('../src/rules/abilities/meta-abilities.js');
+
+    torrent.currentHP = 33; // 1/3以下
+    const boosted = TORRENT.modifyMovePower!({ pokemon: torrent, move: move({ name: 'Water Gun', type: 'water', power: 40 }), value: 40, engine });
+    expect(boosted).toBe(60);
+
+    const other = TORRENT.modifyMovePower!({ pokemon: torrent, move: move({ name: 'Ember', type: 'fire', power: 40 }), value: 40, engine });
+    expect(other).toBe(40); // 他タイプはそのまま
+
+    torrent.currentHP = 50; // 1/3超え
+    const normal = TORRENT.modifyMovePower!({ pokemon: torrent, move: move({ name: 'Water Gun', type: 'water', power: 40 }), value: 40, engine });
+    expect(normal).toBe(40); // ピンチでなければ発動しない
+  });
+
+  test('しろいハーブ: 能力低下を1回防ぐ', () => {
+    const whiteHerb = makePokemon('WhiteHerb', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    whiteHerb.item = 'white-herb';
+    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, whiteHerb);
+
+    engine.useMove(
+      attacker,
+      whiteHerb,
+      move({ name: 'Lunge', type: 'bug', power: 80, targetStatChange: [{ stat: 'ATK', delta: -1, chance: 100 }] }),
+    );
+    expect(whiteHerb.statStages.ATK).toBe(0); // 防がれる
+    expect(whiteHerb.itemUsed).toBe(true); // 消費される
+
+    // 2回目の低下は防げない
+    engine.useMove(
+      attacker,
+      whiteHerb,
+      move({ name: 'Lunge', type: 'bug', power: 80, targetStatChange: [{ stat: 'ATK', delta: -1, chance: 100 }] }),
+    );
+    expect(whiteHerb.statStages.ATK).toBe(-1);
+  });
+
+  test('くろいてっきゅう: 素早さが半減する', () => {
+    const slow = makePokemon('Slow', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    slow.item = 'iron-ball';
+    engine.setActivePokemon(0, slow);
+
+    expect(engine.calculateSpeed(slow)).toBe(50);
+  });
 });
