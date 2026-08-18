@@ -71,6 +71,8 @@ export interface MoveData {
   // 接触技（さめはだ・ゴツゴツメット・さまようたましい等の接触判定に使う）。
   // 物理技のほとんどは接触だが、いわゆる「非接触の物理技」（じしん・ストーンエッジ等）は false。
   contact?: boolean;
+  // キングシールド等、使用するとバトルスイッチ持ち（ギルガルド）がシールドフォルムに戻る技。
+  restoresShieldForm?: boolean;
 }
 
 export type TypeChart = Record<TypeName, Partial<Record<TypeName, number>>>;

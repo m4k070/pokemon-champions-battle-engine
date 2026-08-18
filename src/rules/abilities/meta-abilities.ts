@@ -115,20 +115,15 @@ export const SYNCHRONIZE: AbilityDefinition = {
   name: 'synchronize',
 };
 
-// バトルスイッチ: 攻撃技を使うとブレードフォルム、ターン終了時にシールドフォルムに戻る。
-// フォルム別の種族値は Pokemon.formStats 側で指定する（ギルガルド: shield/blade）。
+// バトルスイッチ: 攻撃技を使うとブレードフォルムになる。
+// シールドフォルムへの復帰はキングシールド使用時（restoresShieldForm 技）に
+// battle-engine 側で行う。フォルム別の種族値は Pokemon.formStats 側で指定する。
 export const BATTLE_SWITCH: AbilityDefinition = {
   name: 'battle-switch',
   onMoveUsed: ({ attacker, engine }) => {
     if (attacker.form !== 'blade') {
       attacker.setForm('blade');
       engine.log.push(`${attacker.name}はブレードフォルムになった`);
-    }
-  },
-  onEndTurn: ({ pokemon, engine }) => {
-    if (pokemon.form === 'blade') {
-      pokemon.setForm('shield');
-      engine.log.push(`${pokemon.name}はシールドフォルムに戻った`);
     }
   },
 };
