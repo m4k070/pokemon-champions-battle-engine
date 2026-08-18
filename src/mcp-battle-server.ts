@@ -66,6 +66,8 @@ const MoveInputSchema = z.object({
   weatherHeal: z.boolean().optional(),
   multiHit: z.boolean().optional(),
   pivot: z.boolean().optional(),
+  contact: z.boolean().optional(),
+  restoresShieldForm: z.boolean().optional(),
 });
 
 const PokemonInputSchema = z.object({
@@ -81,6 +83,9 @@ const PokemonInputSchema = z.object({
   moves: z.array(MoveInputSchema).min(1).max(4),
   currentHP: z.number().int().nonnegative().optional(),
   status: StatusConditionSchema.nullable().optional(),
+  // フォルムチェンジ（バトルスイッチ等）。現在のフォルム名と、フォルム別種族値。
+  form: z.string().optional(),
+  formStats: z.record(z.string(), BaseStatsSchema).optional(),
 });
 
 const ConcreteActionSchema = z.discriminatedUnion('type', [
@@ -112,6 +117,8 @@ function buildPokemon(spec: z.infer<typeof PokemonInputSchema>): Pokemon {
     nature: spec.nature ?? null,
     currentHP: spec.currentHP,
     status: spec.status ?? null,
+    form: spec.form,
+    formStats: spec.formStats,
     moves: spec.moves.map((move) => new Move(move)),
   });
 }
