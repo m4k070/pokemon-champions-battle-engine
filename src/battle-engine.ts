@@ -141,6 +141,10 @@ export class BattleEngine {
             this.log.push(`${p.name}はオボンのみで${heal}回復した`);
           }
         }
+
+        // 特性のターン終了時フック（かそく等）。
+        const ability = getAbilityDefinition(p.ability);
+        ability?.onEndTurn?.({ pokemon: p, engine: this });
       }
     });
 
@@ -160,10 +164,21 @@ export class BattleEngine {
 
   calculateAttack(attacker: Pokemon, move: { category: string }): number {
     const statKey: StatStageKey = move.category === 'physical' ? 'ATK' : 'SPATK';
-    let attack = Math.floor(attacker.stats[statKey] * attacker.getStatStageMultiplier(statKey));
+    // 防御側がてんねん(ignoresOpponentStatChanges)なら、攻撃側の能力ランクを無視する。
+    const defender = this.getOpponent(attacker);
+    const ignoreStages = defender
+      ? (getAbilityDefinition(defender.ability)?.ignoresOpponentStatChanges?.() ?? false)
+      : false;
+    const stageMultiplier = ignoreStages ? 1 : attacker.getStatStageMultiplier(statKey);
+    let attack = Math.floor(attacker.stats[statKey] * stageMultiplier);
 
     if (attacker.status === 'burn' && move.category === 'physical') {
       attack = Math.floor(attack / 2);
+    }
+
+    const ability = getAbilityDefinition(attacker.ability);
+    if (ability?.modifyAttack) {
+      attack = ability.modifyAttack({ pokemon: attacker, move: move as MoveData, value: attack, engine: this });
     }
 
     this.events.emit('calculate-attack', { attacker, move, attack });
@@ -173,7 +188,18 @@ export class BattleEngine {
 
   calculateDefense(defender: Pokemon, move: { category: string }): number {
     const statKey: StatStageKey = move.category === 'physical' ? 'DEF' : 'SPDEF';
-    const defense = Math.floor(defender.stats[statKey] * defender.getStatStageMultiplier(statKey));
+    // 攻撃側がてんねん(ignoresOpponentStatChanges)なら、防御側の能力ランクを無視する。
+    const attacker = this.getOpponent(defender);
+    const ignoreStages = attacker
+      ? (getAbilityDefinition(attacker.ability)?.ignoresOpponentStatChanges?.() ?? false)
+      : false;
+    const stageMultiplier = ignoreStages ? 1 : defender.getStatStageMultiplier(statKey);
+    let defense = Math.floor(defender.stats[statKey] * stageMultiplier);
+
+    const ability = getAbilityDefinition(defender.ability);
+    if (ability?.modifyDefense) {
+      defense = ability.modifyDefense({ pokemon: defender, move: move as MoveData, value: defense, engine: this });
+    }
 
     this.events.emit('calculate-defense', { defender, move, defense });
 
@@ -226,9 +252,18 @@ export class BattleEngine {
     return { finalDamage, effectiveness };
   }
 
-  applyDamage(defender: Pokemon, damage: number): void {
-    this.events.emit('apply-damage', { defender, damage, engine: this });
-    defender.takeDamage(damage, this);
+  applyDamage(defender: Pokemon, damage: number, attacker?: Pokemon, move?: MoveData): void {
+    let effectiveDamage = damage;
+
+    // 特性の被弾時フック（がんじょう・じきゅうりょく・あついしぼう・さめはだ等）。
+    if (attacker && move) {
+      const ability = getAbilityDefinition(defender.ability);
+      const adjusted = ability?.onDamaged?.({ defender, attacker, move, damage, engine: this });
+      if (typeof adjusted === 'number') effectiveDamage = adjusted;
+    }
+
+    this.events.emit('apply-damage', { defender, damage: effectiveDamage, attacker, move, engine: this });
+    defender.takeDamage(effectiveDamage, this);
   }
 
   useMove(attacker: Pokemon, defender: Pokemon, move: MoveData): UseMoveResult {
@@ -248,7 +283,10 @@ export class BattleEngine {
     }
 
     if (move.accuracy < 100) {
-      if (Math.random() * 100 > move.accuracy) {
+      // ノーガード(no-guard): 攻撃側・防御側どちらかが持てば命中率100%になる。
+      const attackerNoGuard = getAbilityDefinition(attacker.ability)?.name === 'no-guard';
+      const defenderNoGuard = getAbilityDefinition(defender.ability)?.name === 'no-guard';
+      if (!attackerNoGuard && !defenderNoGuard && Math.random() * 100 > move.accuracy) {
         this.log.push('技は外れた');
         return { success: false };
       }
@@ -342,6 +380,12 @@ export class BattleEngine {
       power *= 1.5;
     }
 
+    // 特性による威力補正（テクニシャン等）。
+    const powerAbility = getAbilityDefinition(attacker.ability);
+    if (powerAbility?.modifyMovePower) {
+      power = powerAbility.modifyMovePower({ pokemon: attacker, move, value: power, engine: this });
+    }
+
     const moveWithStab: MoveData = { ...move, power, type: effectiveType };
 
     // ロックブラスト等の多段技は命中判定こそ1回だが、当たった後の実ヒット数は乱数（本編仕様）。
@@ -355,7 +399,7 @@ export class BattleEngine {
       const baseDamage = this.calculateBaseDamage(attack, defense, moveWithStab);
       const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, moveWithStab);
 
-      this.applyDamage(defender, finalDamage);
+      this.applyDamage(defender, finalDamage, attacker, moveWithStab);
       totalDamage += finalDamage;
       lastEffectiveness = effectiveness;
 

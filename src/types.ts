@@ -68,6 +68,9 @@ export interface MoveData {
   multiHit?: boolean;
   // とんぼがえり・ボルトチェンジ・クイックターン等、攻撃後に使用者が自動で交代する技。
   pivot?: boolean;
+  // 接触技（さめはだ・ゴツゴツメット・さまようたましい等の接触判定に使う）。
+  // 物理技のほとんどは接触だが、いわゆる「非接触の物理技」（じしん・ストーンエッジ等）は false。
+  contact?: boolean;
 }
 
 export type TypeChart = Record<TypeName, Partial<Record<TypeName, number>>>;

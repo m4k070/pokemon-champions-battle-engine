@@ -28,6 +28,7 @@ export interface MoveConstructorData {
   weatherHeal?: boolean;
   multiHit?: boolean;
   pivot?: boolean;
+  contact?: boolean;
 }
 
 export class Move implements MoveData {

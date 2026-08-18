@@ -1,0 +1,242 @@
+[
+ {
+  "article": "1位 ドヒドスコヴィラン",
+  "pokemonId": "30045",
+  "natureId": "9",
+  "abilityIds": "[311,15]",
+  "itemId": "272",
+  "moveIds": "[53,202,437,182]"
+ },
+ {
+  "article": "1位 ドヒドスコヴィラン",
+  "pokemonId": "36",
+  "natureId": "5",
+  "abilityIds": "[109]",
+  "itemId": "59",
+  "moveIds": "[585,347,182,273]"
+ },
+ {
+  "article": "1位 ドヒドスコヴィラン",
+  "pokemonId": "748",
+  "natureId": "5",
+  "abilityIds": "[144]",
+  "itemId": "148",
+  "moveIds": "[114,92,661,105]"
+ },
+ {
+  "article": "1位 ドヒドスコヴィラン",
+  "pokemonId": "30027",
+  "natureId": "17",
+  "abilityIds": "[26,170]",
+  "itemId": "255",
+  "moveIds": "[595,910,273,182]"
+ },
+ {
+  "article": "1位 ドヒドスコヴィラン",
+  "pokemonId": "445",
+  "natureId": "2",
+  "abilityIds": "[24]",
+  "itemId": "135",
+  "moveIds": "[89,525,191,446]"
+ },
+ {
+  "article": "1位 ドヒドスコヴィラン",
+  "pokemonId": "681",
+  "natureId": "2",
+  "abilityIds": "[176]",
+  "itemId": "79",
+  "moveIds": "[809,425,370,14]"
+ },
+ {
+  "article": "5位 紫電アマガライチュウ",
+  "pokemonId": "30003",
+  "natureId": "17",
+  "abilityIds": "[99,31]",
+  "itemId": "191",
+  "moveIds": "[192,411,447,417]"
+ },
+ {
+  "article": "5位 紫電アマガライチュウ",
+  "pokemonId": "823",
+  "natureId": "6",
+  "abilityIds": "[240]",
+  "itemId": "59",
+  "moveIds": "[413,339,369,355]"
+ },
+ {
+  "article": "5位 紫電アマガライチュウ",
+  "pokemonId": "445",
+  "natureId": "19",
+  "abilityIds": "[24]",
+  "itemId": "37",
+  "moveIds": "[89,200,317,446]"
+ },
+ {
+  "article": "5位 紫電アマガライチュウ",
+  "pokemonId": "730",
+  "natureId": "9",
+  "abilityIds": "[67]",
+  "itemId": "134",
+  "moveIds": "[664,585,453,227]"
+ },
+ {
+  "article": "5位 紫電アマガライチュウ",
+  "pokemonId": "908",
+  "natureId": "2",
+  "abilityIds": "[65]",
+  "itemId": "21",
+  "moveIds": "[870,675,389,390]"
+ },
+ {
+  "article": "5位 紫電アマガライチュウ",
+  "pokemonId": "30027",
+  "natureId": "9",
+  "abilityIds": "[26,66]",
+  "itemId": "255",
+  "moveIds": "[126,473,605,164]"
+ },
+ {
+  "article": "27位 鬼火スタン",
+  "pokemonId": "30027",
+  "natureId": "17",
+  "abilityIds": "[26,66]",
+  "itemId": "255",
+  "moveIds": "[595,94,261,227]"
+ },
+ {
+  "article": "27位 鬼火スタン",
+  "pokemonId": "20028",
+  "natureId": "5",
+  "abilityIds": "[192]",
+  "itemId": "135",
+  "moveIds": "[434,430,446,46]"
+ },
+ {
+  "article": "27位 鬼火スタン",
+  "pokemonId": "730",
+  "natureId": "9",
+  "abilityIds": "[67]",
+  "itemId": "127",
+  "moveIds": "[57,585,347,156]"
+ },
+ {
+  "article": "27位 鬼火スタン",
+  "pokemonId": "1008",
+  "natureId": "2",
+  "abilityIds": "[293]",
+  "itemId": "32",
+  "moveIds": "[869,442,389,14]"
+ },
+ {
+  "article": "27位 鬼火スタン",
+  "pokemonId": "445",
+  "natureId": "2",
+  "abilityIds": "[24]",
+  "itemId": "37",
+  "moveIds": "[89,200,317,424]"
+ },
+ {
+  "article": "27位 鬼火スタン",
+  "pokemonId": "10033",
+  "natureId": "5",
+  "abilityIds": "[47,65]",
+  "itemId": "184",
+  "moveIds": "[202,188,414,235]"
+ },
+ {
+  "article": "54位 月影ブラッキー",
+  "pokemonId": "197",
+  "natureId": "5",
+  "abilityIds": "[39]",
+  "itemId": "59",
+  "moveIds": "[492,182,281,273]"
+ },
+ {
+  "article": "54位 月影ブラッキー",
+  "pokemonId": "10038",
+  "natureId": "9",
+  "abilityIds": "[23]",
+  "itemId": "196",
+  "moveIds": "[482,247,499,417]"
+ },
+ {
+  "article": "54位 月影ブラッキー",
+  "pokemonId": "934",
+  "natureId": "2",
+  "abilityIds": "[278]",
+  "itemId": "37",
+  "moveIds": "[857,834,8,812]"
+ },
+ {
+  "article": "54位 月影ブラッキー",
+  "pokemonId": "445",
+  "natureId": "6",
+  "abilityIds": "[24]",
+  "itemId": "135",
+  "moveIds": "[89,525,446,191]"
+ },
+ {
+  "article": "54位 月影ブラッキー",
+  "pokemonId": "10052",
+  "natureId": "2",
+  "abilityIds": "[37,22]",
+  "itemId": "219",
+  "moveIds": "[583,424,706,389]"
+ },
+ {
+  "article": "54位 月影ブラッキー",
+  "pokemonId": "730",
+  "natureId": "9",
+  "abilityIds": "[67]",
+  "itemId": "101",
+  "moveIds": "[585,664,347,227]"
+ },
+ {
+  "article": "61位 メガペンドラーカメックス",
+  "pokemonId": "30021",
+  "natureId": "2",
+  "abilityIds": "[75,3]",
+  "itemId": "249",
+  "moveIds": "[141,398,89,14]"
+ },
+ {
+  "article": "61位 メガペンドラーカメックス",
+  "pokemonId": "20028",
+  "natureId": "17",
+  "abilityIds": "[5]",
+  "itemId": "135",
+  "moveIds": "[434,796,317,446]"
+ },
+ {
+  "article": "61位 メガペンドラーカメックス",
+  "pokemonId": "212",
+  "natureId": "2",
+  "abilityIds": "[101]",
+  "itemId": "9",
+  "moveIds": "[418,885,372,14]"
+ },
+ {
+  "article": "61位 メガペンドラーカメックス",
+  "pokemonId": "10036",
+  "natureId": "9",
+  "abilityIds": "[178,44]",
+  "itemId": "187",
+  "moveIds": "[323,399,396,504]"
+ },
+ {
+  "article": "61位 メガペンドラーカメックス",
+  "pokemonId": "1005",
+  "natureId": "2",
+  "abilityIds": "[133]",
+  "itemId": "21",
+  "moveIds": "[809,891,370,425]"
+ },
+ {
+  "article": "61位 メガペンドラーカメックス",
+  "pokemonId": "10104",
+  "natureId": "17",
+  "abilityIds": "[117]",
+  "itemId": "84",
+  "moveIds": "[573,694,581,227]"
+ }
+]
