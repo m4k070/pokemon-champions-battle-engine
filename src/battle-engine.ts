@@ -335,6 +335,11 @@ export class BattleEngine {
     // ぼうだん等の技無効化特性は命中判定より前に解決する（本編仕様）。
     const defenderAbility = getAbilityDefinition(defender.ability);
     if (defenderAbility?.blocksMove?.(move)) {
+      // ひらいしん: でん技を弾いたとき、特攻を1段階上げる。
+      if (defender.ability === 'lightning-rod' && move.type === 'electric') {
+        defender.modifyStatStage('SPATK', 1);
+        this.log.push(`${defender.name}のひらいしんで特攻が上がった`);
+      }
       this.log.push(`${defender.name}の${defender.ability}で効果がないようだ`);
       return { success: false };
     }
@@ -580,6 +585,14 @@ export class BattleEngine {
       if (this.trickRoomTurnsLeft === 0) {
         this.log.push('トリックルームが終了しました');
         this.trickRoom = false;
+      }
+    }
+
+    if (this.field.terrainTurnsLeft > 0) {
+      this.field.terrainTurnsLeft--;
+      if (this.field.terrainTurnsLeft === 0) {
+        this.log.push('地形の効果が消えた');
+        this.field.terrain = null;
       }
     }
 

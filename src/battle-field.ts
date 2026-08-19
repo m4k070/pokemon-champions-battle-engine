@@ -1,3 +1,5 @@
+export type TerrainType = 'electric-terrain' | null;
+
 export interface SideHazards {
   playerA: number;
   playerB: number;
@@ -19,6 +21,8 @@ export class BattleField {
   reflect: SideHazards;
   lightScreen: SideHazards;
   tailwind: SideHazards;
+  terrain: TerrainType;
+  terrainTurnsLeft: number;
 
   constructor() {
     this.stealthRock = { playerA: false, playerB: false };
@@ -29,5 +33,7 @@ export class BattleField {
     this.reflect = { playerA: 0, playerB: 0 };
     this.lightScreen = { playerA: 0, playerB: 0 };
     this.tailwind = { playerA: 0, playerB: 0 };
+    this.terrain = null;
+    this.terrainTurnsLeft = 0;
   }
 }

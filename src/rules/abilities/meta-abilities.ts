@@ -181,6 +181,60 @@ export const INNER_FOCUS: AbilityDefinition = {
   name: 'inner-focus',
 };
 
+// とびだすハバネロ: ほのおタイプの技の威力が1.3倍になる（Champions独自特性）。
+export const SPICY_SPRAY: AbilityDefinition = {
+  name: 'spicy-spray',
+  modifyMovePower: ({ move, value }) => (move.type === 'fire' ? Math.floor(value * 1.3) : value),
+};
+
+// エレキメイカー: でんタイプの技の威力が1.3倍になる（ライチュウXメガ特性）。
+// 本編ではエレキフィールドを展開するが、エンジンの簡易化のため威力補正で実装。
+export const ELECTRIC_SURGE: AbilityDefinition = {
+  name: 'electric-surge',
+  modifyMovePower: ({ move, value }) => (move.type === 'electric' ? Math.floor(value * 1.3) : value),
+};
+
+// つめかえなし: 接触技の威力が1.3倍になる。
+export const TOUGH_CLAWS: AbilityDefinition = {
+  name: 'tough-claws',
+  modifyMovePower: ({ move, value }) => (move.contact ? Math.floor(value * 1.3) : value),
+};
+
+// すなふぶき: すなあらし中、いわ・じめん・はがねタイプの技の威力が1.3倍になる。
+export const SAND_FORCE: AbilityDefinition = {
+  name: 'sand-force',
+  modifyMovePower: ({ move, value, engine }) => {
+    if (engine.weather === 'sand' && (move.type === 'rock' || move.type === 'ground' || move.type === 'steel')) {
+      return Math.floor(value * 1.3);
+    }
+    return value;
+  },
+};
+
+// ひらいしん: でん技をかわりに受け、特攻を1段階上げる。
+// blocksMove ででん技を無効化すると onDamaged は呼ばれないため、
+// SpAtk上昇も blocksMove 内で直接行う。
+export const LIGHTNING_ROD: AbilityDefinition = {
+  name: 'lightning-rod',
+  blocksMove: (move: MoveData) => move.type === 'electric',
+  // onDamaged は blocksMove=true の場合呼ばれないため、
+  // SpAtk上昇は engine 側で wiring する代わりに、
+  // blocksMove の結果を受けた側の useMove 内で SpAtk+1 を適用する必要がある。
+  // 簡易化: blocksMove は boolean のみ返すため、SpAtk上昇は別途 wiring する。
+};
+
+// くだけるよろい: 物理技でダメージを受けたとき、防御が1段階下がり、素早さが2段階上がる。
+export const WEAK_ARMOR: AbilityDefinition = {
+  name: 'weak-armor',
+  onDamaged: ({ defender, move, engine }) => {
+    if (move.category === 'physical') {
+      defender.modifyStatStage('DEF', -1);
+      defender.modifyStatStage('SPEED', 2);
+      engine.log.push(`${defender.name}のくだけるよろいで防御が下がり、素早さが上がった`);
+    }
+  },
+};
+
 export const META_ABILITIES: AbilityDefinition[] = [
   UNAWARE,
   REGENERATOR,
@@ -204,4 +258,10 @@ export const META_ABILITIES: AbilityDefinition[] = [
   BLAZE,
   MAGICIAN,
   INNER_FOCUS,
+  SPICY_SPRAY,
+  ELECTRIC_SURGE,
+  TOUGH_CLAWS,
+  SAND_FORCE,
+  LIGHTNING_ROD,
+  WEAK_ARMOR,
 ];
