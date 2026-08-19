@@ -287,4 +287,61 @@ describe('上位構築向け特性（meta-abilities）', () => {
     pokemon.resetTaunt();
     expect(pokemon.isTaunted).toBe(false);
   });
+
+  test('とびだすハバネロ: ほのお技の威力が1.3倍になる', () => {
+    const { SPICY_SPRAY } = require('../src/rules/abilities/meta-abilities.js') as typeof import('../src/rules/abilities/meta-abilities.js');
+    const attacker = makePokemon('Scovillain', 'spicy-spray', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+
+    const fireBoosted = SPICY_SPRAY.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Flamethrower', type: 'fire', power: 90 }), value: 90, engine });
+    expect(fireBoosted).toBe(117);
+
+    const otherType = SPICY_SPRAY.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Tackle', type: 'normal', power: 40 }), value: 40, engine });
+    expect(otherType).toBe(40);
+  });
+
+  test('エレキメイカー: でん技の威力が1.3倍になる', () => {
+    const { ELECTRIC_SURGE } = require('../src/rules/abilities/meta-abilities.js') as typeof import('../src/rules/abilities/meta-abilities.js');
+    const attacker = makePokemon('Raichu', 'electric-surge', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+
+    const electricBoosted = ELECTRIC_SURGE.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Thunderbolt', type: 'electric', power: 90 }), value: 90, engine });
+    expect(electricBoosted).toBe(117);
+
+    const otherType = ELECTRIC_SURGE.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Tackle', type: 'normal', power: 40 }), value: 40, engine });
+    expect(otherType).toBe(40);
+  });
+
+  test('つめかえなし: 接触技の威力が1.3倍になる', () => {
+    const { TOUGH_CLAWS } = require('../src/rules/abilities/meta-abilities.js') as typeof import('../src/rules/abilities/meta-abilities.js');
+    const attacker = makePokemon('Charizard', 'tough-claws', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+
+    const contactBoosted = TOUGH_CLAWS.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Dragon Claw', type: 'dragon', power: 80, contact: true }), value: 80, engine });
+    expect(contactBoosted).toBe(104);
+
+    const nonContact = TOUGH_CLAWS.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Earthquake', type: 'ground', power: 100, contact: false }), value: 100, engine });
+    expect(nonContact).toBe(100);
+  });
+
+  test('ひでり: 入場時に天候をはれにする', () => {
+    const drought = makePokemon('Drought', 'drought', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const defender = makePokemon('Defender', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    engine.setActivePokemon(0, drought);
+    engine.setActivePokemon(1, defender);
+
+    engine.switchIn(drought, [drought, defender], 0);
+    expect(engine.weather).toBe('sun');
+    expect(engine.weatherTurnsLeft).toBe(5);
+  });
+
+  test('すなふぶき: すなあらし中いわ技の威力が1.3倍になる', () => {
+    const { SAND_FORCE } = require('../src/rules/abilities/meta-abilities.js') as typeof import('../src/rules/abilities/meta-abilities.js');
+    const attacker = makePokemon('Garchomp', 'sand-force', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+
+    engine.weather = 'sand';
+    const rockBoosted = SAND_FORCE.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Stone Edge', type: 'rock', power: 100 }), value: 100, engine });
+    expect(rockBoosted).toBe(130);
+
+    engine.weather = null;
+    const rockNormal = SAND_FORCE.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Stone Edge', type: 'rock', power: 100 }), value: 100, engine });
+    expect(rockNormal).toBe(100);
+  });
 });
