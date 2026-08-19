@@ -20,7 +20,11 @@ export type StatStages = Record<StatStageKey, number>;
 
 // 天候・フィールドではなく「陣営の場」に対して発動する効果技（おいかぜ・リフレクター）と、
 // 盤面全体に対して発動する効果技（トリックルーム）。
-export type FieldEffect = 'tailwind' | 'trick-room' | 'reflect';
+// ハザード（ステルスロック・まきびし・どくびし）もここに含める。
+// ひけんちえなみは「まきびしを設置する追加効果を持つ技」のため fieldEffect には含めない。
+export type FieldEffect =
+  | 'tailwind' | 'trick-room' | 'reflect'
+  | 'stealth-rock' | 'spikes' | 'toxic-spikes';
 
 // ダメージ技に追加効果として付随する状態異常（例: れいとうパンチの10%こおり）。
 // status(ダメージ0の状態異常専用技)とは別概念のため独立したフィールドとして持つ。
@@ -68,6 +72,13 @@ export interface MoveData {
   multiHit?: boolean;
   // とんぼがえり・ボルトチェンジ・クイックターン等、攻撃後に使用者が自動で交代する技。
   pivot?: boolean;
+  // 接触技（さめはだ・ゴツゴツメット・さまようたましい等の接触判定に使う）。
+  // 物理技のほとんどは接触だが、いわゆる「非接触の物理技」（じしん・ストーンエッジ等）は false。
+  contact?: boolean;
+  // キングシールド等、使用するとバトルスイッチ持ち（ギルガルド）がシールドフォルムに戻る技。
+  restoresShieldForm?: boolean;
+  // ひけんちえなみ等、使用時に「まきびし」を相手側に設置する追加効果を持つ技。
+  inflictsSpikes?: boolean;
 }
 
 export type TypeChart = Record<TypeName, Partial<Record<TypeName, number>>>;

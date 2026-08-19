@@ -28,6 +28,8 @@ export interface MoveConstructorData {
   weatherHeal?: boolean;
   multiHit?: boolean;
   pivot?: boolean;
+  contact?: boolean;
+  restoresShieldForm?: boolean;
 }
 
 export class Move implements MoveData {
@@ -49,6 +51,8 @@ export class Move implements MoveData {
   weatherHeal: boolean;
   multiHit: boolean;
   pivot: boolean;
+  contact: boolean;
+  restoresShieldForm: boolean;
 
   constructor(data: MoveConstructorData) {
     this.name = data.name;
@@ -69,5 +73,7 @@ export class Move implements MoveData {
     this.weatherHeal = data.weatherHeal ?? false;
     this.multiHit = data.multiHit ?? false;
     this.pivot = data.pivot ?? false;
+    this.contact = data.contact ?? false;
+    this.restoresShieldForm = data.restoresShieldForm ?? false;
   }
 }

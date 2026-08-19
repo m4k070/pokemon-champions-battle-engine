@@ -1222,3 +1222,333 @@ describe('pivot技 (とんぼがえり/ボルトチェンジ/クイックター�
     randomSpy.mockRestore();
   });
 });
+
+describe('Taunt (ちょうはつ)', () => {
+  function makeAttacker(): Pokemon {
+    return new Pokemon({
+      name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: null,
+      baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+      moves: [
+        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+        new Move({ name: 'swords-dance', type: 'normal', power: 0, accuracy: 100, pp: 20, category: 'status', selfStatChange: [{ stat: 'ATK', delta: 2 }] }),
+      ],
+    });
+  }
+
+  function makeDefender(): Pokemon {
+    return new Pokemon({
+      name: 'Blissey', types: ['normal'], ability: 'natural-cure', item: null,
+      baseStats: { HP: 255, ATK: 10, DEF: 10, SPATK: 75, SPDEF: 135, SPEED: 55 },
+    });
+  }
+
+  test('taunted pokemon cannot use attacking moves', () => {
+    const engine = new BattleEngine();
+    const attacker = makeAttacker();
+    const defender = makeDefender();
+
+    attacker.applyTaunt(3);
+    expect(attacker.isTaunted).toBe(true);
+
+    const result = engine.useMove(attacker, defender, attacker.moves[0]); // earthquake (physical)
+    expect(result.success).toBe(false);
+    expect(defender.currentHP).toBe(defender.maxHP); // no damage dealt
+  });
+
+  test('taunted pokemon can use status moves', () => {
+    const engine = new BattleEngine();
+    const attacker = makeAttacker();
+    const defender = makeDefender();
+
+    attacker.applyTaunt(3);
+
+    const result = engine.useMove(attacker, defender, attacker.moves[1]); // swords-dance (status)
+    expect(result.success).toBe(true);
+    expect(attacker.statStages.ATK).toBe(2);
+  });
+
+  test('taunt duration decrements each startTurn', () => {
+    const engine = new BattleEngine();
+    const attacker = makeAttacker();
+    const defender = makeDefender();
+
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, defender);
+
+    attacker.applyTaunt(3);
+
+    engine.startTurn(); // turn 1: 3 -> 2
+    expect(attacker.tauntTurnsLeft).toBe(2);
+    expect(attacker.isTaunted).toBe(true);
+
+    engine.startTurn(); // turn 2: 2 -> 1
+    expect(attacker.tauntTurnsLeft).toBe(1);
+    expect(attacker.isTaunted).toBe(true);
+
+    engine.startTurn(); // turn 3: 1 -> 0
+    expect(attacker.tauntTurnsLeft).toBe(0);
+    expect(attacker.isTaunted).toBe(false);
+  });
+
+  test('taunt clears on switch-out', () => {
+    const engine = new BattleEngine();
+    const attacker = makeAttacker();
+    const defender = makeDefender();
+    const bench = new Pokemon({
+      name: 'Sylveon', types: ['fairy'], ability: 'pixilate', item: null,
+      baseStats: { HP: 95, ATK: 65, DEF: 65, SPATK: 110, SPDEF: 130, SPEED: 60 },
+    });
+
+    attacker.applyTaunt(3);
+    expect(attacker.isTaunted).toBe(true);
+
+    attacker.resetTaunt(); // simulates what switchTo does
+    expect(attacker.isTaunted).toBe(false);
+    expect(attacker.tauntTurnsLeft).toBe(0);
+  });
+});
+
+describe('Mental Herb (メンタルハーブ)', () => {
+  test('cures taunt on first attacking move attempt', () => {
+    const engine = new BattleEngine();
+    const attacker = new Pokemon({
+      name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'mental-herb', itemUsed: false,
+      baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+      moves: [
+        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+      ],
+    });
+    const defender = new Pokemon({
+      name: 'Blissey', types: ['normal'], ability: 'natural-cure', item: null,
+      baseStats: { HP: 255, ATK: 10, DEF: 10, SPATK: 75, SPDEF: 135, SPEED: 55 },
+    });
+
+    attacker.applyTaunt(3);
+    expect(attacker.isTaunted).toBe(true);
+
+    const result = engine.useMove(attacker, defender, attacker.moves[0]);
+    expect(result.success).toBe(true);
+    expect(result.damage).toBeGreaterThan(0);
+    expect(attacker.isTaunted).toBe(false); // taunt cured
+    expect(attacker.itemUsed).toBe(true); // herb consumed
+  });
+
+  test('second attack is blocked after herb is consumed', () => {
+    const engine = new BattleEngine();
+    const attacker = new Pokemon({
+      name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'mental-herb', itemUsed: false,
+      baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+      moves: [
+        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+      ],
+    });
+    const defender = new Pokemon({
+      name: 'Blissey', types: ['normal'], ability: 'natural-cure', item: null,
+      baseStats: { HP: 255, ATK: 10, DEF: 10, SPATK: 75, SPDEF: 135, SPEED: 55 },
+    });
+
+    attacker.applyTaunt(5);
+
+    // First attempt: herb cures taunt, move goes through
+    engine.useMove(attacker, defender, attacker.moves[0]);
+    expect(attacker.isTaunted).toBe(false);
+    expect(attacker.itemUsed).toBe(true);
+
+    // Re-apply taunt for the second test
+    attacker.applyTaunt(3);
+    expect(attacker.isTaunted).toBe(true);
+
+    // Second attempt: herb already used, taunt blocks
+    const result = engine.useMove(attacker, defender, attacker.moves[0]);
+    expect(result.success).toBe(false);
+  });
+
+  test('mental herb does not cure taunt if already used', () => {
+    const engine = new BattleEngine();
+    const attacker = new Pokemon({
+      name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'mental-herb', itemUsed: true,
+      baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+      moves: [
+        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+      ],
+    });
+    const defender = new Pokemon({
+      name: 'Blissey', types: ['normal'], ability: 'natural-cure', item: null,
+      baseStats: { HP: 255, ATK: 10, DEF: 10, SPATK: 75, SPDEF: 135, SPEED: 55 },
+    });
+
+    attacker.applyTaunt(3);
+
+    const result = engine.useMove(attacker, defender, attacker.moves[0]);
+    expect(result.success).toBe(false); // still taunted
+    expect(attacker.isTaunted).toBe(true);
+  });
+
+  // --- ハザード設置技テスト ---
+  describe('Section: Hazards', () => {
+    function makeMon(name: string, types: string[], ability = 'normal', item: string | null = null) {
+      return new Pokemon({
+        name, types: types as any, ability, item,
+        baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      });
+    }
+    function statusMove(name: string, fieldEffect: string): Move {
+      return new Move({ name, type: 'normal', power: 0, accuracy: 100, pp: 10, category: 'status', fieldEffect: fieldEffect as any });
+    }
+
+    test('stealth-rock: sets on attacker side, blocks if already set', () => {
+      const e = new BattleEngine();
+      const a = makeMon('A', ['normal']);
+      const d = makeMon('D', ['normal']);
+      e.setActivePokemon(0, a);
+      e.setActivePokemon(1, d);
+      const move = statusMove('stealth-rock', 'stealth-rock');
+
+      const r1 = e.useMove(a, d, move);
+      expect(r1.success).toBe(true);
+      expect(e.field.stealthRock.playerA).toBe(true);
+
+      // 2回目も技は成功するが「既に設置済み」
+      const r2 = e.useMove(a, d, move);
+      expect(r2.success).toBe(true);
+      expect(e.field.stealthRock.playerA).toBe(true);
+    });
+
+    test('stealth-rock: switch-in damage based on type effectiveness', () => {
+      const e = new BattleEngine();
+      e.setStealthRock(1); // 相手側に設置
+      const mon = makeMon('Gengar', ['poison', 'ghost']);
+      e.setActivePokemon(0, mon);
+      const before = mon.currentHP;
+      e.switchIn(mon, [], 1);
+      // 岩: 2倍 → 1/8 * 2 = 1/4 HP
+      expect(mon.currentHP).toBeLessThan(before);
+    });
+
+    test('spikes: 1 layer = 1/8, 2 = 1/6, 3 = 1/4', () => {
+      const e = new BattleEngine();
+      const a = makeMon('A', ['normal']);
+      const d = makeMon('D', ['normal']);
+      e.setActivePokemon(0, a);
+      e.setActivePokemon(1, d);
+      const move = statusMove('spikes', 'spikes');
+
+      e.useMove(a, d, move);
+      expect(e.field.spikes.playerA).toBe(1);
+
+      e.useMove(a, d, move);
+      expect(e.field.spikes.playerA).toBe(2);
+
+      e.useMove(a, d, move);
+      expect(e.field.spikes.playerA).toBe(3);
+
+      // 4層目は無効
+      e.useMove(a, d, move);
+      expect(e.field.spikes.playerA).toBe(3);
+    });
+
+    test('spikes: flying and levitate are immune to damage', () => {
+      const e = new BattleEngine();
+      const target = makeMon('Target', ['normal']);
+      const setter = makeMon('A', ['normal']);
+      e.setActivePokemon(0, setter);
+      e.setActivePokemon(1, target);
+
+      // まきびし1層を設置
+      const spikeMove = statusMove('spikes', 'spikes');
+      e.useMove(setter, target, spikeMove);
+
+      // 通常タイプはダメージ
+      const normal = makeMon('Normal', ['normal']);
+      e.setActivePokemon(0, normal);
+      const hpBefore = normal.currentHP;
+      e.switchIn(normal, [], 0);
+      expect(normal.currentHP).toBeLessThan(hpBefore);
+
+      // 飛行タイプは無効
+      const flying = makeMon('Bird', ['flying']);
+      e.setActivePokemon(0, flying);
+      const hpFlyingBefore = flying.currentHP;
+      e.switchIn(flying, [], 0);
+      expect(flying.currentHP).toBe(hpFlyingBefore);
+
+      // ふゆう特性も無効
+      const levitate = makeMon('Koffing', ['poison'], 'levitate');
+      e.setActivePokemon(0, levitate);
+      const hpLevBefore = levitate.currentHP;
+      e.switchIn(levitate, [], 0);
+      expect(levitate.currentHP).toBe(hpLevBefore);
+    });
+
+    test('toxic-spikes: 1 layer = poison, 2 layers = badly-poisoned', () => {
+      const e = new BattleEngine();
+      const a = makeMon('A', ['normal']);
+      const d = makeMon('D', ['normal']);
+      e.setActivePokemon(0, a);
+      e.setActivePokemon(1, d);
+      const move = statusMove('toxic-spikes', 'toxic-spikes');
+
+      e.useMove(a, d, move);
+      expect(e.field.toxicSpikes.playerA).toBe(1);
+
+      e.useMove(a, d, move);
+      expect(e.field.toxicSpikes.playerA).toBe(2);
+
+      // 3層目は無効
+      e.useMove(a, d, move);
+      expect(e.field.toxicSpikes.playerA).toBe(2);
+    });
+
+    test('toxic-spikes: poison type absorbs, steel/flying/levitate immune', () => {
+      const e = new BattleEngine();
+      const a = makeMon('A', ['normal']);
+      const d = makeMon('D', ['normal']);
+      e.setActivePokemon(0, a);
+      e.setActivePokemon(1, d);
+      const move = statusMove('toxic-spikes', 'toxic-spikes');
+      e.useMove(a, d, move); // 1層設置
+
+      // 毒タイプは吸収して解除
+      const poison = makeMon('Grimer', ['poison']);
+      e.setActivePokemon(0, poison);
+      e.switchIn(poison, [], 0);
+      expect(e.field.toxicSpikes.playerA).toBe(0);
+      expect(poison.status).toBeNull();
+
+      // もう一度設置
+      e.setActivePokemon(0, a);
+      e.useMove(a, d, move);
+
+      // はがねタイプは無効（消えない）
+      const steel = makeMon('Steelix', ['steel']);
+      e.setActivePokemon(0, steel);
+      e.switchIn(steel, [], 0);
+      expect(steel.status).toBeNull();
+      expect(e.field.toxicSpikes.playerA).toBe(1);
+
+      // ひこうタイプも無効
+      e.setActivePokemon(0, a);
+      e.useMove(a, d, move); // 2層
+      const flying = makeMon('Bird', ['flying']);
+      e.setActivePokemon(0, flying);
+      e.switchIn(flying, [], 0);
+      expect(flying.status).toBeNull();
+      expect(e.field.toxicSpikes.playerA).toBe(2);
+    });
+
+    test('toxic-spikes: switch-in applies poison status', () => {
+      const e = new BattleEngine();
+      const a = makeMon('A', ['normal']);
+      const d = makeMon('D', ['normal']);
+      e.setActivePokemon(0, a);
+      e.setActivePokemon(1, d);
+      const move = statusMove('toxic-spikes', 'toxic-spikes');
+      e.useMove(a, d, move); // 1層
+
+      const victim = makeMon('Victim', ['normal']);
+      e.setActivePokemon(0, victim);
+      e.switchIn(victim, [], 0);
+      expect(victim.status).toBe('poison');
+    });
+  });
+});

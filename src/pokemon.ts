@@ -37,6 +37,11 @@ export interface PokémonConstructorData {
   statStages?: StatStages;
   toxicCounter?: number;
   isSeeded?: boolean;
+  // ちょうはつ: trueの間、攻撃技を使えない（2〜4ターン）。交代で解除。
+  tauntTurnsLeft?: number;
+  // フォルムチェンジ（バトルスイッチ等）。現在のフォルム名と、フォルム別種族値。
+  form?: string;
+  formStats?: Record<string, BaseStats>;
 }
 
 export class Pokemon {
@@ -62,6 +67,14 @@ export class Pokemon {
   toxicCounter: number;
   // やどりぎのタネ: trueの間、毎ターン相手からHPを吸われる（交代で治る揮発性の状態）。
   isSeeded: boolean;
+  // ちょうはつ: trueの間、攻撃技を使えない（2〜4ターン）。交代で解除。
+  tauntTurnsLeft: number;
+  // フォルムチェンジ（バトルスイッチ等）。現在のフォルム名。formStats 未指定なら 'normal'。
+  form: string;
+  // フォルム別種族値。例: ギルガルド { shield: {...}, blade: {...} }。未指定なら変更不可。
+  formStats: Record<string, BaseStats> | null;
+  // レベル（実数値の再計算に使用）。省略時は50。
+  level: number;
 
   constructor(data: PokémonConstructorData) {
     this.name = data.name;
@@ -79,6 +92,10 @@ export class Pokemon {
     this.statStages = data.statStages ? { ...data.statStages } : zeroStatStages();
     this.toxicCounter = data.toxicCounter ?? 0;
     this.isSeeded = data.isSeeded ?? false;
+    this.tauntTurnsLeft = data.tauntTurnsLeft ?? 0;
+    this.form = data.form ?? 'normal';
+    this.formStats = data.formStats ?? null;
+    this.level = data.level ?? 50;
 
     this.statPoints = data.statPoints ?? {};
     this.nature = data.nature ?? null;
@@ -117,6 +134,18 @@ export class Pokemon {
   // 交代で場を離れると能力ランクはリセットされる（本編仕様）。
   resetStatStages(): void {
     this.statStages = zeroStatStages();
+  }
+
+  // フォルムチェンジ。formStats に存在するフォルムへ移行し、種族値を差し替えて
+  // 実数値を再計算する。HP はフォルム間で変わらない前提（ギルガルド等）で維持する。
+  // 存在しないフォルム名・formStats 未指定なら何もしない。
+  setForm(form: string): boolean {
+    if (!this.formStats || !this.formStats[form]) return false;
+    if (this.form === form) return false;
+    this.form = form;
+    const level = this.level;
+    this.stats = statPointSystem.calculateStats(this.formStats[form], this.statPoints, this.nature, level);
+    return true;
   }
 
   // currentHPから導出する（保存フィールドにすると直接代入時に同期が崩れるため）。
@@ -174,6 +203,20 @@ export class Pokemon {
   // やどりぎのタネは（能力ランクと違い）交代すると状態自体が解除される揮発性の状態。
   resetSeeded(): void {
     this.isSeeded = false;
+  }
+
+  // ちょうはつ: 攻撃技を使えない状態（2〜4ターン）。交代で解除。
+  get isTaunted(): boolean {
+    return this.tauntTurnsLeft > 0;
+  }
+
+  applyTaunt(turns: number): void {
+    this.tauntTurnsLeft = turns;
+  }
+
+  // 交代で場を離れると挑発状態は解除される（本編仕様）。
+  resetTaunt(): void {
+    this.tauntTurnsLeft = 0;
   }
 
   canUseMove(moveIndex: number): boolean {
