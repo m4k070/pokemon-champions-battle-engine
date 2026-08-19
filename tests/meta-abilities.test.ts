@@ -288,21 +288,48 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(pokemon.isTaunted).toBe(false);
   });
 
-  test('とびだすハバネロ: ほのお技の威力が1.3倍になる', () => {
+  test('とびだすハバネロ: 攻撃技でダメージを受けたとき、攻撃者をやけどにする', () => {
     const { SPICY_SPRAY } = require('../src/rules/abilities/meta-abilities.js') as typeof import('../src/rules/abilities/meta-abilities.js');
-    const attacker = makePokemon('Scovillain', 'spicy-spray', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const defender = makePokemon('Scovillain', 'spicy-spray', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
 
-    const fireBoosted = SPICY_SPRAY.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Flamethrower', type: 'fire', power: 90 }), value: 90, engine });
-    expect(fireBoosted).toBe(117);
+    // 物理技で攻撃 → やける
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, defender);
+    engine.applyDamage(defender, 10, attacker, move({ name: 'Tackle', type: 'normal', power: 40, category: 'physical' }));
+    expect(attacker.status).toBe('burn');
 
-    const otherType = SPICY_SPRAY.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Tackle', type: 'normal', power: 40 }), value: 40, engine });
-    expect(otherType).toBe(40);
+    // 特殊技でも発動する（フレレイムボディと違い）
+    const attacker2 = makePokemon('Attacker2', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    engine.setActivePokemon(0, attacker2);
+    engine.applyDamage(defender, 10, attacker2, move({ name: 'Thunderbolt', type: 'electric', power: 90, category: 'special' }));
+    expect(attacker2.status).toBe('burn');
+
+    // ほのおタイプは無効
+    const fireAttacker = makePokemon('FireAttacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    fireAttacker.types = ['fire'];
+    engine.setActivePokemon(0, fireAttacker);
+    engine.applyDamage(defender, 10, fireAttacker, move({ name: 'Ember', type: 'fire', power: 40, category: 'special' }));
+    expect(fireAttacker.status).toBeNull();
+
+    // すでに状態異常の相手には発動しない
+    const statusAttacker = makePokemon('StatusAttacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    statusAttacker.status = 'poison';
+    engine.setActivePokemon(0, statusAttacker);
+    engine.applyDamage(defender, 10, statusAttacker, move({ name: 'Tackle', type: 'normal', power: 40, category: 'physical' }));
+    expect(statusAttacker.status).toBe('poison'); // 変わらない
   });
 
-  test('エレキメイカー: でん技の威力が1.3倍になる', () => {
+  test('エレキメイカー: 入場時にエレキフィールドを展開し、でん技の威力が1.3倍になる', () => {
     const { ELECTRIC_SURGE } = require('../src/rules/abilities/meta-abilities.js') as typeof import('../src/rules/abilities/meta-abilities.js');
     const attacker = makePokemon('Raichu', 'electric-surge', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
 
+    // エレキフィールドなしでは補正なし
+    const electricNormal = ELECTRIC_SURGE.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Thunderbolt', type: 'electric', power: 90 }), value: 90, engine });
+    expect(electricNormal).toBe(90);
+
+    // エレキフィールドありでは1.3倍
+    engine.field.terrain = 'electric-terrain';
     const electricBoosted = ELECTRIC_SURGE.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Thunderbolt', type: 'electric', power: 90 }), value: 90, engine });
     expect(electricBoosted).toBe(117);
 
