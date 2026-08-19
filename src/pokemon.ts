@@ -205,17 +205,13 @@ export class Pokemon {
     this.isSeeded = false;
   }
 
-  // ちょうはつ: 攻撃技を使えない状態（2〜4ターン）。
+  // ちょうはつ: 攻撃技を使えない状態（2〜4ターン）。交代で解除。
   get isTaunted(): boolean {
     return this.tauntTurnsLeft > 0;
   }
 
   applyTaunt(turns: number): void {
     this.tauntTurnsLeft = turns;
-  }
-
-  removeTaunt(): void {
-    this.tauntTurnsLeft = 0;
   }
 
   // 交代で場を離れると挑発状態は解除される（本編仕様）。
