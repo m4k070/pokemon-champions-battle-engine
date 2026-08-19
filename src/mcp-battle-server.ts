@@ -25,7 +25,7 @@ const TYPE_NAMES = [
 const TypeNameSchema = z.enum(TYPE_NAMES);
 const MoveCategorySchema = z.enum(['physical', 'special', 'status']);
 const StatusConditionSchema = z.enum(['sleep', 'poison', 'burn', 'paralysis', 'freeze', 'badly-poisoned']);
-const FieldEffectSchema = z.enum(['tailwind', 'trick-room', 'reflect']);
+const FieldEffectSchema = z.enum(['tailwind', 'trick-room', 'reflect', 'stealth-rock', 'spikes', 'toxic-spikes']);
 const StatStageKeySchema = z.enum(['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED']);
 
 const BaseStatsSchema = z.object({
@@ -66,6 +66,9 @@ const MoveInputSchema = z.object({
   weatherHeal: z.boolean().optional(),
   multiHit: z.boolean().optional(),
   pivot: z.boolean().optional(),
+  contact: z.boolean().optional(),
+  restoresShieldForm: z.boolean().optional(),
+  inflictsSpikes: z.boolean().optional(),
 });
 
 const PokemonInputSchema = z.object({
@@ -81,6 +84,9 @@ const PokemonInputSchema = z.object({
   moves: z.array(MoveInputSchema).min(1).max(4),
   currentHP: z.number().int().nonnegative().optional(),
   status: StatusConditionSchema.nullable().optional(),
+  // フォルムチェンジ（バトルスイッチ等）。現在のフォルム名と、フォルム別種族値。
+  form: z.string().optional(),
+  formStats: z.record(z.string(), BaseStatsSchema).optional(),
 });
 
 const ConcreteActionSchema = z.discriminatedUnion('type', [
@@ -112,6 +118,8 @@ function buildPokemon(spec: z.infer<typeof PokemonInputSchema>): Pokemon {
     nature: spec.nature ?? null,
     currentHP: spec.currentHP,
     status: spec.status ?? null,
+    form: spec.form,
+    formStats: spec.formStats,
     moves: spec.moves.map((move) => new Move(move)),
   });
 }
@@ -154,6 +162,8 @@ function stateView(stored: StoredSession) {
     trickRoom: session.engine.trickRoom,
     trickRoomTurnsLeft: session.engine.trickRoomTurnsLeft,
     stealthRock: { ...session.engine.field.stealthRock },
+    spikes: { ...session.engine.field.spikes },
+    toxicSpikes: { ...session.engine.field.toxicSpikes },
     tailwind: { ...session.engine.field.tailwind },
     reflect: { ...session.engine.field.reflect },
     teamA: session.teamA.map(pokemonView),

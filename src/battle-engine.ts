@@ -78,7 +78,9 @@ export class BattleEngine {
   }
 
   setStealthRock(side: 0 | 1): void {
-    this.field.stealthRock[this.sideKey(side)] = true;
+    const key = this.sideKey(side);
+    if (this.field.stealthRock[key]) return;
+    this.field.stealthRock[key] = true;
     this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側の場にステルスロックが設置された`);
   }
 
@@ -96,7 +98,7 @@ export class BattleEngine {
     return null;
   }
 
-  private getSide(pokemon: Pokemon): 0 | 1 | null {
+  getSide(pokemon: Pokemon): 0 | 1 | null {
     if (this.activePokemon0 === pokemon) return 0;
     if (this.activePokemon1 === pokemon) return 1;
     return null;
@@ -141,6 +143,47 @@ export class BattleEngine {
             this.log.push(`${p.name}はオボンのみで${heal}回復した`);
           }
         }
+
+        // カゴのみ: ねむり状態を回復する（1回限り）。
+        if (p.item === 'chesto-berry' && !p.itemUsed && p.status === 'sleep') {
+          p.removeStatus();
+          p.itemUsed = true;
+          this.log.push(`${p.name}はカゴのみでねむりから目覚めた`);
+        }
+
+        // ラムのみ: 状態異常を回復する（1回限り）。
+        if (p.item === 'lum-berry' && !p.itemUsed && p.status) {
+          p.removeStatus();
+          p.itemUsed = true;
+          this.log.push(`${p.name}はラムのみで状態異常が回復した`);
+        }
+
+        // どくどくだま: ターン終了時に猛毒状態になる（1回限り）。
+        if (p.item === 'toxic-orb' && !p.itemUsed && !p.status) {
+          p.applyStatus('badly-poisoned');
+          p.itemUsed = true;
+          this.log.push(`${p.name}はどくどくだまの毒に侵された`);
+        }
+
+        // メンタルハーブ: ちょうはつ状態を解除する（1回限り）。
+        if (p.item === 'mental-herb' && !p.itemUsed && p.isTaunted) {
+          p.resetTaunt();
+          p.itemUsed = true;
+          this.log.push(`${p.name}はメンタルハーブで挑発を解いた`);
+        }
+
+        // スピーダー: ターン終了時に素早さが1段階上がる（消耗品）。
+        if (p.item === 'x-speed' && !p.itemUsed) {
+          const changed = p.modifyStatStage('SPEED', 1);
+          if (changed !== 0) {
+            p.itemUsed = true;
+            this.log.push(`${p.name}はスピーダーで素早さが上がった`);
+          }
+        }
+
+        // 特性のターン終了時フック（かそく等）。
+        const ability = getAbilityDefinition(p.ability);
+        ability?.onEndTurn?.({ pokemon: p, engine: this });
       }
     });
 
@@ -160,10 +203,21 @@ export class BattleEngine {
 
   calculateAttack(attacker: Pokemon, move: { category: string }): number {
     const statKey: StatStageKey = move.category === 'physical' ? 'ATK' : 'SPATK';
-    let attack = Math.floor(attacker.stats[statKey] * attacker.getStatStageMultiplier(statKey));
+    // 防御側がてんねん(ignoresOpponentStatChanges)なら、攻撃側の能力ランクを無視する。
+    const defender = this.getOpponent(attacker);
+    const ignoreStages = defender
+      ? (getAbilityDefinition(defender.ability)?.ignoresOpponentStatChanges?.() ?? false)
+      : false;
+    const stageMultiplier = ignoreStages ? 1 : attacker.getStatStageMultiplier(statKey);
+    let attack = Math.floor(attacker.stats[statKey] * stageMultiplier);
 
     if (attacker.status === 'burn' && move.category === 'physical') {
       attack = Math.floor(attack / 2);
+    }
+
+    const ability = getAbilityDefinition(attacker.ability);
+    if (ability?.modifyAttack) {
+      attack = ability.modifyAttack({ pokemon: attacker, move: move as MoveData, value: attack, engine: this });
     }
 
     this.events.emit('calculate-attack', { attacker, move, attack });
@@ -173,7 +227,18 @@ export class BattleEngine {
 
   calculateDefense(defender: Pokemon, move: { category: string }): number {
     const statKey: StatStageKey = move.category === 'physical' ? 'DEF' : 'SPDEF';
-    const defense = Math.floor(defender.stats[statKey] * defender.getStatStageMultiplier(statKey));
+    // 攻撃側がてんねん(ignoresOpponentStatChanges)なら、防御側の能力ランクを無視する。
+    const attacker = this.getOpponent(defender);
+    const ignoreStages = attacker
+      ? (getAbilityDefinition(attacker.ability)?.ignoresOpponentStatChanges?.() ?? false)
+      : false;
+    const stageMultiplier = ignoreStages ? 1 : defender.getStatStageMultiplier(statKey);
+    let defense = Math.floor(defender.stats[statKey] * stageMultiplier);
+
+    const ability = getAbilityDefinition(defender.ability);
+    if (ability?.modifyDefense) {
+      defense = ability.modifyDefense({ pokemon: defender, move: move as MoveData, value: defense, engine: this });
+    }
 
     this.events.emit('calculate-defense', { defender, move, defense });
 
@@ -213,7 +278,17 @@ export class BattleEngine {
   }
 
   applyModifiers(baseDamage: number, attacker: Pokemon, defender: Pokemon, move: MoveData): { finalDamage: number; effectiveness: number } {
-    const effectiveness = this.getTypeEffectiveness(move.type, defender.types);
+    let effectiveness = this.getTypeEffectiveness(move.type, defender.types);
+    // 攻撃側の特性によるタイプ相性補正（きもったま: Normal/Fighting→Ghost 有効化等）
+    const attackerAbility = getAbilityDefinition(attacker.ability);
+    if (attackerAbility?.modifyTypeEffectiveness) {
+      effectiveness = attackerAbility.modifyTypeEffectiveness({
+        attackType: move.type,
+        defenderTypes: defender.types,
+        effectiveness,
+        engine: this,
+      });
+    }
     let finalDamage = Math.floor(baseDamage * effectiveness);
 
     const defenderSide = this.getSide(defender);
@@ -226,9 +301,25 @@ export class BattleEngine {
     return { finalDamage, effectiveness };
   }
 
-  applyDamage(defender: Pokemon, damage: number): void {
-    this.events.emit('apply-damage', { defender, damage, engine: this });
-    defender.takeDamage(damage, this);
+  applyDamage(defender: Pokemon, damage: number, attacker?: Pokemon, move?: MoveData): void {
+    let effectiveDamage = damage;
+
+    // 特性の被弾時フック（がんじょう・じきゅうりょく・あついしぼう・さめはだ等）。
+    if (attacker && move) {
+      const ability = getAbilityDefinition(defender.ability);
+      const adjusted = ability?.onDamaged?.({ defender, attacker, move, damage, engine: this });
+      if (typeof adjusted === 'number') effectiveDamage = adjusted;
+    }
+
+    // シュカのみ: 地面技のダメージを半減する（1回限り）。
+    if (defender.item === 'shuca-berry' && !defender.itemUsed && move?.type === 'ground') {
+      effectiveDamage = Math.floor(effectiveDamage / 2);
+      defender.itemUsed = true;
+      this.log.push(`${defender.name}はシュカのみで地面技のダメージを半減した`);
+    }
+
+    this.events.emit('apply-damage', { defender, damage: effectiveDamage, attacker, move, engine: this });
+    defender.takeDamage(effectiveDamage, this);
   }
 
   useMove(attacker: Pokemon, defender: Pokemon, move: MoveData): UseMoveResult {
@@ -240,15 +331,36 @@ export class BattleEngine {
 
     this.log.push(`${attacker.name}の${move.name}`);
 
+    // ちょうはつ: 攻撃技（category !== 'status'）の使用を阻止する。
+    // メンタルハーブ: ちょうはつを1回だけ解除して技を通す（消費される）。
+    if (attacker.isTaunted && move.category !== 'status') {
+      if (attacker.item === 'mental-herb' && !attacker.itemUsed) {
+        attacker.resetTaunt();
+        attacker.itemUsed = true;
+        this.log.push(`${attacker.name}はメンタルハーブで挑発を解いた`);
+      } else {
+        this.log.push(`${attacker.name}は挑発されて使えない！`);
+        return { success: false };
+      }
+    }
+
     // ぼうだん等の技無効化特性は命中判定より前に解決する（本編仕様）。
     const defenderAbility = getAbilityDefinition(defender.ability);
     if (defenderAbility?.blocksMove?.(move)) {
+      // ひらいしん: でん技を弾いたとき、特攻を1段階上げる。
+      if (defender.ability === 'lightning-rod' && move.type === 'electric') {
+        defender.modifyStatStage('SPATK', 1);
+        this.log.push(`${defender.name}のひらいしんで特攻が上がった`);
+      }
       this.log.push(`${defender.name}の${defender.ability}で効果がないようだ`);
       return { success: false };
     }
 
     if (move.accuracy < 100) {
-      if (Math.random() * 100 > move.accuracy) {
+      // ノーガード(no-guard): 攻撃側・防御側どちらかが持てば命中率100%になる。
+      const attackerNoGuard = getAbilityDefinition(attacker.ability)?.name === 'no-guard';
+      const defenderNoGuard = getAbilityDefinition(defender.ability)?.name === 'no-guard';
+      if (!attackerNoGuard && !defenderNoGuard && Math.random() * 100 > move.accuracy) {
         this.log.push('技は外れた');
         return { success: false };
       }
@@ -285,11 +397,64 @@ export class BattleEngine {
       return { success: true };
     }
 
+    // --- ハザード設置技 ---
+    if (move.fieldEffect === 'stealth-rock') {
+      const side = this.getSide(attacker);
+      if (side !== null) {
+        const key = this.sideKey(side);
+        if (this.field.stealthRock[key]) {
+          this.log.push('ステルスロックは既に設置されている');
+        } else {
+          this.field.stealthRock[key] = true;
+          this.log.push(`${attacker.name}側の場にステルスロックが散りばめられた`);
+        }
+      }
+      return { success: true };
+    }
+
+    if (move.fieldEffect === 'spikes') {
+      const side = this.getSide(attacker);
+      if (side !== null) {
+        const key = this.sideKey(side);
+        if (this.field.spikes[key] >= 3) {
+          this.log.push('まきびしはこれ以上盛れない');
+        } else {
+          this.field.spikes[key]++;
+          this.log.push(`${attacker.name}側の場にまきびしが${this.field.spikes[key]}層設置された`);
+        }
+      }
+      return { success: true };
+    }
+
+    if (move.fieldEffect === 'toxic-spikes') {
+      const side = this.getSide(attacker);
+      if (side !== null) {
+        const key = this.sideKey(side);
+        if (this.field.toxicSpikes[key] >= 2) {
+          this.log.push('どくびしはこれ以上盛れない');
+        } else {
+          this.field.toxicSpikes[key]++;
+          this.log.push(`${attacker.name}側の場にどくびしが${this.field.toxicSpikes[key]}層設置された`);
+        }
+      }
+      return { success: true };
+    }
+
     if (move.weatherHeal) {
       const percent = WEATHER_HEAL_PERCENT[this.weather ?? 'none'];
       const heal = Math.floor(attacker.maxHP * percent);
       attacker.heal(heal);
       this.log.push(`${attacker.name}は${move.name}で${heal}回復した`);
+      return { success: true };
+    }
+
+    // キングシールド等: バトルスイッチ持ち（ギルガルド）がシールドフォルムに戻る。
+    if (move.restoresShieldForm) {
+      const ability = getAbilityDefinition(attacker.ability);
+      if (ability?.name === 'battle-switch' && attacker.form !== 'shield') {
+        attacker.setForm('shield');
+        this.log.push(`${attacker.name}はシールドフォルムに戻った`);
+      }
       return { success: true };
     }
 
@@ -342,6 +507,12 @@ export class BattleEngine {
       power *= 1.5;
     }
 
+    // 特性による威力補正（テクニシャン等）。
+    const powerAbility = getAbilityDefinition(attacker.ability);
+    if (powerAbility?.modifyMovePower) {
+      power = powerAbility.modifyMovePower({ pokemon: attacker, move, value: power, engine: this });
+    }
+
     const moveWithStab: MoveData = { ...move, power, type: effectiveType };
 
     // ロックブラスト等の多段技は命中判定こそ1回だが、当たった後の実ヒット数は乱数（本編仕様）。
@@ -355,7 +526,7 @@ export class BattleEngine {
       const baseDamage = this.calculateBaseDamage(attack, defense, moveWithStab);
       const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, moveWithStab);
 
-      this.applyDamage(defender, finalDamage);
+      this.applyDamage(defender, finalDamage, attacker, moveWithStab);
       totalDamage += finalDamage;
       lastEffectiveness = effectiveness;
 
@@ -378,6 +549,10 @@ export class BattleEngine {
 
     this.log.push(`${defender.name}に${totalDamage}のダメージ`);
 
+    // 特性の「ダメージ技を命中させた後」フック（バトルスイッチ等）。
+    const attackerAbility = getAbilityDefinition(attacker.ability);
+    attackerAbility?.onMoveUsed?.({ attacker, defender, move, engine: this });
+
     if (defender.isFainted) {
       this.log.push(`${defender.name}は戦闘不能になった`);
     } else {
@@ -388,7 +563,20 @@ export class BattleEngine {
         }
       }
       if (move.targetStatChange) {
-        this.applyTargetStatChange(defender, move.targetStatChange);
+        this.applyTargetStatChange(attacker, defender, move.targetStatChange);
+      }
+      // ひけんちえなみ等: 命中時に相手側にまきびしを設置する追加効果。
+      if (move.inflictsSpikes) {
+        const defenderSide = this.getSide(defender);
+        if (defenderSide !== null) {
+          const key = this.sideKey(defenderSide);
+          if (this.field.spikes[key] >= 3) {
+            this.log.push('まきびしはこれ以上盛れない');
+          } else {
+            this.field.spikes[key]++;
+            this.log.push(`${defender.name}側の場にまきびしが${this.field.spikes[key]}層設置された`);
+          }
+        }
       }
     }
 
@@ -415,9 +603,23 @@ export class BattleEngine {
     return MULTI_HIT_TABLE[MULTI_HIT_TABLE.length - 1].hits;
   }
 
-  private applyTargetStatChange(pokemon: Pokemon, changes: NonNullable<MoveData['targetStatChange']>): void {
+  private applyTargetStatChange(attacker: Pokemon, pokemon: Pokemon, changes: NonNullable<MoveData['targetStatChange']>): void {
     for (const change of changes) {
       if (Math.random() * 100 >= change.chance) continue;
+      // ミラーアーマー: 相手から受ける能力低下をその相手に反射する。
+      if (change.delta < 0 && pokemon.ability === 'mirror-armor') {
+        const applied = attacker.modifyStatStage(change.stat, change.delta);
+        if (applied === 0) continue;
+        const direction = applied > 0 ? '上がった' : '下がった';
+        this.log.push(`${attacker.name}の${change.stat}が${direction}（${pokemon.name}のミラーアーマー）`);
+        continue;
+      }
+      // しろいハーブ: 能力低下を1回だけ防ぐ（消費される）。
+      if (change.delta < 0 && pokemon.item === 'white-herb' && !pokemon.itemUsed) {
+        pokemon.itemUsed = true;
+        this.log.push(`${pokemon.name}はしろいハーブで能力低下を防いだ`);
+        continue;
+      }
       const applied = pokemon.modifyStatStage(change.stat, change.delta);
       if (applied === 0) continue;
       const direction = applied > 0 ? '上がった' : '下がった';
@@ -454,6 +656,14 @@ export class BattleEngine {
       }
     }
 
+    if (this.field.terrainTurnsLeft > 0) {
+      this.field.terrainTurnsLeft--;
+      if (this.field.terrainTurnsLeft === 0) {
+        this.log.push('地形の効果が消えた');
+        this.field.terrain = null;
+      }
+    }
+
     for (const side of [0, 1] as const) {
       const key = this.sideKey(side);
       if (this.field.tailwind[key] > 0) {
@@ -467,6 +677,15 @@ export class BattleEngine {
         if (this.field.reflect[key] === 0) {
           this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側のリフレクターが消えた`);
         }
+      }
+    }
+
+    // ちょうはつ: ターンごとに残りターンを減らし、0になったら解除。
+    for (const pokemon of [this.activePokemon0, this.activePokemon1]) {
+      if (!pokemon || pokemon.isFainted || pokemon.tauntTurnsLeft <= 0) continue;
+      pokemon.tauntTurnsLeft--;
+      if (pokemon.tauntTurnsLeft === 0) {
+        this.log.push(`${pokemon.name}の挑発が解けた`);
       }
     }
   }
@@ -547,12 +766,57 @@ export class BattleEngine {
     this.log.push(`${pokemon.name}が場に出た！`);
     this.events.emit('switch-in', { pokemon, team, engine: this });
 
-    if (side !== undefined && !pokemon.isFainted && this.field.stealthRock[this.sideKey(side)]) {
+    if (side === undefined || pokemon.isFainted) return pokemon;
+
+    const key = this.sideKey(side);
+
+    // ステルスロック: 岩タイプ有効度に基づくダメージ（1/8 HP）
+    if (this.field.stealthRock[key]) {
       const effectiveness = this.getTypeEffectiveness('rock', pokemon.types);
       if (effectiveness > 0) {
         const damage = Math.floor((pokemon.maxHP / 8) * effectiveness);
         pokemon.takeDamage(damage, this);
         this.log.push(`${pokemon.name}はステルスロックのダメージで${damage}のダメージを受けた`);
+      }
+    }
+
+    // まきびし: 飛行タイプは無効。層数に応じてダメージ。
+    if (this.field.spikes[key] > 0) {
+      const isFlying = pokemon.types.includes('flying');
+      const hasLevitate = pokemon.ability === 'levitate';
+      if (!isFlying && !hasLevitate) {
+        const spikesLayers = this.field.spikes[key];
+        // 1層=1/8, 2層=1/6, 3層=1/4
+        const denoms = [0, 8, 6, 4];
+        const damage = Math.floor(pokemon.maxHP / denoms[spikesLayers]);
+        pokemon.takeDamage(damage, this);
+        this.log.push(`${pokemon.name}はまきびしのダメージで${damage}のダメージを受けた`);
+      }
+    }
+
+    // どくびし: どく/はがね/ひこうタイプ、ふゆう特性は無効。毒タイプは吸収して解除。
+    if (this.field.toxicSpikes[key] > 0) {
+      const isImmune =
+        pokemon.types.includes('poison')
+        || pokemon.types.includes('steel')
+        || pokemon.types.includes('flying')
+        || pokemon.ability === 'levitate';
+      if (isImmune) {
+        if (pokemon.types.includes('poison')) {
+          // 毒タイプはどくびしを吸収して解除
+          this.field.toxicSpikes[key] = 0;
+          this.log.push(`${pokemon.name}はどくびしを吸収して消した`);
+        }
+        // はがね/ひこう/ふゆうは無効（何もしない）
+      } else if (!pokemon.isFainted && pokemon.status === null) {
+        // 状態異常でなければ毒付与（1層= poison, 2層= badly-poisoned）
+        if (this.field.toxicSpikes[key] >= 2) {
+          pokemon.applyStatus('badly-poisoned');
+          this.log.push(`${pokemon.name}はどくびしの猛毒を受けた`);
+        } else {
+          pokemon.applyStatus('poison');
+          this.log.push(`${pokemon.name}はどくびしの毒を受けた`);
+        }
       }
     }
 
@@ -564,6 +828,11 @@ export class BattleEngine {
 
     if (pokemon.item === 'choice-scarf') {
       speed = Math.floor(speed * 1.5);
+    }
+
+    // くろいてっきゅう: 素早さが半減する（じめん技が当たるようになる効果は未実装）。
+    if (pokemon.item === 'iron-ball') {
+      speed = Math.floor(speed / 2);
     }
 
     if (pokemon.status === 'paralysis') {
