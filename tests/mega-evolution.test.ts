@@ -48,6 +48,50 @@ function createMockFetcher(): PokemonDataFetcher {
       abilities: [{ name: 'sand-force', isHidden: false }],
       baseStats: { HP: 108, ATK: 170, DEF: 115, SPATK: 120, SPDEF: 95, SPEED: 92 },
     }),
+    venusaur: fakePokemonData({
+      name: 'venusaur',
+      types: ['grass', 'poison'],
+      baseStats: { HP: 80, ATK: 82, DEF: 83, SPATK: 100, SPDEF: 100, SPEED: 80 },
+    }),
+    'venusaur-mega': fakePokemonData({
+      name: 'venusaur-mega',
+      types: ['grass', 'poison'],
+      abilities: [{ name: 'thick-fat', isHidden: false }],
+      baseStats: { HP: 80, ATK: 100, DEF: 123, SPATK: 122, SPDEF: 120, SPEED: 80 },
+    }),
+    gengar: fakePokemonData({
+      name: 'gengar',
+      types: ['ghost', 'poison'],
+      baseStats: { HP: 60, ATK: 65, DEF: 60, SPATK: 130, SPDEF: 75, SPEED: 110 },
+    }),
+    'gengar-mega': fakePokemonData({
+      name: 'gengar-mega',
+      types: ['ghost', 'poison'],
+      abilities: [{ name: 'shadow-tag', isHidden: false }],
+      baseStats: { HP: 60, ATK: 65, DEF: 80, SPATK: 170, SPDEF: 95, SPEED: 130 },
+    }),
+    mawile: fakePokemonData({
+      name: 'mawile',
+      types: ['steel', 'fairy'],
+      baseStats: { HP: 50, ATK: 85, DEF: 85, SPATK: 55, SPDEF: 55, SPEED: 50 },
+    }),
+    'mawile-mega': fakePokemonData({
+      name: 'mawile-mega',
+      types: ['steel', 'fairy'],
+      abilities: [{ name: 'huge-power', isHidden: false }],
+      baseStats: { HP: 50, ATK: 105, DEF: 125, SPATK: 55, SPDEF: 95, SPEED: 50 },
+    }),
+    blastoise: fakePokemonData({
+      name: 'blastoise',
+      types: ['water'],
+      baseStats: { HP: 79, ATK: 83, DEF: 100, SPATK: 85, SPDEF: 105, SPEED: 78 },
+    }),
+    'blastoise-mega': fakePokemonData({
+      name: 'blastoise-mega',
+      types: ['water'],
+      abilities: [{ name: 'mega-launcher', isHidden: false }],
+      baseStats: { HP: 79, ATK: 103, DEF: 120, SPATK: 135, SPDEF: 115, SPEED: 78 },
+    }),
   };
 
   return {

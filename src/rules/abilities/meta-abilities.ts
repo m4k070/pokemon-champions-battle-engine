@@ -181,17 +181,35 @@ export const INNER_FOCUS: AbilityDefinition = {
   name: 'inner-focus',
 };
 
-// とびだすハバネロ: ほのおタイプの技の威力が1.3倍になる（Champions独自特性）。
+// とびだすハバネロ: 攻撃技でダメージを受けたとき、攻撃者をやけどにする（100%）。
+// フレイムボディ(ほのおのからだ)と違い、特殊技でも発動する。
+// やけど状態の相手・ほのおタイプの相手には発動しない。
 export const SPICY_SPRAY: AbilityDefinition = {
   name: 'spicy-spray',
-  modifyMovePower: ({ move, value }) => (move.type === 'fire' ? Math.floor(value * 1.3) : value),
+  onDamaged: ({ defender, attacker, move }) => {
+    if (move.category === 'status') return;
+    if (attacker.status) return;
+    if (attacker.types.includes('fire')) return;
+    attacker.applyStatus('burn');
+  },
 };
 
-// エレキメイカー: でんタイプの技の威力が1.3倍になる（ライチュウXメガ特性）。
-// 本編ではエレキフィールドを展開するが、エンジンの簡易化のため威力補正で実装。
+// エレキメイカー: 入場時にエレキフィールドを展開する（5ターン）。
+// でん技の威力が1.3倍になる効果は battle-engine 側で field.terrain を参照して実装する。
 export const ELECTRIC_SURGE: AbilityDefinition = {
   name: 'electric-surge',
-  modifyMovePower: ({ move, value }) => (move.type === 'electric' ? Math.floor(value * 1.3) : value),
+  onSwitchIn: ({ pokemon, engine }) => {
+    if (engine.field.terrain === 'electric-terrain') return;
+    engine.field.terrain = 'electric-terrain';
+    engine.field.terrainTurnsLeft = 5;
+    engine.log.push(`${pokemon.name}のエレキメイカーでエレキフィールドが発動した！`);
+  },
+  modifyMovePower: ({ move, value, engine }) => {
+    if (move.type === 'electric' && engine.field.terrain === 'electric-terrain') {
+      return Math.floor(value * 1.3);
+    }
+    return value;
+  },
 };
 
 // つめかえなし: 接触技の威力が1.3倍になる。

@@ -33,6 +33,9 @@ export const MEGA_STONE_SEEDS: Record<string, MegaStoneSeed> = {
   'charizardite-x': { pokemon: 'charizard', megaApiName: 'charizard-mega-x', megaName: 'mega-charizard-x' },
   'charizardite-y': { pokemon: 'charizard', megaApiName: 'charizard-mega-y', megaName: 'mega-charizard-y' },
   'garchompite': { pokemon: 'garchomp', megaApiName: 'garchomp-mega', megaName: 'mega-garchomp' },
+  'venusaurite': { pokemon: 'venusaur', megaApiName: 'venusaur-mega', megaName: 'mega-venusaur' },
+  'mawilite': { pokemon: 'mawile', megaApiName: 'mawile-mega', megaName: 'mega-mawile' },
+  'blastoisinite': { pokemon: 'blastoise', megaApiName: 'blastoise-mega', megaName: 'mega-blastoise' },
 };
 
 // Poke APIから取得できない場合のデフォルト値（2026-07時点でPoke API実データと突合済み）。
@@ -94,6 +97,28 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     typeChange: ['electric'],
     abilityChange: 'no-guard',
     statBoosts: { ATK: 10, DEF: 0, SPATK: 70, SPDEF: 0, SPEED: 20 },
+  },
+  // ---- 標準メガ（Poke API実データに基づく）----
+  'venusaurite': {
+    pokemon: 'venusaur',
+    megaName: 'mega-venusaur',
+    typeChange: ['grass', 'poison'],
+    abilityChange: 'thick-fat',
+    statBoosts: { ATK: 0, DEF: 0, SPATK: 30, SPDEF: 20, SPEED: 50 },
+  },
+  'mawilite': {
+    pokemon: 'mawile',
+    megaName: 'mega-mawile',
+    typeChange: ['steel', 'fairy'],
+    abilityChange: 'huge-power',
+    statBoosts: { ATK: 50, DEF: 50, SPATK: 0, SPDEF: 0, SPEED: 0 },
+  },
+  'blastoisinite': {
+    pokemon: 'blastoise',
+    megaName: 'mega-blastoise',
+    typeChange: ['water'],
+    abilityChange: 'mega-launcher',
+    statBoosts: { ATK: 0, DEF: 30, SPATK: 50, SPDEF: 20, SPEED: 0 },
   },
 };
 
