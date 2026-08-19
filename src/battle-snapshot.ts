@@ -34,7 +34,6 @@ export interface FieldSnapshot {
   stealthRock: SideFlags;
   spikes: SideHazards;
   toxicSpikes: SideHazards;
-  stickyWeb: SideFlags;
   auroraVeil: SideHazards;
   reflect: SideHazards;
   lightScreen: SideHazards;
@@ -131,7 +130,6 @@ function snapshotField(field: BattleField): FieldSnapshot {
     stealthRock: { ...field.stealthRock },
     spikes: { ...field.spikes },
     toxicSpikes: { ...field.toxicSpikes },
-    stickyWeb: { ...field.stickyWeb },
     auroraVeil: { ...field.auroraVeil },
     reflect: { ...field.reflect },
     lightScreen: { ...field.lightScreen },
@@ -143,7 +141,6 @@ function restoreField(field: BattleField, snapshot: FieldSnapshot): void {
   field.stealthRock = { ...snapshot.stealthRock };
   field.spikes = { ...snapshot.spikes };
   field.toxicSpikes = { ...snapshot.toxicSpikes };
-  field.stickyWeb = { ...snapshot.stickyWeb };
   field.auroraVeil = { ...snapshot.auroraVeil };
   field.reflect = { ...snapshot.reflect };
   field.lightScreen = { ...snapshot.lightScreen };

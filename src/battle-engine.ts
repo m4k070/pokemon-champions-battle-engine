@@ -78,7 +78,9 @@ export class BattleEngine {
   }
 
   setStealthRock(side: 0 | 1): void {
-    this.field.stealthRock[this.sideKey(side)] = true;
+    const key = this.sideKey(side);
+    if (this.field.stealthRock[key]) return;
+    this.field.stealthRock[key] = true;
     this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側の場にステルスロックが設置された`);
   }
 
@@ -96,7 +98,7 @@ export class BattleEngine {
     return null;
   }
 
-  private getSide(pokemon: Pokemon): 0 | 1 | null {
+  getSide(pokemon: Pokemon): 0 | 1 | null {
     if (this.activePokemon0 === pokemon) return 0;
     if (this.activePokemon1 === pokemon) return 1;
     return null;
@@ -276,7 +278,17 @@ export class BattleEngine {
   }
 
   applyModifiers(baseDamage: number, attacker: Pokemon, defender: Pokemon, move: MoveData): { finalDamage: number; effectiveness: number } {
-    const effectiveness = this.getTypeEffectiveness(move.type, defender.types);
+    let effectiveness = this.getTypeEffectiveness(move.type, defender.types);
+    // 攻撃側の特性によるタイプ相性補正（きもったま: Normal/Fighting→Ghost 有効化等）
+    const attackerAbility = getAbilityDefinition(attacker.ability);
+    if (attackerAbility?.modifyTypeEffectiveness) {
+      effectiveness = attackerAbility.modifyTypeEffectiveness({
+        attackType: move.type,
+        defenderTypes: defender.types,
+        effectiveness,
+        engine: this,
+      });
+    }
     let finalDamage = Math.floor(baseDamage * effectiveness);
 
     const defenderSide = this.getSide(defender);
@@ -381,6 +393,49 @@ export class BattleEngine {
       if (side !== null) {
         this.field.reflect[this.sideKey(side)] = 5;
         this.log.push(`${attacker.name}側の場に「リフレクター」の壁ができた`);
+      }
+      return { success: true };
+    }
+
+    // --- ハザード設置技 ---
+    if (move.fieldEffect === 'stealth-rock') {
+      const side = this.getSide(attacker);
+      if (side !== null) {
+        const key = this.sideKey(side);
+        if (this.field.stealthRock[key]) {
+          this.log.push('ステルスロックは既に設置されている');
+        } else {
+          this.field.stealthRock[key] = true;
+          this.log.push(`${attacker.name}側の場にステルスロックが散りばめられた`);
+        }
+      }
+      return { success: true };
+    }
+
+    if (move.fieldEffect === 'spikes') {
+      const side = this.getSide(attacker);
+      if (side !== null) {
+        const key = this.sideKey(side);
+        if (this.field.spikes[key] >= 3) {
+          this.log.push('まきびしはこれ以上盛れない');
+        } else {
+          this.field.spikes[key]++;
+          this.log.push(`${attacker.name}側の場にまきびしが${this.field.spikes[key]}層設置された`);
+        }
+      }
+      return { success: true };
+    }
+
+    if (move.fieldEffect === 'toxic-spikes') {
+      const side = this.getSide(attacker);
+      if (side !== null) {
+        const key = this.sideKey(side);
+        if (this.field.toxicSpikes[key] >= 2) {
+          this.log.push('どくびしはこれ以上盛れない');
+        } else {
+          this.field.toxicSpikes[key]++;
+          this.log.push(`${attacker.name}側の場にどくびしが${this.field.toxicSpikes[key]}層設置された`);
+        }
       }
       return { success: true };
     }
@@ -509,6 +564,19 @@ export class BattleEngine {
       }
       if (move.targetStatChange) {
         this.applyTargetStatChange(attacker, defender, move.targetStatChange);
+      }
+      // ひけんちえなみ等: 命中時に相手側にまきびしを設置する追加効果。
+      if (move.inflictsSpikes) {
+        const defenderSide = this.getSide(defender);
+        if (defenderSide !== null) {
+          const key = this.sideKey(defenderSide);
+          if (this.field.spikes[key] >= 3) {
+            this.log.push('まきびしはこれ以上盛れない');
+          } else {
+            this.field.spikes[key]++;
+            this.log.push(`${defender.name}側の場にまきびしが${this.field.spikes[key]}層設置された`);
+          }
+        }
       }
     }
 
@@ -698,12 +766,57 @@ export class BattleEngine {
     this.log.push(`${pokemon.name}が場に出た！`);
     this.events.emit('switch-in', { pokemon, team, engine: this });
 
-    if (side !== undefined && !pokemon.isFainted && this.field.stealthRock[this.sideKey(side)]) {
+    if (side === undefined || pokemon.isFainted) return pokemon;
+
+    const key = this.sideKey(side);
+
+    // ステルスロック: 岩タイプ有効度に基づくダメージ（1/8 HP）
+    if (this.field.stealthRock[key]) {
       const effectiveness = this.getTypeEffectiveness('rock', pokemon.types);
       if (effectiveness > 0) {
         const damage = Math.floor((pokemon.maxHP / 8) * effectiveness);
         pokemon.takeDamage(damage, this);
         this.log.push(`${pokemon.name}はステルスロックのダメージで${damage}のダメージを受けた`);
+      }
+    }
+
+    // まきびし: 飛行タイプは無効。層数に応じてダメージ。
+    if (this.field.spikes[key] > 0) {
+      const isFlying = pokemon.types.includes('flying');
+      const hasLevitate = pokemon.ability === 'levitate';
+      if (!isFlying && !hasLevitate) {
+        const spikesLayers = this.field.spikes[key];
+        // 1層=1/8, 2層=1/6, 3層=1/4
+        const denoms = [0, 8, 6, 4];
+        const damage = Math.floor(pokemon.maxHP / denoms[spikesLayers]);
+        pokemon.takeDamage(damage, this);
+        this.log.push(`${pokemon.name}はまきびしのダメージで${damage}のダメージを受けた`);
+      }
+    }
+
+    // どくびし: どく/はがね/ひこうタイプ、ふゆう特性は無効。毒タイプは吸収して解除。
+    if (this.field.toxicSpikes[key] > 0) {
+      const isImmune =
+        pokemon.types.includes('poison')
+        || pokemon.types.includes('steel')
+        || pokemon.types.includes('flying')
+        || pokemon.ability === 'levitate';
+      if (isImmune) {
+        if (pokemon.types.includes('poison')) {
+          // 毒タイプはどくびしを吸収して解除
+          this.field.toxicSpikes[key] = 0;
+          this.log.push(`${pokemon.name}はどくびしを吸収して消した`);
+        }
+        // はがね/ひこう/ふゆうは無効（何もしない）
+      } else if (!pokemon.isFainted && pokemon.status === null) {
+        // 状態異常でなければ毒付与（1層= poison, 2層= badly-poisoned）
+        if (this.field.toxicSpikes[key] >= 2) {
+          pokemon.applyStatus('badly-poisoned');
+          this.log.push(`${pokemon.name}はどくびしの猛毒を受けた`);
+        } else {
+          pokemon.applyStatus('poison');
+          this.log.push(`${pokemon.name}はどくびしの毒を受けた`);
+        }
       }
     }
 
