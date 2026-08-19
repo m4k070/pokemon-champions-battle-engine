@@ -303,6 +303,19 @@ export class BattleEngine {
 
     this.log.push(`${attacker.name}の${move.name}`);
 
+    // ちょうはつ: 攻撃技（category !== 'status'）の使用を阻止する。
+    // メンタルハーブ: ちょうはつを1回だけ解除して技を通す（消費される）。
+    if (attacker.isTaunted && move.category !== 'status') {
+      if (attacker.item === 'mental-herb' && !attacker.itemUsed) {
+        attacker.removeTaunt();
+        attacker.itemUsed = true;
+        this.log.push(`${attacker.name}はメンタルハーブで挑発を解いた`);
+      } else {
+        this.log.push(`${attacker.name}は挑発されて使えない！`);
+        return { success: false };
+      }
+    }
+
     // ぼうだん等の技無効化特性は命中判定より前に解決する（本編仕様）。
     const defenderAbility = getAbilityDefinition(defender.ability);
     if (defenderAbility?.blocksMove?.(move)) {
@@ -567,6 +580,15 @@ export class BattleEngine {
         if (this.field.reflect[key] === 0) {
           this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側のリフレクターが消えた`);
         }
+      }
+    }
+
+    // ちょうはつ: ターンごとに残りターンを減らし、0になったら解除。
+    for (const pokemon of [this.activePokemon0, this.activePokemon1]) {
+      if (!pokemon || pokemon.isFainted || pokemon.tauntTurnsLeft <= 0) continue;
+      pokemon.tauntTurnsLeft--;
+      if (pokemon.tauntTurnsLeft === 0) {
+        this.log.push(`${pokemon.name}の挑発が解けた`);
       }
     }
   }

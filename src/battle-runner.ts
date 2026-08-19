@@ -255,6 +255,7 @@ export class BattleSession {
     outgoing.resetToxicCounter(); // 猛毒の経過ターン数も場を離れるとリセットされる
     outgoing.resetSeeded(); // やどりぎのタネも場を離れると解除される
     outgoing.resetLockedMove(); // こだわり系の技固定も場を離れると解除される
+    outgoing.resetTaunt(); // ちょうはつも場を離れると解除される
 
     // 場を離れるときの特性フック（さいせいりょく等）。
     const ability = getAbilityDefinition(outgoing.ability);

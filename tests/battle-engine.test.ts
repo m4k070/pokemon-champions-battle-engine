@@ -1222,3 +1222,165 @@ describe('pivot技 (とんぼがえり/ボルトチェンジ/クイックター�
     randomSpy.mockRestore();
   });
 });
+
+describe('Taunt (ちょうはつ)', () => {
+  function makeAttacker(): Pokemon {
+    return new Pokemon({
+      name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: null,
+      baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+      moves: [
+        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+        new Move({ name: 'swords-dance', type: 'normal', power: 0, accuracy: 100, pp: 20, category: 'status', selfStatChange: [{ stat: 'ATK', delta: 2 }] }),
+      ],
+    });
+  }
+
+  function makeDefender(): Pokemon {
+    return new Pokemon({
+      name: 'Blissey', types: ['normal'], ability: 'natural-cure', item: null,
+      baseStats: { HP: 255, ATK: 10, DEF: 10, SPATK: 75, SPDEF: 135, SPEED: 55 },
+    });
+  }
+
+  test('taunted pokemon cannot use attacking moves', () => {
+    const engine = new BattleEngine();
+    const attacker = makeAttacker();
+    const defender = makeDefender();
+
+    attacker.applyTaunt(3);
+    expect(attacker.isTaunted).toBe(true);
+
+    const result = engine.useMove(attacker, defender, attacker.moves[0]); // earthquake (physical)
+    expect(result.success).toBe(false);
+    expect(defender.currentHP).toBe(defender.maxHP); // no damage dealt
+  });
+
+  test('taunted pokemon can use status moves', () => {
+    const engine = new BattleEngine();
+    const attacker = makeAttacker();
+    const defender = makeDefender();
+
+    attacker.applyTaunt(3);
+
+    const result = engine.useMove(attacker, defender, attacker.moves[1]); // swords-dance (status)
+    expect(result.success).toBe(true);
+    expect(attacker.statStages.ATK).toBe(2);
+  });
+
+  test('taunt duration decrements each startTurn', () => {
+    const engine = new BattleEngine();
+    const attacker = makeAttacker();
+    const defender = makeDefender();
+
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, defender);
+
+    attacker.applyTaunt(3);
+
+    engine.startTurn(); // turn 1: 3 -> 2
+    expect(attacker.tauntTurnsLeft).toBe(2);
+    expect(attacker.isTaunted).toBe(true);
+
+    engine.startTurn(); // turn 2: 2 -> 1
+    expect(attacker.tauntTurnsLeft).toBe(1);
+    expect(attacker.isTaunted).toBe(true);
+
+    engine.startTurn(); // turn 3: 1 -> 0
+    expect(attacker.tauntTurnsLeft).toBe(0);
+    expect(attacker.isTaunted).toBe(false);
+  });
+
+  test('taunt clears on switch-out', () => {
+    const engine = new BattleEngine();
+    const attacker = makeAttacker();
+    const defender = makeDefender();
+    const bench = new Pokemon({
+      name: 'Sylveon', types: ['fairy'], ability: 'pixilate', item: null,
+      baseStats: { HP: 95, ATK: 65, DEF: 65, SPATK: 110, SPDEF: 130, SPEED: 60 },
+    });
+
+    attacker.applyTaunt(3);
+    expect(attacker.isTaunted).toBe(true);
+
+    attacker.resetTaunt(); // simulates what switchTo does
+    expect(attacker.isTaunted).toBe(false);
+    expect(attacker.tauntTurnsLeft).toBe(0);
+  });
+});
+
+describe('Mental Herb (メンタルハーブ)', () => {
+  test('cures taunt on first attacking move attempt', () => {
+    const engine = new BattleEngine();
+    const attacker = new Pokemon({
+      name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'mental-herb', itemUsed: false,
+      baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+      moves: [
+        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+      ],
+    });
+    const defender = new Pokemon({
+      name: 'Blissey', types: ['normal'], ability: 'natural-cure', item: null,
+      baseStats: { HP: 255, ATK: 10, DEF: 10, SPATK: 75, SPDEF: 135, SPEED: 55 },
+    });
+
+    attacker.applyTaunt(3);
+    expect(attacker.isTaunted).toBe(true);
+
+    const result = engine.useMove(attacker, defender, attacker.moves[0]);
+    expect(result.success).toBe(true);
+    expect(result.damage).toBeGreaterThan(0);
+    expect(attacker.isTaunted).toBe(false); // taunt cured
+    expect(attacker.itemUsed).toBe(true); // herb consumed
+  });
+
+  test('second attack is blocked after herb is consumed', () => {
+    const engine = new BattleEngine();
+    const attacker = new Pokemon({
+      name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'mental-herb', itemUsed: false,
+      baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+      moves: [
+        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+      ],
+    });
+    const defender = new Pokemon({
+      name: 'Blissey', types: ['normal'], ability: 'natural-cure', item: null,
+      baseStats: { HP: 255, ATK: 10, DEF: 10, SPATK: 75, SPDEF: 135, SPEED: 55 },
+    });
+
+    attacker.applyTaunt(5);
+
+    // First attempt: herb cures taunt, move goes through
+    engine.useMove(attacker, defender, attacker.moves[0]);
+    expect(attacker.isTaunted).toBe(false);
+    expect(attacker.itemUsed).toBe(true);
+
+    // Re-apply taunt for the second test
+    attacker.applyTaunt(3);
+    expect(attacker.isTaunted).toBe(true);
+
+    // Second attempt: herb already used, taunt blocks
+    const result = engine.useMove(attacker, defender, attacker.moves[0]);
+    expect(result.success).toBe(false);
+  });
+
+  test('mental herb does not cure taunt if already used', () => {
+    const engine = new BattleEngine();
+    const attacker = new Pokemon({
+      name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'mental-herb', itemUsed: true,
+      baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+      moves: [
+        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+      ],
+    });
+    const defender = new Pokemon({
+      name: 'Blissey', types: ['normal'], ability: 'natural-cure', item: null,
+      baseStats: { HP: 255, ATK: 10, DEF: 10, SPATK: 75, SPDEF: 135, SPEED: 55 },
+    });
+
+    attacker.applyTaunt(3);
+
+    const result = engine.useMove(attacker, defender, attacker.moves[0]);
+    expect(result.success).toBe(false); // still taunted
+    expect(attacker.isTaunted).toBe(true);
+  });
+});
