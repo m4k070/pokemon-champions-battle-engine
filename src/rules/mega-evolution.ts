@@ -104,21 +104,21 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     megaName: 'mega-venusaur',
     typeChange: ['grass', 'poison'],
     abilityChange: 'thick-fat',
-    statBoosts: { ATK: 0, DEF: 0, SPATK: 30, SPDEF: 20, SPEED: 50 },
+    statBoosts: { ATK: 18, DEF: 40, SPATK: 22, SPDEF: 20, SPEED: 0 },
   },
   'mawilite': {
     pokemon: 'mawile',
     megaName: 'mega-mawile',
     typeChange: ['steel', 'fairy'],
     abilityChange: 'huge-power',
-    statBoosts: { ATK: 50, DEF: 50, SPATK: 0, SPDEF: 0, SPEED: 0 },
+    statBoosts: { ATK: 20, DEF: 40, SPATK: 0, SPDEF: 40, SPEED: 0 },
   },
   'blastoisinite': {
     pokemon: 'blastoise',
     megaName: 'mega-blastoise',
     typeChange: ['water'],
     abilityChange: 'mega-launcher',
-    statBoosts: { ATK: 0, DEF: 30, SPATK: 50, SPDEF: 20, SPEED: 0 },
+    statBoosts: { ATK: 20, DEF: 20, SPATK: 50, SPDEF: 10, SPEED: 0 },
   },
 };
 
