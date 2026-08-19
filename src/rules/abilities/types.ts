@@ -73,4 +73,11 @@ export interface AbilityDefinition {
   // 能力変化の方向・量の補正（あまのじゃく等。既存は Pokemon.modifyStatStage が担当）。
   // ここでは「相手の能力変化を無視する（てんねん）」等の判定に使う。
   ignoresOpponentStatChanges?(): boolean;
+  // タイプ相性の補正（きもったま等）。効果倍率を上書きして返す。
+  modifyTypeEffectiveness?(context: {
+    attackType: import('../../types.js').TypeName;
+    defenderTypes: import('../../types.js').TypeName[];
+    effectiveness: number;
+    engine: import('../../battle-engine.js').BattleEngine;
+  }): number;
 }

@@ -1,7 +1,7 @@
 import { BattleEngine } from '../src/battle-engine.js';
 import { Pokemon } from '../src/pokemon.js';
 import { Move } from '../src/move.js';
-import type { BaseStats, MoveData, Stats } from '../src/types.js';
+import type { BaseStats, MoveData, Stats, TypeName } from '../src/types.js';
 
 const FIXED_STATS: Stats = { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
 
@@ -370,5 +370,49 @@ describe('上位構築向け特性（meta-abilities）', () => {
     engine.weather = null;
     const rockNormal = SAND_FORCE.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Stone Edge', type: 'rock', power: 100 }), value: 100, engine });
     expect(rockNormal).toBe(100);
+  });
+
+  test('きもったま: Normal/Fighting技がゴーストに有効になる', () => {
+    const { SCRAPPY } = require('../src/rules/abilities/meta-abilities.js') as typeof import('../src/rules/abilities/meta-abilities.js');
+
+    // ゴーストタイプ相手
+    const ghostTypes: TypeName[] = ['ghost'];
+    // 通常: Normal技 → Ghost = 0 (無効)
+    expect(engine.getTypeEffectiveness('normal', ghostTypes)).toBe(0);
+    // 通常: Fighting技 → Ghost = 0 (無効)
+    expect(engine.getTypeEffectiveness('fighting', ghostTypes)).toBe(0);
+
+    // きもったま持ちが攻撃する場合
+    const result1 = SCRAPPY.modifyTypeEffectiveness!({
+      attackType: 'normal', defenderTypes: ghostTypes, effectiveness: 0, engine,
+    });
+    expect(result1).toBe(1.0); // 有効になる
+
+    const result2 = SCRAPPY.modifyTypeEffectiveness!({
+      attackType: 'fighting', defenderTypes: ghostTypes, effectiveness: 0, engine,
+    });
+    expect(result2).toBe(1.0); // 有効になる
+
+    // 他のタイプは変わらない
+    const result3 = SCRAPPY.modifyTypeEffectiveness!({
+      attackType: 'fire', defenderTypes: ghostTypes, effectiveness: 1.0, engine,
+    });
+    expect(result3).toBe(1.0); // 変わらない
+
+    // ゴースト以外の相手は変わらない
+    const normalTypes: TypeName[] = ['normal'];
+    const result4 = SCRAPPY.modifyTypeEffectiveness!({
+      attackType: 'normal', defenderTypes: normalTypes, effectiveness: 1.0, engine,
+    });
+    expect(result4).toBe(1.0); // 等倍はそのまま
+
+    // 2倍効果が0になるケース（Ghost/Dark → Normal技）
+    const ghostDarkTypes: TypeName[] = ['ghost', 'dark'];
+    // Ghost で 0、Dark で 1 → 合計 0
+    expect(engine.getTypeEffectiveness('normal', ghostDarkTypes)).toBe(0);
+    const result5 = SCRAPPY.modifyTypeEffectiveness!({
+      attackType: 'normal', defenderTypes: ghostDarkTypes, effectiveness: 0, engine,
+    });
+    expect(result5).toBe(1.0); // きもったまで有効化
   });
 });
