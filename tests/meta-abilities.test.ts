@@ -218,4 +218,59 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(magician.item).toBe('leftovers'); // すでに持っているので奪わない
     expect(defender2.item).toBe('life-orb');
   });
+
+  test('ちょうはつ: 変化技以外を使用できない', () => {
+    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const taunted = makePokemon('Taunted', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    taunted.applyTaunt(3);
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, taunted);
+
+    // 攻撃技は使えない
+    const result = engine.useMove(taunted, attacker, move({ name: 'Tackle', type: 'normal', power: 40 }));
+    expect(result.success).toBe(false);
+
+    // 変化技は使える（stats変化のみの技）
+    const statResult = engine.useMove(taunted, attacker, move({ name: 'Swords Dance', type: 'normal', power: 0, category: 'status', selfStatChange: [{ stat: 'ATK', delta: 2 }] }));
+    expect(statResult.success).toBe(true);
+  });
+
+  test('メンタルハーブ: ちょうはつを1回だけ解除する', () => {
+    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const holder = makePokemon('Holder', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    holder.item = 'mental-herb';
+    holder.applyTaunt(3);
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, holder);
+
+    // 1回目: メンタルハーブで挑発を解除して技を通す
+    const result = engine.useMove(holder, attacker, move({ name: 'Tackle', type: 'normal', power: 40 }));
+    expect(result.success).toBe(true);
+    expect(holder.isTaunted).toBe(false);
+    expect(holder.itemUsed).toBe(true);
+
+    // 再び挑発された場合、メンタルハーブはもう使えない
+    holder.applyTaunt(2);
+    const result2 = engine.useMove(holder, attacker, move({ name: 'Tackle', type: 'normal', power: 40 }));
+    expect(result2.success).toBe(false); // メンタルハーブは消費済みなので挑発が残る
+  });
+
+  test('メンタルハーブ: ターン終了時にちょうはつを解除する', () => {
+    const holder = makePokemon('Holder', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    holder.item = 'mental-herb';
+    holder.applyTaunt(3);
+    engine.setActivePokemon(0, holder);
+
+    // ターン終了時にメンタルハーブが発動
+    engine.events.emit('end-turn', { team: [holder] });
+    expect(holder.isTaunted).toBe(false);
+    expect(holder.itemUsed).toBe(true);
+  });
+
+  test('ちょうはつ: 交代で解除される', () => {
+    const pokemon = makePokemon('Pokemon', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    pokemon.applyTaunt(3);
+    pokemon.resetTaunt();
+    expect(pokemon.isTaunted).toBe(false);
+  });
 });

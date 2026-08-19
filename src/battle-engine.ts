@@ -163,6 +163,13 @@ export class BattleEngine {
           this.log.push(`${p.name}はどくどくだまの毒に侵された`);
         }
 
+        // メンタルハーブ: ちょうはつ状態を解除する（1回限り）。
+        if (p.item === 'mental-herb' && !p.itemUsed && p.isTaunted) {
+          p.resetTaunt();
+          p.itemUsed = true;
+          this.log.push(`${p.name}はメンタルハーブで挑発を解いた`);
+        }
+
         // 特性のターン終了時フック（かそく等）。
         const ability = getAbilityDefinition(p.ability);
         ability?.onEndTurn?.({ pokemon: p, engine: this });
@@ -307,7 +314,7 @@ export class BattleEngine {
     // メンタルハーブ: ちょうはつを1回だけ解除して技を通す（消費される）。
     if (attacker.isTaunted && move.category !== 'status') {
       if (attacker.item === 'mental-herb' && !attacker.itemUsed) {
-        attacker.removeTaunt();
+        attacker.resetTaunt();
         attacker.itemUsed = true;
         this.log.push(`${attacker.name}はメンタルハーブで挑発を解いた`);
       } else {
