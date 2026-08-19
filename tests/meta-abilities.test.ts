@@ -198,6 +198,20 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(engine.calculateSpeed(slow)).toBe(50);
   });
 
+  test('スピーダー: ターン終了時に素早さが1段階上がる（消耗品）', () => {
+    const speedy = makePokemon('Speedy', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    speedy.item = 'x-speed';
+    engine.setActivePokemon(0, speedy);
+
+    engine.events.emit('end-turn', { team: [speedy] });
+    expect(speedy.statStages.SPEED).toBe(1);
+    expect(speedy.itemUsed).toBe(true);
+
+    // 2ターン目: 消耗済みなので上がらない
+    engine.events.emit('end-turn', { team: [speedy] });
+    expect(speedy.statStages.SPEED).toBe(1);
+  });
+
   test('マジシャン: 攻撃を当てた相手の持ち物を奪う', () => {
     const magician = makePokemon('Magician', 'magician', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     magician.item = null;

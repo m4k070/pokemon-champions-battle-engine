@@ -170,6 +170,15 @@ export class BattleEngine {
           this.log.push(`${p.name}はメンタルハーブで挑発を解いた`);
         }
 
+        // スピーダー: ターン終了時に素早さが1段階上がる（消耗品）。
+        if (p.item === 'x-speed' && !p.itemUsed) {
+          const changed = p.modifyStatStage('SPEED', 1);
+          if (changed !== 0) {
+            p.itemUsed = true;
+            this.log.push(`${p.name}はスピーダーで素早さが上がった`);
+          }
+        }
+
         // 特性のターン終了時フック（かそく等）。
         const ability = getAbilityDefinition(p.ability);
         ability?.onEndTurn?.({ pokemon: p, engine: this });
