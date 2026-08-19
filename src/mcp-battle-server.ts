@@ -25,7 +25,7 @@ const TYPE_NAMES = [
 const TypeNameSchema = z.enum(TYPE_NAMES);
 const MoveCategorySchema = z.enum(['physical', 'special', 'status']);
 const StatusConditionSchema = z.enum(['sleep', 'poison', 'burn', 'paralysis', 'freeze', 'badly-poisoned']);
-const FieldEffectSchema = z.enum(['tailwind', 'trick-room', 'reflect']);
+const FieldEffectSchema = z.enum(['tailwind', 'trick-room', 'reflect', 'stealth-rock', 'spikes', 'toxic-spikes']);
 const StatStageKeySchema = z.enum(['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED']);
 
 const BaseStatsSchema = z.object({
@@ -68,6 +68,7 @@ const MoveInputSchema = z.object({
   pivot: z.boolean().optional(),
   contact: z.boolean().optional(),
   restoresShieldForm: z.boolean().optional(),
+  inflictsSpikes: z.boolean().optional(),
 });
 
 const PokemonInputSchema = z.object({
@@ -161,6 +162,8 @@ function stateView(stored: StoredSession) {
     trickRoom: session.engine.trickRoom,
     trickRoomTurnsLeft: session.engine.trickRoomTurnsLeft,
     stealthRock: { ...session.engine.field.stealthRock },
+    spikes: { ...session.engine.field.spikes },
+    toxicSpikes: { ...session.engine.field.toxicSpikes },
     tailwind: { ...session.engine.field.tailwind },
     reflect: { ...session.engine.field.reflect },
     teamA: session.teamA.map(pokemonView),

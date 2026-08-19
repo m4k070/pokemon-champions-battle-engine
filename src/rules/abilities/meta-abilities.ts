@@ -253,6 +253,36 @@ export const WEAK_ARMOR: AbilityDefinition = {
   },
 };
 
+// きもったま: Normal/Fightingタイプの技がゴーストタイプにも有効になる。
+// メガミミロップの特性。
+export const SCRAPPY: AbilityDefinition = {
+  name: 'scrappy',
+  modifyTypeEffectiveness: ({ attackType, defenderTypes, effectiveness }) => {
+    if (effectiveness === 0 && defenderTypes.includes('ghost')) {
+      if (attackType === 'normal' || attackType === 'fighting') {
+        return 1.0;
+      }
+    }
+    return effectiveness;
+  },
+};
+
+// どくげしょう: 物理技でダメージを受けたとき、攻撃者の場にどくびしを設置する。
+// 本編の「接触技で30%毒付与」とは異なる、Champions 独自仕様。
+export const POISON_POINT: AbilityDefinition = {
+  name: 'poison-point',
+  onDamaged: ({ defender, attacker, move, engine }) => {
+    if (move.category !== 'physical') return;
+    // 攻撃者のサイドにどくびしを設置
+    const attackerSide = engine.getSide(attacker);
+    if (attackerSide === null) return;
+    const key = attackerSide === 0 ? 'playerA' : 'playerB';
+    if (engine.field.toxicSpikes[key] >= 2) return; // 最大2層
+    engine.field.toxicSpikes[key]++;
+    engine.log.push(`${defender.name}のどくげしょうで${attacker.name}側の場にどくびしが設置された`);
+  },
+};
+
 export const META_ABILITIES: AbilityDefinition[] = [
   UNAWARE,
   REGENERATOR,
@@ -282,4 +312,6 @@ export const META_ABILITIES: AbilityDefinition[] = [
   SAND_FORCE,
   LIGHTNING_ROD,
   WEAK_ARMOR,
+  SCRAPPY,
+  POISON_POINT,
 ];
