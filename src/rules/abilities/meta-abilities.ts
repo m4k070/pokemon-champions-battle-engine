@@ -239,6 +239,29 @@ export const ADAPTABILITY: AbilityDefinition = {
   name: 'adaptability',
 };
 
+// スカイスキン: ノーマル技がひこう技になる（威力1.2倍）。
+// 技タイプ変換は battle-engine の useMove 側で name 判定して行う。
+export const AERILATE: AbilityDefinition = {
+  name: 'aerilate',
+};
+
+// フェアリースキン: ノーマル技がフェアリー技になる（威力1.2倍）。
+export const PIXILATE: AbilityDefinition = {
+  name: 'pixilate',
+};
+
+// かたやぶり: 攻撃時に相手の特性を無視する（がんじょう・あついしぼう・マルチスケイル等）。
+// 判定は battle-engine の攻撃処理側で name 判定して行う。
+export const MOLD_BREAKER: AbilityDefinition = {
+  name: 'mold-breaker',
+};
+
+// マジックミラー: 変化技を跳ね返す（対象を入れ替えて再適用）。
+// 判定は battle-engine の useMove 側で name 判定して行う。
+export const MAGIC_BOUNCE: AbilityDefinition = {
+  name: 'magic-bounce',
+};
+
 // へんげんじざい: 技を使うと、その技のタイプに変わる（単一タイプになる）。
 // メガシンカでタイプが typeChange にリセットされた場合も、次の技使用で再発動する
 // （メガシンカは実質的な場への再登場のため、タイプ変化もやり直される）。
@@ -351,6 +374,10 @@ export const META_ABILITIES: AbilityDefinition[] = [
   PARENTAL_BOND,
   MULTISCALE,
   ADAPTABILITY,
+  AERILATE,
+  PIXILATE,
+  MOLD_BREAKER,
+  MAGIC_BOUNCE,
   PROTEAN,
   TOUGH_CLAWS,
   SAND_FORCE,

@@ -236,7 +236,9 @@ export class BattleEngine {
     let defense = Math.floor(defender.stats[statKey] * stageMultiplier);
 
     const ability = getAbilityDefinition(defender.ability);
-    if (ability?.modifyDefense) {
+    // かたやぶり（mold-breaker）持ちの攻撃は防御側の特性（あついしぼう等）を無視する
+    const moldBreaker = attacker ? attacker.ability === 'mold-breaker' : false;
+    if (ability?.modifyDefense && !moldBreaker) {
       defense = ability.modifyDefense({ pokemon: defender, move: move as MoveData, value: defense, engine: this });
     }
 
@@ -305,7 +307,8 @@ export class BattleEngine {
     let effectiveDamage = damage;
 
     // 特性の被弾時フック（がんじょう・じきゅうりょく・あついしぼう・さめはだ等）。
-    if (attacker && move) {
+    // かたやぶり（mold-breaker）持ちの攻撃は防御側の特性を無視する。
+    if (attacker && move && attacker.ability !== 'mold-breaker') {
       const ability = getAbilityDefinition(defender.ability);
       const adjusted = ability?.onDamaged?.({ defender, attacker, move, damage, engine: this });
       if (typeof adjusted === 'number') effectiveDamage = adjusted;
@@ -327,6 +330,14 @@ export class BattleEngine {
       this.log.push(`${attacker.name}は${move.name}を出そうとしたが、PPが残っていない！`);
       return { success: false };
     }
+
+    // マジックミラー（magic-bounce）: 変化技を跳ね返す（対象を入れ替えて再適用）。
+    // 両者マジックミラーなら跳ね返し合いにならない（1回だけ跳ね返す）。
+    if (move.category === 'status' && defender.ability === 'magic-bounce' && attacker.ability !== 'magic-bounce') {
+      this.log.push(`${defender.name}のマジックミラーが${attacker.name}の${move.name}を跳ね返した！`);
+      return this.useMove(defender, attacker, move);
+    }
+
     move.pp -= 1;
 
     this.log.push(`${attacker.name}の${move.name}`);
@@ -345,8 +356,9 @@ export class BattleEngine {
     }
 
     // ぼうだん等の技無効化特性は命中判定より前に解決する（本編仕様）。
+    // かたやぶり（mold-breaker）持ちの攻撃は防御側の特性（ぼうだん・ひらいしん等）を無視する。
     const defenderAbility = getAbilityDefinition(defender.ability);
-    if (defenderAbility?.blocksMove?.(move)) {
+    if (attacker.ability !== 'mold-breaker' && defenderAbility?.blocksMove?.(move)) {
       // ひらいしん: でん技を弾いたとき、特攻を1段階上げる。
       if (defender.ability === 'lightning-rod' && move.type === 'electric') {
         defender.modifyStatStage('SPATK', 1);
@@ -486,11 +498,23 @@ export class BattleEngine {
     }
 
     // ウェザーボールは天候下でタイプが変化する。
-    const effectiveType = move.name === 'weather-ball' && this.weather && WEATHER_BALL_TYPE[this.weather]
+    let effectiveType = move.name === 'weather-ball' && this.weather && WEATHER_BALL_TYPE[this.weather]
       ? WEATHER_BALL_TYPE[this.weather]!
       : move.type;
 
     let power = move.power;
+
+    // スカイスキン（aerilate）: ノーマル技がひこう技になる（威力1.2倍）
+    // フェアリースキン（pixilate）: ノーマル技がフェアリー技になる（威力1.2倍）
+    if (effectiveType === 'normal') {
+      if (attacker.ability === 'aerilate') {
+        effectiveType = 'flying';
+        power = Math.floor(power * 1.2);
+      } else if (attacker.ability === 'pixilate') {
+        effectiveType = 'fairy';
+        power = Math.floor(power * 1.2);
+      }
+    }
 
     if (attacker.types && attacker.types.includes(effectiveType)) {
       // STAB: タイプ一致技は1.5倍（適応力持ちは2倍）

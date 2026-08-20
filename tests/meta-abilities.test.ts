@@ -301,6 +301,102 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(adaptDamage).toBeLessThanOrEqual(Math.ceil(normalDamage * 1.34));
   });
 
+  test('スカイスキン: ノーマル技がひこう技として計算される', () => {
+    const mence = new Pokemon({
+      name: 'Salamence',
+      types: ['dragon', 'flying'],
+      ability: 'aerilate',
+      item: null,
+      baseStats: { HP: 95, ATK: 135, DEF: 80, SPATK: 110, SPDEF: 80, SPEED: 100 },
+      stats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      moves: [move({ name: 'Return', type: 'normal', power: 100 })],
+    });
+    // くさタイプ: ひこう2倍（ノーマルは等倍）
+    const defender = new Pokemon({
+      name: 'Def',
+      types: ['grass'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 },
+      stats: { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 },
+    });
+    engine.setActivePokemon(0, mence);
+    engine.setActivePokemon(1, defender);
+
+    const r = engine.useMove(mence, defender, move({ name: 'Return', type: 'normal', power: 100 }));
+    expect(r.effectiveness).toBe(2); // ひこう技として抜群
+  });
+
+  test('フェアリースキン: ノーマル技がフェアリー技として計算される', () => {
+    const gardevoir = new Pokemon({
+      name: 'Gardevoir',
+      types: ['psychic', 'fairy'],
+      ability: 'pixilate',
+      item: null,
+      baseStats: { HP: 68, ATK: 65, DEF: 65, SPATK: 125, SPDEF: 115, SPEED: 80 },
+      stats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      moves: [move({ name: 'Hyper Voice', type: 'normal', power: 90 })],
+    });
+    // かくとうタイプ: フェアリー2倍（ノーマルは等倍）
+    const defender = new Pokemon({
+      name: 'Def',
+      types: ['fighting'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 },
+      stats: { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 },
+    });
+    engine.setActivePokemon(0, gardevoir);
+    engine.setActivePokemon(1, defender);
+
+    const r = engine.useMove(gardevoir, defender, move({ name: 'Hyper Voice', type: 'normal', power: 90 }));
+    expect(r.effectiveness).toBe(2); // フェアリー技として抜群
+  });
+
+  test('かたやぶり: 相手の特性（マルチスケイル）を無視する', () => {
+    const makeDef = (ability: string) => makePokemon('Def', ability, { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 });
+    const attacker = makePokemon('Attacker', 'mold-breaker', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attackerNoMB = makePokemon('Attacker2', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+
+    // 基準: かたやぶりなし（マルチスケイル半減が効く）
+    const ms1 = makeDef('multiscale');
+    engine.setActivePokemon(0, attackerNoMB);
+    engine.setActivePokemon(1, ms1);
+    const hp1 = ms1.currentHP;
+    engine.useMove(attackerNoMB, ms1, move({ name: 'Tackle', type: 'normal', power: 80 }));
+    const halvedDamage = hp1 - ms1.currentHP;
+
+    // かたやぶり: マルチスケイルを無視（半減されない）
+    const ms2 = makeDef('multiscale');
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, ms2);
+    const hp2 = ms2.currentHP;
+    engine.useMove(attacker, ms2, move({ name: 'Tackle', type: 'normal', power: 80 }));
+    const ignoredDamage = hp2 - ms2.currentHP;
+
+    expect(ignoredDamage).toBeGreaterThan(halvedDamage); // かたやぶりで半減が無視される
+  });
+
+  test('マジックミラー: 変化技を跳ね返す', () => {
+    const bouncer = new Pokemon({
+      name: 'Sableye',
+      types: ['dark', 'ghost'],
+      ability: 'magic-bounce',
+      item: null,
+      baseStats: { HP: 50, ATK: 75, DEF: 75, SPATK: 65, SPDEF: 65, SPEED: 50 },
+      stats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+    });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, bouncer);
+
+    engine.useMove(attacker, bouncer, move({ name: 'Toxic', type: 'poison', power: 0, category: 'status', status: 'poison' }));
+
+    expect(attacker.status).toBe('poison'); // 跳ね返されて攻撃者が毒になる
+    expect(bouncer.status).toBeNull(); // 防御側は無傷
+    expect(engine.getLog()).toContain('マジックミラー');
+  });
+
   test('ミラーアーマー: 相手の能力低下を反射する', () => {
     const mirrorArmor = makePokemon('MirrorArmor', 'mirror-armor', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
