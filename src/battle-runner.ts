@@ -311,10 +311,15 @@ export class BattleSession {
     if (actionA.type === 'move' && actionA.megaEvolve && this.megaEvolutionSystem.canMegaEvolve(this.activeA)) {
       this.megaEvolutionSystem.megaEvolve(this.activeA);
       this.engine.log.push(`${this.activeA.name}はメガシンカした！`);
+      // メガシンカは実質的な場への再登場: 新特性の onSwitchIn（いかく・天候変化等）を発動する。
+      // ステータス変化・状態異常などは megaEvolve 内で引き継がれる（リセットしない）。
+      this.engine.events.emit('switch-in', { pokemon: this.activeA, team: this.teamA, engine: this.engine });
     }
     if (actionB.type === 'move' && actionB.megaEvolve && this.megaEvolutionSystem.canMegaEvolve(this.activeB)) {
       this.megaEvolutionSystem.megaEvolve(this.activeB);
       this.engine.log.push(`${this.activeB.name}はメガシンカした！`);
+      // 同上: 新特性の onSwitchIn を発動する
+      this.engine.events.emit('switch-in', { pokemon: this.activeB, team: this.teamB, engine: this.engine });
     }
 
     const attackers: { side: 0 | 1; pokemon: Pokemon }[] = [];

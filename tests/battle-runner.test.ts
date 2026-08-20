@@ -148,6 +148,62 @@ describe('BattleSession', () => {
     expect(session.megaEvolutionSystem.canMegaEvolve(charizard)).toBe(false); // 一度メガシンカしたら戻せない
   });
 
+  test('mega evolution triggers the new ability\'s onSwitchIn (drought sets sun)', async () => {
+    // メガシンカは実質的な場への再登場: 新特性（ひでり）の onSwitchIn が発動する
+    const charizard = new Pokemon({
+      name: 'Charizard',
+      baseName: 'charizard',
+      types: ['fire', 'flying'],
+      ability: 'blaze',
+      item: 'charizardite-y',
+      baseStats: { HP: 78, ATK: 84, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 },
+      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
+    });
+    const defender = makeDefender();
+    const session = await BattleSession.start([charizard], [defender]);
+    session.beginTurn();
+
+    expect(session.engine.weather).toBeNull(); // メガシンカ前は天候なし
+
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0, megaEvolve: true } },
+      { action: { type: 'forfeit' } }
+    );
+
+    expect(charizard.isMega).toBe(true);
+    expect(charizard.ability).toBe('drought');
+    expect(session.engine.weather).toBe('sun'); // メガシンカでひでりが発動した
+    expect(session.engine.weatherTurnsLeft).toBe(5);
+  });
+
+  test('mega evolution triggers electric surge (electric terrain set on switch-in)', async () => {
+    // ライチュウXのメガシンカでエレキメイカーが発動し、エレキフィールドが展開される
+    const raichu = new Pokemon({
+      name: 'Raichu',
+      baseName: 'raichu',
+      types: ['electric'],
+      ability: 'static',
+      item: 'raichunite-x',
+      baseStats: { HP: 60, ATK: 90, DEF: 55, SPATK: 90, SPDEF: 80, SPEED: 110 },
+      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
+    });
+    const defender = makeDefender();
+    const session = await BattleSession.start([raichu], [defender]);
+    session.beginTurn();
+
+    expect(session.engine.field.terrain).toBeNull();
+
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0, megaEvolve: true } },
+      { action: { type: 'forfeit' } }
+    );
+
+    expect(raichu.isMega).toBe(true);
+    expect(raichu.ability).toBe('electric-surge');
+    expect(session.engine.field.terrain).toBe('electric-terrain'); // メガシンカでエレキフィールド展開
+    expect(session.engine.field.terrainTurnsLeft).toBe(5);
+  });
+
   test('start() lets the slower lead\'s weather-setting ability overwrite the faster one\'s', async () => {
     // teamA(ひでり)の方がteamB(あめふらし)より速いので、実際の対戦仕様では
     // 後から発動する遅い側(teamB)のあめふらしが最終的な天候として残るはず。
