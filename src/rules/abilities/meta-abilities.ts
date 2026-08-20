@@ -217,6 +217,12 @@ export const SWIFT_SWIM: AbilityDefinition = {
   name: 'swift-swim',
 };
 
+// おやこあい: 攻撃技が2回ヒットする（2回目は威力1/4）。
+// ヒット処理は battle-engine の攻撃ループ側で name 判定して行う。
+export const PARENTAL_BOND: AbilityDefinition = {
+  name: 'parental-bond',
+};
+
 // へんげんじざい: 技を使うと、その技のタイプに変わる（単一タイプになる）。
 // メガシンカでタイプが typeChange にリセットされた場合も、次の技使用で再発動する
 // （メガシンカは実質的な場への再登場のため、タイプ変化もやり直される）。
@@ -326,6 +332,7 @@ export const META_ABILITIES: AbilityDefinition[] = [
   SPICY_SPRAY,
   ELECTRIC_SURGE,
   SWIFT_SWIM,
+  PARENTAL_BOND,
   PROTEAN,
   TOUGH_CLAWS,
   SAND_FORCE,

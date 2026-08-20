@@ -166,9 +166,9 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'lopunny',
     megaName: 'mega-lopunny',
     typeChange: ['normal', 'fighting'],
-    abilityChange: 'scrappy', // すてみ
-    // 実データは A+16/S+30 の合計+46（メガシンカの例外配分）
-    statBoosts: { ATK: 16, DEF: 0, SPATK: 0, SPDEF: 0, SPEED: 30 },
+    abilityChange: 'scrappy', // きもったま
+    // 実データ: ミミロップ A76/D84/S105 → メガ A136/D94/S135（A+60/D+10/S+30 = +100）
+    statBoosts: { ATK: 60, DEF: 10, SPATK: 0, SPDEF: 0, SPEED: 30 },
   },
 };
 
@@ -190,14 +190,9 @@ export class MegaEvolutionSystem {
 
   private validateStatBoosts(item: string, statBoosts: MegaStatBoosts): void {
     const total = MEGA_STAT_KEYS.reduce((sum, key) => sum + statBoosts[key], 0);
-    // 本編のメガシンカは多くのポケモンで合計+100だが、例外がある
-    // （例: メガミミロップは A+16/S+30 の合計+46）。実データに合わせて
-    // 「0より大きく、100以下」を妥当とする。
-    if (total > MEGA_STAT_TOTAL) {
-      throw new Error(`メガシンカの種族値配分が不正です: ${item} の合計は${total}（上限${MEGA_STAT_TOTAL}）`);
-    }
-    if (total <= 0) {
-      throw new Error(`メガシンカの種族値配分が不正です: ${item} の合計は${total}（0以下）`);
+    // メガシンカの種族値配分は HP を除く5ステータスの合計が +100 固定（本編仕様）。
+    if (total !== MEGA_STAT_TOTAL) {
+      throw new Error(`メガシンカの種族値配分が不正です: ${item} の合計は${total}（期待値${MEGA_STAT_TOTAL}）`);
     }
   }
 

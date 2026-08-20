@@ -515,18 +515,25 @@ export class BattleEngine {
 
     const moveWithStab: MoveData = { ...move, power, type: effectiveType };
 
+    // おやこあい: 攻撃技が2回ヒットする（2回目は威力1/4）。命中判定は1回（本編仕様）。
+    const isParentalBond = attacker.ability === 'parental-bond';
+
     // ロックブラスト等の多段技は命中判定こそ1回だが、当たった後の実ヒット数は乱数（本編仕様）。
-    const hitCount = move.multiHit ? this.rollMultiHitCount() : 1;
+    const hitCount = move.multiHit ? this.rollMultiHitCount() : isParentalBond ? 2 : 1;
     let totalDamage = 0;
     let lastEffectiveness = 1;
 
     for (let hit = 0; hit < hitCount && !defender.isFainted; hit++) {
-      const attack = this.calculateAttack(attacker, moveWithStab);
-      const defense = this.calculateDefense(defender, moveWithStab);
-      const baseDamage = this.calculateBaseDamage(attack, defense, moveWithStab);
-      const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, moveWithStab);
+      // おやこあいの2回目は威力1/4で計算する
+      const hitMove: MoveData = isParentalBond && hit > 0
+        ? { ...moveWithStab, power: Math.floor(moveWithStab.power / 4) }
+        : moveWithStab;
+      const attack = this.calculateAttack(attacker, hitMove);
+      const defense = this.calculateDefense(defender, hitMove);
+      const baseDamage = this.calculateBaseDamage(attack, defense, hitMove);
+      const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, hitMove);
 
-      this.applyDamage(defender, finalDamage, attacker, moveWithStab);
+      this.applyDamage(defender, finalDamage, attacker, hitMove);
       totalDamage += finalDamage;
       lastEffectiveness = effectiveness;
 
@@ -537,6 +544,8 @@ export class BattleEngine {
 
     if (move.multiHit) {
       this.log.push(`${hitCount}回攻撃した！`);
+    } else if (isParentalBond) {
+      this.log.push('おやこあいで2回攻撃した！');
     }
 
     if (lastEffectiveness > 1) {

@@ -192,6 +192,53 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(engine.calculateSpeed(swampert)).toBe(70); // 雨が止むと戻る
   });
 
+  test('おやこあい: 攻撃技が2回ヒットし、2回目は威力1/4', () => {
+    const makeKangaskhan = (ability: string) => new Pokemon({
+      name: 'Kangaskhan',
+      types: ['normal'],
+      ability,
+      item: null,
+      baseStats: { HP: 105, ATK: 100, DEF: 100, SPATK: 60, SPDEF: 100, SPEED: 100 },
+      stats: { HP: 200, ATK: 100, DEF: 100, SPATK: 60, SPDEF: 100, SPEED: 100 },
+      moves: [move({ name: 'Return', type: 'normal', power: 80 })],
+    });
+    const makeDef = () => makePokemon('Defender', 'normal-ability', { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 });
+
+    // 親子愛なしの単発ダメージを基準にする
+    const normal = makeKangaskhan('none');
+    const def1 = makeDef();
+    engine.setActivePokemon(0, normal);
+    engine.setActivePokemon(1, def1);
+    const r1 = engine.useMove(normal, def1, move({ name: 'Return', type: 'normal', power: 80 }));
+    const singleDamage = r1.damage ?? 0;
+    expect(singleDamage).toBeGreaterThan(0);
+
+    // 親子愛あり: 1回目（単発相当）+ 2回目（威力1/4）
+    const parental = makeKangaskhan('parental-bond');
+    const def2 = makeDef();
+    engine.setActivePokemon(0, parental);
+    engine.setActivePokemon(1, def2);
+    const r2 = engine.useMove(parental, def2, move({ name: 'Return', type: 'normal', power: 80 }));
+    const parentalDamage = r2.damage ?? 0;
+
+    expect(parentalDamage).toBeGreaterThan(singleDamage);            // 2回攻撃で単発より大きい
+    expect(parentalDamage).toBeLessThan(singleDamage * 1.5);         // 2回目は1/4威力（合計≈1.25倍）
+    expect(engine.getLog()).toContain('おやこあいで2回攻撃した');
+  });
+
+  test('きもったま: いかくを無効化する', () => {
+    const scrappy = makePokemon('Scrappy', 'scrappy', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const intimidator = makePokemon('Intimidator', 'intimidate', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    engine.setActivePokemon(0, intimidator);
+    engine.setActivePokemon(1, scrappy);
+
+    const atkBefore = scrappy.stats.ATK;
+    engine.events.emit('switch-in', { pokemon: intimidator, engine });
+
+    expect(scrappy.stats.ATK).toBe(atkBefore); // 攻撃は下がらない
+    expect(engine.getLog()).toContain('きもったま');
+  });
+
   test('ミラーアーマー: 相手の能力低下を反射する', () => {
     const mirrorArmor = makePokemon('MirrorArmor', 'mirror-armor', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });

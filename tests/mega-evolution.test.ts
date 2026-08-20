@@ -140,7 +140,7 @@ function createMockFetcher(): PokemonDataFetcher {
     lopunny: fakePokemonData({
       name: 'lopunny',
       types: ['normal'],
-      baseStats: { HP: 65, ATK: 120, DEF: 94, SPATK: 54, SPDEF: 96, SPEED: 105 },
+      baseStats: { HP: 65, ATK: 76, DEF: 84, SPATK: 54, SPDEF: 96, SPEED: 105 },
     }),
     'lopunny-mega': fakePokemonData({
       name: 'lopunny-mega',
@@ -160,14 +160,13 @@ function createMockFetcher(): PokemonDataFetcher {
 }
 
 describe('MegaEvolutionSystem', () => {
-  test('all registered mega stones distribute at most +100 base stat total (実データには+46等の例外がある)', () => {
+  test('all registered mega stones distribute exactly +100 base stat total', () => {
     const system = new MegaEvolutionSystem();
 
     for (const [item, stone] of Object.entries(system.megaStones)) {
       const total = stone.statBoosts.ATK + stone.statBoosts.DEF + stone.statBoosts.SPATK
         + stone.statBoosts.SPDEF + stone.statBoosts.SPEED;
-      expect(total).toBeLessThanOrEqual(100);
-      expect(total).toBeGreaterThan(0);
+      expect(total).toBe(100);
       expect(item).toBeTruthy();
     }
   });
@@ -369,14 +368,14 @@ describe('MegaEvolutionSystem.fromPokeApi', () => {
     await expect(MegaEvolutionSystem.fromPokeApi(fetcher, seeds)).rejects.toThrow('HPが変化する');
   });
 
-  test('throws if the derived stat boosts exceed +100 or are non-positive', async () => {
+  test('throws if the derived stat boosts do not sum to 100', async () => {
     const fetcher: PokemonDataFetcher = {
       async fetchPokemonData(id) {
         if (id === 'charizard') {
           return fakePokemonData({ baseStats: { HP: 78, ATK: 84, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 } });
         }
-        // 合計100を超える壊れたレスポンス（ATK+80, SPEED+80 = 160）
-        return fakePokemonData({ baseStats: { HP: 78, ATK: 164, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 180 } });
+        // ATK+46のみで他が変化しない、合計100にならない壊れたレスポンス
+        return fakePokemonData({ baseStats: { HP: 78, ATK: 130, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 } });
       },
     };
     const seeds: Record<string, MegaStoneSeed> = {
