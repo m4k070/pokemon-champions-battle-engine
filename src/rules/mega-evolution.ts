@@ -170,6 +170,15 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     // 実データ: ミミロップ A76/D84/S105 → メガ A136/D94/S135（A+60/D+10/S+30 = +100）
     statBoosts: { ATK: 60, DEF: 10, SPATK: 0, SPDEF: 0, SPEED: 30 },
   },
+  // ---- Champions/ZA 独自メガ（やっくんチャンピオンズ図鑑 2026-08-19 確認）----
+  'dragoniteite': {
+    pokemon: 'dragonite',
+    megaName: 'mega-dragonite',
+    typeChange: ['dragon', 'flying'],
+    abilityChange: 'multiscale', // マルチスケイル: 満HP時ダメージ半減
+    // カイリュー A134/D95/SA100/SD100/S80 → メガ A124/D115/SA145/SD125/S100（A-10/D+20/SA+45/SD+25/S+20 = +100）
+    statBoosts: { ATK: -10, DEF: 20, SPATK: 45, SPDEF: 25, SPEED: 20 },
+  },
 };
 
 // PokemonAPI本体に依存せず注入できるよう、使う分だけのインターフェースを切り出す。

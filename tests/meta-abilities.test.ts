@@ -239,6 +239,34 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(engine.getLog()).toContain('きもったま');
   });
 
+  test('マルチスケイル: HP満タン時に受けるダメージが半減する', () => {
+    const makeDef = (ability: string) => makePokemon('Def', ability, { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+
+    // 基準: マルチスケイルなしの実際のダメージ（currentHPの変化で測る）
+    const normal = makeDef('none');
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, normal);
+    const hp1 = normal.currentHP;
+    engine.useMove(attacker, normal, move({ name: 'Tackle', type: 'normal', power: 80 }));
+    const normalDamage = hp1 - normal.currentHP;
+    expect(normalDamage).toBeGreaterThan(0);
+
+    // マルチスケイル（満HP）: 受けるダメージが半減する
+    const ms = makeDef('multiscale');
+    engine.setActivePokemon(1, ms);
+    const hp2 = ms.currentHP;
+    engine.useMove(attacker, ms, move({ name: 'Tackle', type: 'normal', power: 80 }));
+    const fullHPDamage = hp2 - ms.currentHP;
+    expect(fullHPDamage).toBeLessThanOrEqual(Math.ceil(normalDamage / 2)); // 満HP時は半減
+
+    // HP減後（満HPでない）: 半減しない
+    const hp3 = ms.currentHP;
+    engine.useMove(attacker, ms, move({ name: 'Tackle', type: 'normal', power: 80 }));
+    const damagedDamage = hp3 - ms.currentHP;
+    expect(damagedDamage).toBeGreaterThan(fullHPDamage);
+  });
+
   test('ミラーアーマー: 相手の能力低下を反射する', () => {
     const mirrorArmor = makePokemon('MirrorArmor', 'mirror-armor', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });

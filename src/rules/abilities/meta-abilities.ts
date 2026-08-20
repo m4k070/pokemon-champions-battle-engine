@@ -223,6 +223,16 @@ export const PARENTAL_BOND: AbilityDefinition = {
   name: 'parental-bond',
 };
 
+// マルチスケイル: HP満タン時に受けるダメージが半減する。
+export const MULTISCALE: AbilityDefinition = {
+  name: 'multiscale',
+  onDamaged: ({ defender, damage }) => {
+    if (defender.currentHP >= defender.maxHP) {
+      return Math.floor(damage / 2);
+    }
+  },
+};
+
 // へんげんじざい: 技を使うと、その技のタイプに変わる（単一タイプになる）。
 // メガシンカでタイプが typeChange にリセットされた場合も、次の技使用で再発動する
 // （メガシンカは実質的な場への再登場のため、タイプ変化もやり直される）。
@@ -333,6 +343,7 @@ export const META_ABILITIES: AbilityDefinition[] = [
   ELECTRIC_SURGE,
   SWIFT_SWIM,
   PARENTAL_BOND,
+  MULTISCALE,
   PROTEAN,
   TOUGH_CLAWS,
   SAND_FORCE,

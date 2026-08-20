@@ -229,6 +229,28 @@ describe('MegaEvolutionSystem', () => {
     expect(getAbilityDefinition('swift-swim')).toBeDefined();
   });
 
+  test('Champions/ZA独自メガ: メガカイリューはメガ後 ability が "multiscale" になる', () => {
+    const system = new MegaEvolutionSystem();
+    const dragonite = new Pokemon({
+      name: 'dragonite',
+      baseName: 'dragonite',
+      types: ['dragon', 'flying'],
+      ability: 'inner-focus',
+      item: 'dragoniteite',
+      baseStats: { HP: 91, ATK: 134, DEF: 95, SPATK: 100, SPDEF: 100, SPEED: 80 },
+    });
+
+    const atkBefore = dragonite.stats.ATK;
+    const spaBefore = dragonite.stats.SPATK;
+    system.megaEvolve(dragonite);
+
+    expect(dragonite.ability).toBe('multiscale'); // マルチスケイル
+    expect(dragonite.types).toEqual(['dragon', 'flying']);
+    expect(dragonite.stats.ATK).toBe(atkBefore - 10); // A-10（特攻型に振り直し）
+    expect(dragonite.stats.SPATK).toBe(spaBefore + 45); // SA+45
+    expect(getAbilityDefinition('multiscale')).toBeDefined();
+  });
+
   test('Mega Charizard X applies its own ATK/DEF/SPATK distribution, not a flat +100', () => {
     const system = new MegaEvolutionSystem();
     const charizard = new Pokemon({
