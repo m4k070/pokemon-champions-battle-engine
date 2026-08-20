@@ -212,6 +212,68 @@ export const ELECTRIC_SURGE: AbilityDefinition = {
   },
 };
 
+// すいすい: 雨のとき素早さが2倍になる（速度計算は battle-engine の calculateSpeed 側で判定）。
+export const SWIFT_SWIM: AbilityDefinition = {
+  name: 'swift-swim',
+};
+
+// おやこあい: 攻撃技が2回ヒットする（2回目は威力1/4）。
+// ヒット処理は battle-engine の攻撃ループ側で name 判定して行う。
+export const PARENTAL_BOND: AbilityDefinition = {
+  name: 'parental-bond',
+};
+
+// マルチスケイル: HP満タン時に受けるダメージが半減する。
+export const MULTISCALE: AbilityDefinition = {
+  name: 'multiscale',
+  onDamaged: ({ defender, damage }) => {
+    if (defender.currentHP >= defender.maxHP) {
+      return Math.floor(damage / 2);
+    }
+  },
+};
+
+// 適応力: タイプ一致技の威力が1.5倍ではなく2倍になる。
+// STAB計算は battle-engine の useMove 側で name 判定して行う。
+export const ADAPTABILITY: AbilityDefinition = {
+  name: 'adaptability',
+};
+
+// スカイスキン: ノーマル技がひこう技になる（威力1.2倍）。
+// 技タイプ変換は battle-engine の useMove 側で name 判定して行う。
+export const AERILATE: AbilityDefinition = {
+  name: 'aerilate',
+};
+
+// フェアリースキン: ノーマル技がフェアリー技になる（威力1.2倍）。
+export const PIXILATE: AbilityDefinition = {
+  name: 'pixilate',
+};
+
+// かたやぶり: 攻撃時に相手の特性を無視する（がんじょう・あついしぼう・マルチスケイル等）。
+// 判定は battle-engine の攻撃処理側で name 判定して行う。
+export const MOLD_BREAKER: AbilityDefinition = {
+  name: 'mold-breaker',
+};
+
+// マジックミラー: 変化技を跳ね返す（対象を入れ替えて再適用）。
+// 判定は battle-engine の useMove 側で name 判定して行う。
+export const MAGIC_BOUNCE: AbilityDefinition = {
+  name: 'magic-bounce',
+};
+
+// へんげんじざい: 技を使うと、その技のタイプに変わる（単一タイプになる）。
+// メガシンカでタイプが typeChange にリセットされた場合も、次の技使用で再発動する
+// （メガシンカは実質的な場への再登場のため、タイプ変化もやり直される）。
+export const PROTEAN: AbilityDefinition = {
+  name: 'protean',
+  onMoveUsed: ({ attacker, move, engine }) => {
+    if (attacker.types.length === 1 && attacker.types[0] === move.type) return; // 既に技タイプなら変化しない
+    attacker.types = [move.type];
+    engine.log.push(`${attacker.name}は${move.type}タイプになった`);
+  },
+};
+
 // つめかえなし: 接触技の威力が1.3倍になる。
 export const TOUGH_CLAWS: AbilityDefinition = {
   name: 'tough-claws',
@@ -308,6 +370,15 @@ export const META_ABILITIES: AbilityDefinition[] = [
   INNER_FOCUS,
   SPICY_SPRAY,
   ELECTRIC_SURGE,
+  SWIFT_SWIM,
+  PARENTAL_BOND,
+  MULTISCALE,
+  ADAPTABILITY,
+  AERILATE,
+  PIXILATE,
+  MOLD_BREAKER,
+  MAGIC_BOUNCE,
+  PROTEAN,
   TOUGH_CLAWS,
   SAND_FORCE,
   LIGHTNING_ROD,

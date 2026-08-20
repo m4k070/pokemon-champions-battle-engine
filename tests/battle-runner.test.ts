@@ -1,5 +1,6 @@
 import { BattleSession, BattleHistory, runBattle } from '../src/battle-runner.js';
 import { RandomBattleAgent, getLegalActions } from '../src/ai/battle-agent.js';
+import { MegaEvolutionSystem } from '../src/rules/mega-evolution.js';
 import { Pokemon } from '../src/pokemon.js';
 import { Move } from '../src/move.js';
 
@@ -146,6 +147,118 @@ describe('BattleSession', () => {
     expect(charizard.name).toBe('mega-charizard-y');
     expect(charizard.ability).toBe('drought');
     expect(session.megaEvolutionSystem.canMegaEvolve(charizard)).toBe(false); // 一度メガシンカしたら戻せない
+  });
+
+  test('mega evolution triggers the new ability\'s onSwitchIn (drought sets sun)', async () => {
+    // メガシンカは実質的な場への再登場: 新特性（ひでり）の onSwitchIn が発動する
+    const charizard = new Pokemon({
+      name: 'Charizard',
+      baseName: 'charizard',
+      types: ['fire', 'flying'],
+      ability: 'blaze',
+      item: 'charizardite-y',
+      baseStats: { HP: 78, ATK: 84, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 },
+      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
+    });
+    const defender = makeDefender();
+    const session = await BattleSession.start([charizard], [defender]);
+    session.beginTurn();
+
+    expect(session.engine.weather).toBeNull(); // メガシンカ前は天候なし
+
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0, megaEvolve: true } },
+      { action: { type: 'forfeit' } }
+    );
+
+    expect(charizard.isMega).toBe(true);
+    expect(charizard.ability).toBe('drought');
+    expect(session.engine.weather).toBe('sun'); // メガシンカでひでりが発動した
+    expect(session.engine.weatherTurnsLeft).toBe(5);
+  });
+
+  test('mega evolution triggers electric surge (electric terrain set on switch-in)', async () => {
+    // ライチュウXのメガシンカでエレキメイカーが発動し、エレキフィールドが展開される
+    const raichu = new Pokemon({
+      name: 'Raichu',
+      baseName: 'raichu',
+      types: ['electric'],
+      ability: 'static',
+      item: 'raichunite-x',
+      baseStats: { HP: 60, ATK: 90, DEF: 55, SPATK: 90, SPDEF: 80, SPEED: 110 },
+      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
+    });
+    const defender = makeDefender();
+    const session = await BattleSession.start([raichu], [defender]);
+    session.beginTurn();
+
+    expect(session.engine.field.terrain).toBeNull();
+
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0, megaEvolve: true } },
+      { action: { type: 'forfeit' } }
+    );
+
+    expect(raichu.isMega).toBe(true);
+    expect(raichu.ability).toBe('electric-surge');
+    expect(session.engine.field.terrain).toBe('electric-terrain'); // メガシンカでエレキフィールド展開
+    expect(session.engine.field.terrainTurnsLeft).toBe(5);
+  });
+
+  test('へんげんじざい: メガシンカ後もタイプ変化が再発動する', async () => {
+    // メガシンカでタイプが typeChange にリセットされても、へんげんじざいは技使用ごとに再発動する
+    const megaSystem = new MegaEvolutionSystem({
+      greninjaite: {
+        pokemon: 'greninja',
+        megaName: 'mega-greninja',
+        typeChange: ['water', 'dark'],
+        abilityChange: 'protean',
+        statBoosts: { ATK: 40, DEF: 10, SPATK: 20, SPDEF: 10, SPEED: 20 },
+      },
+    });
+    const greninja = new Pokemon({
+      name: 'Greninja',
+      baseName: 'greninja',
+      types: ['water', 'dark'],
+      ability: 'torrent',
+      item: 'greninjaite',
+      baseStats: { HP: 72, ATK: 95, DEF: 67, SPATK: 103, SPDEF: 71, SPEED: 122 },
+      moves: [
+        new Move({ name: 'surf', type: 'water', power: 90, accuracy: 100, pp: 10, category: 'special' }),
+        new Move({ name: 'knock-off', type: 'dark', power: 65, accuracy: 100, pp: 10, category: 'physical' }),
+      ],
+    });
+    const defender = new Pokemon({
+      name: 'Defender',
+      types: ['normal'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 200, ATK: 10, DEF: 100, SPATK: 10, SPDEF: 100, SPEED: 1 },
+      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+    });
+    const session = await BattleSession.start([greninja], [defender], { megaEvolutionSystem: megaSystem });
+    session.beginTurn();
+
+    // メガシンカ（技の選択と同時に宣言）。このターンはみず技（surf）を使用。
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0, megaEvolve: true } },
+      { action: { type: 'forfeit' } }
+    );
+
+    expect(greninja.isMega).toBe(true);
+    expect(greninja.ability).toBe('protean');
+    // メガシンカで typeChange（みず/あく）にリセットされた直後、同じターンの技使用で
+    // へんげんじざいが発動し、技タイプ（みず）の単一タイプになる
+    expect(greninja.types).toEqual(['water']);
+
+    // 次のターン: あく技（knock-off）使用でへんげんじざいが再発動し、あくタイプに変わる
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 1, target: 0 } },
+      { action: { type: 'forfeit' } }
+    );
+
+    expect(greninja.types).toEqual(['dark']); // 再発動: 技タイプ（あく）
   });
 
   test('start() lets the slower lead\'s weather-setting ability overwrite the faster one\'s', async () => {

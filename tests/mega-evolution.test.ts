@@ -1,5 +1,6 @@
 import { MegaEvolutionSystem } from '../src/rules/mega-evolution.js';
 import type { PokemonDataFetcher, MegaStoneSeed } from '../src/rules/mega-evolution.js';
+import { getAbilityDefinition } from '../src/rules/abilities/registry.js';
 import type { PokeApiPokemonData } from '../src/api/pokemon-api.js';
 import { Pokemon } from '../src/pokemon.js';
 
@@ -92,6 +93,61 @@ function createMockFetcher(): PokemonDataFetcher {
       abilities: [{ name: 'mega-launcher', isHidden: false }],
       baseStats: { HP: 79, ATK: 103, DEF: 120, SPATK: 135, SPDEF: 115, SPEED: 78 },
     }),
+    swampert: fakePokemonData({
+      name: 'swampert',
+      types: ['water', 'ground'],
+      baseStats: { HP: 100, ATK: 110, DEF: 90, SPATK: 85, SPDEF: 90, SPEED: 60 },
+    }),
+    'swampert-mega': fakePokemonData({
+      name: 'swampert-mega',
+      types: ['water', 'ground'],
+      abilities: [{ name: 'swift-swim', isHidden: false }],
+      baseStats: { HP: 100, ATK: 150, DEF: 110, SPATK: 95, SPDEF: 110, SPEED: 70 },
+    }),
+    blaziken: fakePokemonData({
+      name: 'blaziken',
+      types: ['fire', 'fighting'],
+      baseStats: { HP: 80, ATK: 120, DEF: 70, SPATK: 110, SPDEF: 70, SPEED: 80 },
+    }),
+    'blaziken-mega': fakePokemonData({
+      name: 'blaziken-mega',
+      types: ['fire', 'fighting'],
+      abilities: [{ name: 'speed-boost', isHidden: false }],
+      baseStats: { HP: 80, ATK: 160, DEF: 80, SPATK: 130, SPDEF: 80, SPEED: 100 },
+    }),
+    kangaskhan: fakePokemonData({
+      name: 'kangaskhan',
+      types: ['normal'],
+      baseStats: { HP: 105, ATK: 95, DEF: 80, SPATK: 40, SPDEF: 80, SPEED: 90 },
+    }),
+    'kangaskhan-mega': fakePokemonData({
+      name: 'kangaskhan-mega',
+      types: ['normal'],
+      abilities: [{ name: 'parental-bond', isHidden: false }],
+      baseStats: { HP: 105, ATK: 125, DEF: 100, SPATK: 60, SPDEF: 100, SPEED: 100 },
+    }),
+    scizor: fakePokemonData({
+      name: 'scizor',
+      types: ['bug', 'steel'],
+      baseStats: { HP: 70, ATK: 130, DEF: 100, SPATK: 55, SPDEF: 80, SPEED: 65 },
+    }),
+    'scizor-mega': fakePokemonData({
+      name: 'scizor-mega',
+      types: ['bug', 'steel'],
+      abilities: [{ name: 'technician', isHidden: false }],
+      baseStats: { HP: 70, ATK: 150, DEF: 140, SPATK: 65, SPDEF: 100, SPEED: 75 },
+    }),
+    lopunny: fakePokemonData({
+      name: 'lopunny',
+      types: ['normal'],
+      baseStats: { HP: 65, ATK: 76, DEF: 84, SPATK: 54, SPDEF: 96, SPEED: 105 },
+    }),
+    'lopunny-mega': fakePokemonData({
+      name: 'lopunny-mega',
+      types: ['normal', 'fighting'],
+      abilities: [{ name: 'scrappy', isHidden: false }],
+      baseStats: { HP: 65, ATK: 136, DEF: 94, SPATK: 54, SPDEF: 96, SPEED: 135 },
+    }),
   };
 
   return {
@@ -113,6 +169,104 @@ describe('MegaEvolutionSystem', () => {
       expect(total).toBe(100);
       expect(item).toBeTruthy();
     }
+  });
+
+  test('Champions 独自メガ: スコヴィランのメガ後 ability は registry で解決可能な "spicy-spray" になる', () => {
+    const system = new MegaEvolutionSystem();
+    const scovillain = new Pokemon({
+      name: 'scovillain',
+      baseName: 'scovillain',
+      types: ['grass', 'fire'],
+      ability: 'chlorophyll',
+      item: 'scovillainite',
+      baseStats: { HP: 65, ATK: 108, DEF: 65, SPATK: 108, SPDEF: 65, SPEED: 75 },
+    });
+
+    system.megaEvolve(scovillain);
+
+    expect(scovillain.ability).toBe('spicy-spray'); // とびだすハバネロ（英語名 = registry キー）
+    expect(scovillain.types).toEqual(['grass', 'fire']);
+    expect(getAbilityDefinition('spicy-spray')).toBeDefined();
+  });
+
+  test('Champions 独自メガ: ライチュウXのメガ後 ability は "electric-surge" になる', () => {
+    const system = new MegaEvolutionSystem();
+    const raichu = new Pokemon({
+      name: 'raichu',
+      baseName: 'raichu',
+      types: ['electric'],
+      ability: 'static',
+      item: 'raichunite-x',
+      baseStats: { HP: 60, ATK: 90, DEF: 55, SPATK: 90, SPDEF: 80, SPEED: 110 },
+    });
+
+    system.megaEvolve(raichu);
+
+    expect(raichu.ability).toBe('electric-surge'); // エレキメイカー
+    expect(raichu.types).toEqual(['electric']);
+    expect(getAbilityDefinition('electric-surge')).toBeDefined();
+  });
+
+  test('上位構築メガ: メガラグラージはメガ後 ability が "swift-swim" になる', () => {
+    const system = new MegaEvolutionSystem();
+    const swampert = new Pokemon({
+      name: 'swampert',
+      baseName: 'swampert',
+      types: ['water', 'ground'],
+      ability: 'torrent',
+      item: 'swampertite',
+      baseStats: { HP: 100, ATK: 110, DEF: 90, SPATK: 85, SPDEF: 90, SPEED: 60 },
+    });
+
+    const atkBefore = swampert.stats.ATK;
+    const speedBefore = swampert.stats.SPEED;
+    system.megaEvolve(swampert);
+
+    expect(swampert.ability).toBe('swift-swim'); // すいすい
+    expect(swampert.types).toEqual(['water', 'ground']);
+    expect(swampert.stats.ATK).toBe(atkBefore + 40); // ATK+40
+    expect(swampert.stats.SPEED).toBe(speedBefore + 10); // SPEED+10
+    expect(getAbilityDefinition('swift-swim')).toBeDefined();
+  });
+
+  test('Champions/ZA独自メガ: メガカイリューはメガ後 ability が "multiscale" になる', () => {
+    const system = new MegaEvolutionSystem();
+    const dragonite = new Pokemon({
+      name: 'dragonite',
+      baseName: 'dragonite',
+      types: ['dragon', 'flying'],
+      ability: 'inner-focus',
+      item: 'dragoniteite',
+      baseStats: { HP: 91, ATK: 134, DEF: 95, SPATK: 100, SPDEF: 100, SPEED: 80 },
+    });
+
+    const atkBefore = dragonite.stats.ATK;
+    const spaBefore = dragonite.stats.SPATK;
+    system.megaEvolve(dragonite);
+
+    expect(dragonite.ability).toBe('multiscale'); // マルチスケイル
+    expect(dragonite.types).toEqual(['dragon', 'flying']);
+    expect(dragonite.stats.ATK).toBe(atkBefore - 10); // A-10（特攻型に振り直し）
+    expect(dragonite.stats.SPATK).toBe(spaBefore + 45); // SA+45
+    expect(getAbilityDefinition('multiscale')).toBeDefined();
+  });
+
+  test('優先度「中」メガ: メガルカリオはメガ後 ability が "adaptability" になる', () => {
+    const system = new MegaEvolutionSystem();
+    const lucario = new Pokemon({
+      name: 'lucario',
+      baseName: 'lucario',
+      types: ['fighting', 'steel'],
+      ability: 'inner-focus',
+      item: 'lucarionite',
+      baseStats: { HP: 70, ATK: 110, DEF: 70, SPATK: 115, SPDEF: 70, SPEED: 90 },
+    });
+
+    system.megaEvolve(lucario);
+
+    expect(lucario.ability).toBe('adaptability'); // 適応力
+    expect(lucario.types).toEqual(['fighting', 'steel']);
+    expect(getAbilityDefinition('adaptability')).toBeDefined();
   });
 
   test('Mega Charizard X applies its own ATK/DEF/SPATK distribution, not a flat +100', () => {
