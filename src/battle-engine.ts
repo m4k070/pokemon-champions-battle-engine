@@ -374,6 +374,13 @@ export class BattleEngine {
       const defenderNoGuard = getAbilityDefinition(defender.ability)?.name === 'no-guard';
       if (!attackerNoGuard && !defenderNoGuard && Math.random() * 100 > move.accuracy) {
         this.log.push('技は外れた');
+        // 飛び膝蹴り等のクラッシュダメージ（最大HPの50%）
+        if (move.crashDamage) {
+          const crashDmg = Math.floor(attacker.maxHP / 2);
+          this.applyDamage(attacker, crashDmg, attacker, move);
+          this.log.push(`${attacker.name}は技がはずれてダメージを受けた！`);
+          this.log.push(`${attacker.name}に${crashDmg}のダメージ`);
+        }
         return { success: false };
       }
     }
@@ -553,20 +560,28 @@ export class BattleEngine {
     const isParentalBond = attacker.ability === 'parental-bond';
 
     // ロックブラスト等の多段技は命中判定こそ1回だが、当たった後の実ヒット数は乱数（本編仕様）。
-    const hitCount = move.multiHit ? this.rollMultiHitCount() : isParentalBond ? 2 : 1;
+    // maxHitsが指定されていれば上限を適用
+    const hitCount = move.multiHit
+      ? (move.maxHits ? Math.min(this.rollMultiHitCount(), move.maxHits) : this.rollMultiHitCount())
+      : isParentalBond ? 2 : 1;
     let totalDamage = 0;
     let lastEffectiveness = 1;
 
     for (let hit = 0; hit < hitCount && !defender.isFainted; hit++) {
+      // multiHitPowersが指定されていれば、ヒットごとに威力を変更
       // おやこあいの2回目は威力1/4で計算する
-      const hitMove: MoveData = isParentalBond && hit > 0
-        ? { ...moveWithStab, power: Math.floor(moveWithStab.power / 4) }
-        : moveWithStab;
+      let hitPower = moveWithStab.power;
+      if (move.multiHitPowers && hit < move.multiHitPowers.length) {
+        hitPower = move.multiHitPowers[hit];
+      } else if (isParentalBond && hit > 0) {
+        hitPower = Math.floor(moveWithStab.power / 4);
+      }
+      const hitMove: MoveData = { ...moveWithStab, power: hitPower };
+
       const attack = this.calculateAttack(attacker, hitMove);
       const defense = this.calculateDefense(defender, hitMove);
       const baseDamage = this.calculateBaseDamage(attack, defense, hitMove);
       const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, hitMove);
-
       this.applyDamage(defender, finalDamage, attacker, hitMove);
       totalDamage += finalDamage;
       lastEffectiveness = effectiveness;

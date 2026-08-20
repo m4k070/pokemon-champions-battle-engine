@@ -29,9 +29,13 @@ export interface MoveConstructorData {
   weatherHeal?: boolean;
   weather?: WeatherType | null;
   multiHit?: boolean;
+  maxHits?: number;
+  multiHitPowers?: number[];
   pivot?: boolean;
+  crashDamage?: boolean;
   contact?: boolean;
   restoresShieldForm?: boolean;
+  inflictsSpikes?: boolean;
 }
 
 export class Move implements MoveData {
@@ -53,9 +57,13 @@ export class Move implements MoveData {
   weatherHeal: boolean;
   weather: WeatherType | null;
   multiHit: boolean;
+  maxHits?: number;
+  multiHitPowers?: number[];
   pivot: boolean;
+  crashDamage: boolean;
   contact: boolean;
   restoresShieldForm: boolean;
+  inflictsSpikes: boolean;
 
   constructor(data: MoveConstructorData) {
     this.name = data.name;
@@ -76,8 +84,12 @@ export class Move implements MoveData {
     this.weatherHeal = data.weatherHeal ?? false;
     this.weather = data.weather ?? null;
     this.multiHit = data.multiHit ?? false;
+    this.maxHits = data.maxHits;
+    this.multiHitPowers = data.multiHitPowers;
     this.pivot = data.pivot ?? false;
+    this.crashDamage = data.crashDamage ?? false;
     this.contact = data.contact ?? false;
     this.restoresShieldForm = data.restoresShieldForm ?? false;
+    this.inflictsSpikes = data.inflictsSpikes ?? false;
   }
 }
