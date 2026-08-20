@@ -72,8 +72,15 @@ export interface MoveData {
   weather?: WeatherType | null;
   // ロックブラスト等、通常配分（2発37.5%/3発37.5%/4発12.5%/5発12.5%）の多段技。
   multiHit?: boolean;
+  // トリプルアクセル等、ヒット数に上限がある多段技。省略時はmultiHitの通常配分に従う。
+  maxHits?: number;
+  // トリプルアクセル等、ヒットごとに威力が変化する多段技。[20,30,40]なら1発目20、2発目30、3発目40。
+  // maxHitsと併用する。省略時はmultiHitの通常 powerless
+  multiHitPowers?: number[];
   // とんぼがえり・ボルトチェンジ・クイックターン等、攻撃後に使用者が自動で交代する技。
   pivot?: boolean;
+  // 飛び膝蹴り等、技が外れた時に使用者がダメージを受ける技（最大HPの50%）。
+  crashDamage?: boolean;
   // 接触技（さめはだ・ゴツゴツメット・さまようたましい等の接触判定に使う）。
   // 物理技のほとんどは接触だが、いわゆる「非接触の物理技」（じしん・ストーンエッジ等）は false。
   contact?: boolean;
