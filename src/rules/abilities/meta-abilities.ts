@@ -212,6 +212,18 @@ export const ELECTRIC_SURGE: AbilityDefinition = {
   },
 };
 
+// へんげんじざい: 技を使うと、その技のタイプに変わる（単一タイプになる）。
+// メガシンカでタイプが typeChange にリセットされた場合も、次の技使用で再発動する
+// （メガシンカは実質的な場への再登場のため、タイプ変化もやり直される）。
+export const PROTEAN: AbilityDefinition = {
+  name: 'protean',
+  onMoveUsed: ({ attacker, move, engine }) => {
+    if (attacker.types.length === 1 && attacker.types[0] === move.type) return; // 既に技タイプなら変化しない
+    attacker.types = [move.type];
+    engine.log.push(`${attacker.name}は${move.type}タイプになった`);
+  },
+};
+
 // つめかえなし: 接触技の威力が1.3倍になる。
 export const TOUGH_CLAWS: AbilityDefinition = {
   name: 'tough-claws',
@@ -308,6 +320,7 @@ export const META_ABILITIES: AbilityDefinition[] = [
   INNER_FOCUS,
   SPICY_SPRAY,
   ELECTRIC_SURGE,
+  PROTEAN,
   TOUGH_CLAWS,
   SAND_FORCE,
   LIGHTNING_ROD,

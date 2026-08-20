@@ -134,6 +134,44 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(aegislash.form).toBe('shield');
   });
 
+  test('へんげんじざい: 技を使うとその技のタイプに変わる（単一タイプになる）', () => {
+    const greninja = new Pokemon({
+      name: 'Greninja',
+      types: ['water', 'dark'],
+      ability: 'protean',
+      item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      stats: { ...FIXED_STATS },
+      moves: [move({ name: 'Ice Beam', type: 'ice', power: 90 })],
+    });
+    const defender = makePokemon('Defender', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    engine.setActivePokemon(0, greninja);
+    engine.setActivePokemon(1, defender);
+
+    expect(greninja.types).toEqual(['water', 'dark']);
+
+    engine.useMove(greninja, defender, move({ name: 'Ice Beam', type: 'ice', power: 90 }));
+    expect(greninja.types).toEqual(['ice']); // 技タイプ（こおり）の単一タイプになる
+  });
+
+  test('へんげんじざい: 既に技タイプと同じなら変化しない', () => {
+    const greninja = new Pokemon({
+      name: 'Greninja',
+      types: ['water'],
+      ability: 'protean',
+      item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      stats: { ...FIXED_STATS },
+      moves: [move({ name: 'Surf', type: 'water', power: 90 })],
+    });
+    const defender = makePokemon('Defender', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    engine.setActivePokemon(0, greninja);
+    engine.setActivePokemon(1, defender);
+
+    engine.useMove(greninja, defender, move({ name: 'Surf', type: 'water', power: 90 }));
+    expect(greninja.types).toEqual(['water']); // 変化なし
+  });
+
   test('ミラーアーマー: 相手の能力低下を反射する', () => {
     const mirrorArmor = makePokemon('MirrorArmor', 'mirror-armor', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
