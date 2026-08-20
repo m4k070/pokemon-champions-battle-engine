@@ -67,7 +67,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'scovillain',
     megaName: 'mega-scovillain',
     typeChange: ['grass', 'fire'],
-    abilityChange: 'とびだすハバネロ', // Champions 独自特性（未実装・効果調査待ち）
+    abilityChange: 'spicy-spray', // とびだすハバネロ（実装済み・攻撃で受けたら攻撃者をやけどにする）
     statBoosts: { ATK: 30, DEF: 20, SPATK: 30, SPDEF: 20, SPEED: 0 },
   },
   'delphoxite': {

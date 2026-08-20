@@ -1,5 +1,6 @@
 import { MegaEvolutionSystem } from '../src/rules/mega-evolution.js';
 import type { PokemonDataFetcher, MegaStoneSeed } from '../src/rules/mega-evolution.js';
+import { getAbilityDefinition } from '../src/rules/abilities/registry.js';
 import type { PokeApiPokemonData } from '../src/api/pokemon-api.js';
 import { Pokemon } from '../src/pokemon.js';
 
@@ -113,6 +114,42 @@ describe('MegaEvolutionSystem', () => {
       expect(total).toBe(100);
       expect(item).toBeTruthy();
     }
+  });
+
+  test('Champions 独自メガ: スコヴィランのメガ後 ability は registry で解決可能な "spicy-spray" になる', () => {
+    const system = new MegaEvolutionSystem();
+    const scovillain = new Pokemon({
+      name: 'scovillain',
+      baseName: 'scovillain',
+      types: ['grass', 'fire'],
+      ability: 'chlorophyll',
+      item: 'scovillainite',
+      baseStats: { HP: 65, ATK: 108, DEF: 65, SPATK: 108, SPDEF: 65, SPEED: 75 },
+    });
+
+    system.megaEvolve(scovillain);
+
+    expect(scovillain.ability).toBe('spicy-spray'); // とびだすハバネロ（英語名 = registry キー）
+    expect(scovillain.types).toEqual(['grass', 'fire']);
+    expect(getAbilityDefinition('spicy-spray')).toBeDefined();
+  });
+
+  test('Champions 独自メガ: ライチュウXのメガ後 ability は "electric-surge" になる', () => {
+    const system = new MegaEvolutionSystem();
+    const raichu = new Pokemon({
+      name: 'raichu',
+      baseName: 'raichu',
+      types: ['electric'],
+      ability: 'static',
+      item: 'raichunite-x',
+      baseStats: { HP: 60, ATK: 90, DEF: 55, SPATK: 90, SPDEF: 80, SPEED: 110 },
+    });
+
+    system.megaEvolve(raichu);
+
+    expect(raichu.ability).toBe('electric-surge'); // エレキメイカー
+    expect(raichu.types).toEqual(['electric']);
+    expect(getAbilityDefinition('electric-surge')).toBeDefined();
   });
 
   test('Mega Charizard X applies its own ATK/DEF/SPATK distribution, not a flat +100', () => {
