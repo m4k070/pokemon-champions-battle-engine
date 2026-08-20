@@ -172,6 +172,26 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(greninja.types).toEqual(['water']); // 変化なし
   });
 
+  test('すいすい: 雨のとき素早さが2倍になる', () => {
+    const swampert = new Pokemon({
+      name: 'Swampert',
+      types: ['water', 'ground'],
+      ability: 'swift-swim',
+      item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 70 },
+      stats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 70 },
+    });
+    engine.setActivePokemon(0, swampert);
+
+    expect(engine.calculateSpeed(swampert)).toBe(70); // 晴れ: そのまま
+
+    engine.weather = 'rain';
+    expect(engine.calculateSpeed(swampert)).toBe(140); // 雨: 2倍
+
+    engine.weather = null;
+    expect(engine.calculateSpeed(swampert)).toBe(70); // 雨が止むと戻る
+  });
+
   test('ミラーアーマー: 相手の能力低下を反射する', () => {
     const mirrorArmor = makePokemon('MirrorArmor', 'mirror-armor', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });

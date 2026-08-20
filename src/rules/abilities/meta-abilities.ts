@@ -212,6 +212,11 @@ export const ELECTRIC_SURGE: AbilityDefinition = {
   },
 };
 
+// すいすい: 雨のとき素早さが2倍になる（速度計算は battle-engine の calculateSpeed 側で判定）。
+export const SWIFT_SWIM: AbilityDefinition = {
+  name: 'swift-swim',
+};
+
 // へんげんじざい: 技を使うと、その技のタイプに変わる（単一タイプになる）。
 // メガシンカでタイプが typeChange にリセットされた場合も、次の技使用で再発動する
 // （メガシンカは実質的な場への再登場のため、タイプ変化もやり直される）。
@@ -320,6 +325,7 @@ export const META_ABILITIES: AbilityDefinition[] = [
   INNER_FOCUS,
   SPICY_SPRAY,
   ELECTRIC_SURGE,
+  SWIFT_SWIM,
   PROTEAN,
   TOUGH_CLAWS,
   SAND_FORCE,

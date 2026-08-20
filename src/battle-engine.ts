@@ -839,6 +839,11 @@ export class BattleEngine {
       speed = Math.floor(speed / 2);
     }
 
+    // すいすい: 雨のとき素早さが2倍になる
+    if (pokemon.ability === 'swift-swim' && this.weather === 'rain') {
+      speed *= 2;
+    }
+
     const side = this.getSide(pokemon);
     if (side !== null && this.field.tailwind[this.sideKey(side)] > 0) {
       speed *= 2;

@@ -36,6 +36,12 @@ export const MEGA_STONE_SEEDS: Record<string, MegaStoneSeed> = {
   'venusaurite': { pokemon: 'venusaur', megaApiName: 'venusaur-mega', megaName: 'mega-venusaur' },
   'mawilite': { pokemon: 'mawile', megaApiName: 'mawile-mega', megaName: 'mega-mawile' },
   'blastoisinite': { pokemon: 'blastoise', megaApiName: 'blastoise-mega', megaName: 'mega-blastoise' },
+  'swampertite': { pokemon: 'swampert', megaApiName: 'swampert-mega', megaName: 'mega-swampert' },
+  'blazikenite': { pokemon: 'blaziken', megaApiName: 'blaziken-mega', megaName: 'mega-blaziken' },
+  'gengarite': { pokemon: 'gengar', megaApiName: 'gengar-mega', megaName: 'mega-gengar' },
+  'kangaskhanite': { pokemon: 'kangaskhan', megaApiName: 'kangaskhan-mega', megaName: 'mega-kangaskhan' },
+  'scizorite': { pokemon: 'scizor', megaApiName: 'scizor-mega', megaName: 'mega-scizor' },
+  'lopunnite': { pokemon: 'lopunny', megaApiName: 'lopunny-mega', megaName: 'mega-lopunny' },
 };
 
 // Poke APIから取得できない場合のデフォルト値（2026-07時点でPoke API実データと突合済み）。
@@ -120,6 +126,50 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     abilityChange: 'mega-launcher',
     statBoosts: { ATK: 20, DEF: 20, SPATK: 50, SPDEF: 10, SPEED: 0 },
   },
+  // ---- 上位構築メガ（2026-08-19 追加、種族値は Pokémon Showdown データで確認）----
+  'swampertite': {
+    pokemon: 'swampert',
+    megaName: 'mega-swampert',
+    typeChange: ['water', 'ground'],
+    abilityChange: 'swift-swim', // すいすい: 雨で素早さ2倍
+    statBoosts: { ATK: 40, DEF: 20, SPATK: 10, SPDEF: 20, SPEED: 10 },
+  },
+  'blazikenite': {
+    pokemon: 'blaziken',
+    megaName: 'mega-blaziken',
+    typeChange: ['fire', 'fighting'],
+    abilityChange: 'speed-boost', // かそく
+    statBoosts: { ATK: 40, DEF: 10, SPATK: 20, SPDEF: 10, SPEED: 20 },
+  },
+  'gengarite': {
+    pokemon: 'gengar',
+    megaName: 'mega-gengar',
+    typeChange: ['ghost', 'poison'],
+    abilityChange: 'shadow-tag', // かげふみ
+    statBoosts: { ATK: 0, DEF: 20, SPATK: 40, SPDEF: 20, SPEED: 20 },
+  },
+  'kangaskhanite': {
+    pokemon: 'kangaskhan',
+    megaName: 'mega-kangaskhan',
+    typeChange: ['normal'],
+    abilityChange: 'parental-bond', // おやこあい（未実装）
+    statBoosts: { ATK: 30, DEF: 20, SPATK: 20, SPDEF: 20, SPEED: 10 },
+  },
+  'scizorite': {
+    pokemon: 'scizor',
+    megaName: 'mega-scizor',
+    typeChange: ['bug', 'steel'],
+    abilityChange: 'technician', // テクニシャン
+    statBoosts: { ATK: 20, DEF: 40, SPATK: 10, SPDEF: 20, SPEED: 10 },
+  },
+  'lopunnite': {
+    pokemon: 'lopunny',
+    megaName: 'mega-lopunny',
+    typeChange: ['normal', 'fighting'],
+    abilityChange: 'scrappy', // すてみ
+    // 実データは A+16/S+30 の合計+46（メガシンカの例外配分）
+    statBoosts: { ATK: 16, DEF: 0, SPATK: 0, SPDEF: 0, SPEED: 30 },
+  },
 };
 
 // PokemonAPI本体に依存せず注入できるよう、使う分だけのインターフェースを切り出す。
@@ -140,8 +190,14 @@ export class MegaEvolutionSystem {
 
   private validateStatBoosts(item: string, statBoosts: MegaStatBoosts): void {
     const total = MEGA_STAT_KEYS.reduce((sum, key) => sum + statBoosts[key], 0);
-    if (total !== MEGA_STAT_TOTAL) {
-      throw new Error(`メガシンカの種族値配分が不正です: ${item} の合計は${total}（期待値${MEGA_STAT_TOTAL}）`);
+    // 本編のメガシンカは多くのポケモンで合計+100だが、例外がある
+    // （例: メガミミロップは A+16/S+30 の合計+46）。実データに合わせて
+    // 「0より大きく、100以下」を妥当とする。
+    if (total > MEGA_STAT_TOTAL) {
+      throw new Error(`メガシンカの種族値配分が不正です: ${item} の合計は${total}（上限${MEGA_STAT_TOTAL}）`);
+    }
+    if (total <= 0) {
+      throw new Error(`メガシンカの種族値配分が不正です: ${item} の合計は${total}（0以下）`);
     }
   }
 
