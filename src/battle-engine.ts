@@ -452,6 +452,15 @@ export class BattleEngine {
       return { success: true };
     }
 
+    // あまごい・にほんばれ等: 天候を5ターン変化させる。
+    if (move.weather) {
+      this.weather = move.weather;
+      this.weatherTurnsLeft = 5;
+      const weatherName = { rain: 'あめ', sun: 'にほんばれ', sand: 'すなあらし', hail: 'あられ' }[move.weather];
+      this.log.push(`${attacker.name}は${weatherName}を呼び出した`);
+      return { success: true };
+    }
+
     if (move.weatherHeal) {
       const percent = WEATHER_HEAL_PERCENT[this.weather ?? 'none'];
       const heal = Math.floor(attacker.maxHP * percent);
