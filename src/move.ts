@@ -7,6 +7,7 @@ import type {
   SecondaryStatusEffect,
   SelfStatChange,
   TargetStatChange,
+  WeatherType,
 } from './types.js';
 
 export interface MoveConstructorData {
@@ -26,6 +27,7 @@ export interface MoveConstructorData {
   targetStatChange?: TargetStatChange[] | null;
   inflictsSeed?: boolean;
   weatherHeal?: boolean;
+  weather?: WeatherType | null;
   multiHit?: boolean;
   pivot?: boolean;
   contact?: boolean;
@@ -49,6 +51,7 @@ export class Move implements MoveData {
   targetStatChange: TargetStatChange[] | null;
   inflictsSeed: boolean;
   weatherHeal: boolean;
+  weather: WeatherType | null;
   multiHit: boolean;
   pivot: boolean;
   contact: boolean;
@@ -71,6 +74,7 @@ export class Move implements MoveData {
     this.targetStatChange = data.targetStatChange ?? null;
     this.inflictsSeed = data.inflictsSeed ?? false;
     this.weatherHeal = data.weatherHeal ?? false;
+    this.weather = data.weather ?? null;
     this.multiHit = data.multiHit ?? false;
     this.pivot = data.pivot ?? false;
     this.contact = data.contact ?? false;
