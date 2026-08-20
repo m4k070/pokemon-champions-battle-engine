@@ -236,7 +236,9 @@ export class BattleEngine {
     let defense = Math.floor(defender.stats[statKey] * stageMultiplier);
 
     const ability = getAbilityDefinition(defender.ability);
-    if (ability?.modifyDefense) {
+    // かたやぶり（mold-breaker）持ちの攻撃は防御側の特性（あついしぼう等）を無視する
+    const moldBreaker = attacker ? attacker.ability === 'mold-breaker' : false;
+    if (ability?.modifyDefense && !moldBreaker) {
       defense = ability.modifyDefense({ pokemon: defender, move: move as MoveData, value: defense, engine: this });
     }
 
@@ -305,7 +307,8 @@ export class BattleEngine {
     let effectiveDamage = damage;
 
     // 特性の被弾時フック（がんじょう・じきゅうりょく・あついしぼう・さめはだ等）。
-    if (attacker && move) {
+    // かたやぶり（mold-breaker）持ちの攻撃は防御側の特性を無視する。
+    if (attacker && move && attacker.ability !== 'mold-breaker') {
       const ability = getAbilityDefinition(defender.ability);
       const adjusted = ability?.onDamaged?.({ defender, attacker, move, damage, engine: this });
       if (typeof adjusted === 'number') effectiveDamage = adjusted;
@@ -327,6 +330,14 @@ export class BattleEngine {
       this.log.push(`${attacker.name}は${move.name}を出そうとしたが、PPが残っていない！`);
       return { success: false };
     }
+
+    // マジックミラー（magic-bounce）: 変化技を跳ね返す（対象を入れ替えて再適用）。
+    // 両者マジックミラーなら跳ね返し合いにならない（1回だけ跳ね返す）。
+    if (move.category === 'status' && defender.ability === 'magic-bounce' && attacker.ability !== 'magic-bounce') {
+      this.log.push(`${defender.name}のマジックミラーが${attacker.name}の${move.name}を跳ね返した！`);
+      return this.useMove(defender, attacker, move);
+    }
+
     move.pp -= 1;
 
     this.log.push(`${attacker.name}の${move.name}`);
@@ -345,8 +356,9 @@ export class BattleEngine {
     }
 
     // ぼうだん等の技無効化特性は命中判定より前に解決する（本編仕様）。
+    // かたやぶり（mold-breaker）持ちの攻撃は防御側の特性（ぼうだん・ひらいしん等）を無視する。
     const defenderAbility = getAbilityDefinition(defender.ability);
-    if (defenderAbility?.blocksMove?.(move)) {
+    if (attacker.ability !== 'mold-breaker' && defenderAbility?.blocksMove?.(move)) {
       // ひらいしん: でん技を弾いたとき、特攻を1段階上げる。
       if (defender.ability === 'lightning-rod' && move.type === 'electric') {
         defender.modifyStatStage('SPATK', 1);
@@ -486,14 +498,27 @@ export class BattleEngine {
     }
 
     // ウェザーボールは天候下でタイプが変化する。
-    const effectiveType = move.name === 'weather-ball' && this.weather && WEATHER_BALL_TYPE[this.weather]
+    let effectiveType = move.name === 'weather-ball' && this.weather && WEATHER_BALL_TYPE[this.weather]
       ? WEATHER_BALL_TYPE[this.weather]!
       : move.type;
 
     let power = move.power;
 
+    // スカイスキン（aerilate）: ノーマル技がひこう技になる（威力1.2倍）
+    // フェアリースキン（pixilate）: ノーマル技がフェアリー技になる（威力1.2倍）
+    if (effectiveType === 'normal') {
+      if (attacker.ability === 'aerilate') {
+        effectiveType = 'flying';
+        power = Math.floor(power * 1.2);
+      } else if (attacker.ability === 'pixilate') {
+        effectiveType = 'fairy';
+        power = Math.floor(power * 1.2);
+      }
+    }
+
     if (attacker.types && attacker.types.includes(effectiveType)) {
-      power *= 1.5;
+      // STAB: タイプ一致技は1.5倍（適応力持ちは2倍）
+      power *= attacker.ability === 'adaptability' ? 2.0 : 1.5;
     }
 
     if (attacker.item === 'life-orb') {
@@ -515,18 +540,25 @@ export class BattleEngine {
 
     const moveWithStab: MoveData = { ...move, power, type: effectiveType };
 
+    // おやこあい: 攻撃技が2回ヒットする（2回目は威力1/4）。命中判定は1回（本編仕様）。
+    const isParentalBond = attacker.ability === 'parental-bond';
+
     // ロックブラスト等の多段技は命中判定こそ1回だが、当たった後の実ヒット数は乱数（本編仕様）。
-    const hitCount = move.multiHit ? this.rollMultiHitCount() : 1;
+    const hitCount = move.multiHit ? this.rollMultiHitCount() : isParentalBond ? 2 : 1;
     let totalDamage = 0;
     let lastEffectiveness = 1;
 
     for (let hit = 0; hit < hitCount && !defender.isFainted; hit++) {
-      const attack = this.calculateAttack(attacker, moveWithStab);
-      const defense = this.calculateDefense(defender, moveWithStab);
-      const baseDamage = this.calculateBaseDamage(attack, defense, moveWithStab);
-      const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, moveWithStab);
+      // おやこあいの2回目は威力1/4で計算する
+      const hitMove: MoveData = isParentalBond && hit > 0
+        ? { ...moveWithStab, power: Math.floor(moveWithStab.power / 4) }
+        : moveWithStab;
+      const attack = this.calculateAttack(attacker, hitMove);
+      const defense = this.calculateDefense(defender, hitMove);
+      const baseDamage = this.calculateBaseDamage(attack, defense, hitMove);
+      const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, hitMove);
 
-      this.applyDamage(defender, finalDamage, attacker, moveWithStab);
+      this.applyDamage(defender, finalDamage, attacker, hitMove);
       totalDamage += finalDamage;
       lastEffectiveness = effectiveness;
 
@@ -537,6 +569,8 @@ export class BattleEngine {
 
     if (move.multiHit) {
       this.log.push(`${hitCount}回攻撃した！`);
+    } else if (isParentalBond) {
+      this.log.push('おやこあいで2回攻撃した！');
     }
 
     if (lastEffectiveness > 1) {
@@ -837,6 +871,11 @@ export class BattleEngine {
 
     if (pokemon.status === 'paralysis') {
       speed = Math.floor(speed / 2);
+    }
+
+    // すいすい: 雨のとき素早さが2倍になる
+    if (pokemon.ability === 'swift-swim' && this.weather === 'rain') {
+      speed *= 2;
     }
 
     const side = this.getSide(pokemon);

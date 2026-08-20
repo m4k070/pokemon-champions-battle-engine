@@ -36,6 +36,12 @@ export const MEGA_STONE_SEEDS: Record<string, MegaStoneSeed> = {
   'venusaurite': { pokemon: 'venusaur', megaApiName: 'venusaur-mega', megaName: 'mega-venusaur' },
   'mawilite': { pokemon: 'mawile', megaApiName: 'mawile-mega', megaName: 'mega-mawile' },
   'blastoisinite': { pokemon: 'blastoise', megaApiName: 'blastoise-mega', megaName: 'mega-blastoise' },
+  'swampertite': { pokemon: 'swampert', megaApiName: 'swampert-mega', megaName: 'mega-swampert' },
+  'blazikenite': { pokemon: 'blaziken', megaApiName: 'blaziken-mega', megaName: 'mega-blaziken' },
+  'gengarite': { pokemon: 'gengar', megaApiName: 'gengar-mega', megaName: 'mega-gengar' },
+  'kangaskhanite': { pokemon: 'kangaskhan', megaApiName: 'kangaskhan-mega', megaName: 'mega-kangaskhan' },
+  'scizorite': { pokemon: 'scizor', megaApiName: 'scizor-mega', megaName: 'mega-scizor' },
+  'lopunnite': { pokemon: 'lopunny', megaApiName: 'lopunny-mega', megaName: 'mega-lopunny' },
 };
 
 // Poke APIから取得できない場合のデフォルト値（2026-07時点でPoke API実データと突合済み）。
@@ -67,7 +73,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'scovillain',
     megaName: 'mega-scovillain',
     typeChange: ['grass', 'fire'],
-    abilityChange: 'とびだすハバネロ', // Champions 独自特性（未実装・効果調査待ち）
+    abilityChange: 'spicy-spray', // とびだすハバネロ（実装済み・攻撃で受けたら攻撃者をやけどにする）
     statBoosts: { ATK: 30, DEF: 20, SPATK: 30, SPDEF: 20, SPEED: 0 },
   },
   'delphoxite': {
@@ -120,6 +126,116 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     abilityChange: 'mega-launcher',
     statBoosts: { ATK: 20, DEF: 20, SPATK: 50, SPDEF: 10, SPEED: 0 },
   },
+  // ---- 上位構築メガ（2026-08-19 追加、種族値は Pokémon Showdown データで確認）----
+  'swampertite': {
+    pokemon: 'swampert',
+    megaName: 'mega-swampert',
+    typeChange: ['water', 'ground'],
+    abilityChange: 'swift-swim', // すいすい: 雨で素早さ2倍
+    statBoosts: { ATK: 40, DEF: 20, SPATK: 10, SPDEF: 20, SPEED: 10 },
+  },
+  'blazikenite': {
+    pokemon: 'blaziken',
+    megaName: 'mega-blaziken',
+    typeChange: ['fire', 'fighting'],
+    abilityChange: 'speed-boost', // かそく
+    statBoosts: { ATK: 40, DEF: 10, SPATK: 20, SPDEF: 10, SPEED: 20 },
+  },
+  'gengarite': {
+    pokemon: 'gengar',
+    megaName: 'mega-gengar',
+    typeChange: ['ghost', 'poison'],
+    abilityChange: 'shadow-tag', // かげふみ
+    statBoosts: { ATK: 0, DEF: 20, SPATK: 40, SPDEF: 20, SPEED: 20 },
+  },
+  'kangaskhanite': {
+    pokemon: 'kangaskhan',
+    megaName: 'mega-kangaskhan',
+    typeChange: ['normal'],
+    abilityChange: 'parental-bond', // おやこあい（未実装）
+    statBoosts: { ATK: 30, DEF: 20, SPATK: 20, SPDEF: 20, SPEED: 10 },
+  },
+  'scizorite': {
+    pokemon: 'scizor',
+    megaName: 'mega-scizor',
+    typeChange: ['bug', 'steel'],
+    abilityChange: 'technician', // テクニシャン
+    statBoosts: { ATK: 20, DEF: 40, SPATK: 10, SPDEF: 20, SPEED: 10 },
+  },
+  'lopunnite': {
+    pokemon: 'lopunny',
+    megaName: 'mega-lopunny',
+    typeChange: ['normal', 'fighting'],
+    abilityChange: 'scrappy', // きもったま
+    // 実データ: ミミロップ A76/D84/S105 → メガ A136/D94/S135（A+60/D+10/S+30 = +100）
+    statBoosts: { ATK: 60, DEF: 10, SPATK: 0, SPDEF: 0, SPEED: 30 },
+  },
+  // ---- Champions/ZA 独自メガ（やっくんチャンピオンズ図鑑 2026-08-19 確認）----
+  'dragoniteite': {
+    pokemon: 'dragonite',
+    megaName: 'mega-dragonite',
+    typeChange: ['dragon', 'flying'],
+    abilityChange: 'multiscale', // マルチスケイル: 満HP時ダメージ半減
+    // カイリュー A134/D95/SA100/SD100/S80 → メガ A124/D115/SA145/SD125/S100（A-10/D+20/SA+45/SD+25/S+20 = +100）
+    statBoosts: { ATK: -10, DEF: 20, SPATK: 45, SPDEF: 25, SPEED: 20 },
+  },
+  // ---- 優先度「中」メガ（種族値は Pokémon Showdown データ + 本編差分+100 で算出）----
+  'lucarionite': {
+    pokemon: 'lucario',
+    megaName: 'mega-lucario',
+    typeChange: ['fighting', 'steel'],
+    abilityChange: 'adaptability', // 適応力: タイプ一致技2倍
+    // ルカリオ A110/D70/SA115/SD70/S90 → メガ A145/D88/SA140/SD70/S112
+    statBoosts: { ATK: 35, DEF: 18, SPATK: 25, SPDEF: 0, SPEED: 22 },
+  },
+  'gyaradosite': {
+    pokemon: 'gyarados',
+    megaName: 'mega-gyarados',
+    typeChange: ['water', 'dark'],
+    abilityChange: 'mold-breaker', // かたやぶり（未実装）
+    // ギャラドス A125/D79/SA60/SD100/S81 → メガ A155/D109/SA70/SD130/S81
+    statBoosts: { ATK: 30, DEF: 30, SPATK: 10, SPDEF: 30, SPEED: 0 },
+  },
+  'greninjaite': {
+    pokemon: 'greninja',
+    megaName: 'mega-greninja',
+    typeChange: ['water', 'dark'],
+    abilityChange: 'protean', // へんげんじざい
+    // ゲッコウガ A95/D67/SA103/SD71/S122 → メガ A125/D77/SA133/SD81/S142
+    statBoosts: { ATK: 30, DEF: 10, SPATK: 30, SPDEF: 10, SPEED: 20 },
+  },
+  'metagrossite': {
+    pokemon: 'metagross',
+    megaName: 'mega-metagross',
+    typeChange: ['steel', 'psychic'],
+    abilityChange: 'tough-claws', // かたいツメ
+    // メタグロス A135/D130/SA95/SD90/S70 → メガ A145/D150/SA105/SD110/S110
+    statBoosts: { ATK: 10, DEF: 20, SPATK: 10, SPDEF: 20, SPEED: 40 },
+  },
+  'salamencite': {
+    pokemon: 'salamence',
+    megaName: 'mega-salamence',
+    typeChange: ['dragon', 'flying'],
+    abilityChange: 'aerilate', // スカイスキン（未実装）
+    // ボーマンダ A135/D80/SA110/SD80/S100 → メガ A145/D130/SA120/SD90/S120
+    statBoosts: { ATK: 10, DEF: 50, SPATK: 10, SPDEF: 10, SPEED: 20 },
+  },
+  'gardevoirite': {
+    pokemon: 'gardevoir',
+    megaName: 'mega-gardevoir',
+    typeChange: ['psychic', 'fairy'],
+    abilityChange: 'pixilate', // フェアリースキン（未実装）
+    // サーナイト A65/D65/SA125/SD115/S80 → メガ A85/D65/SA165/SD135/S100
+    statBoosts: { ATK: 20, DEF: 0, SPATK: 40, SPDEF: 20, SPEED: 20 },
+  },
+  'sablenite': {
+    pokemon: 'sableye',
+    megaName: 'mega-sableye',
+    typeChange: ['dark', 'ghost'],
+    abilityChange: 'magic-bounce', // マジックミラー（未実装）
+    // ヤミラミ A75/D75/SA65/SD65/S50 → メガ A85/D125/SA85/SD115/S20
+    statBoosts: { ATK: 10, DEF: 50, SPATK: 20, SPDEF: 50, SPEED: -30 },
+  },
 };
 
 // PokemonAPI本体に依存せず注入できるよう、使う分だけのインターフェースを切り出す。
@@ -140,6 +256,7 @@ export class MegaEvolutionSystem {
 
   private validateStatBoosts(item: string, statBoosts: MegaStatBoosts): void {
     const total = MEGA_STAT_KEYS.reduce((sum, key) => sum + statBoosts[key], 0);
+    // メガシンカの種族値配分は HP を除く5ステータスの合計が +100 固定（本編仕様）。
     if (total !== MEGA_STAT_TOTAL) {
       throw new Error(`メガシンカの種族値配分が不正です: ${item} の合計は${total}（期待値${MEGA_STAT_TOTAL}）`);
     }
