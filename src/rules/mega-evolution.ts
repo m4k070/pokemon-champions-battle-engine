@@ -179,6 +179,63 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     // カイリュー A134/D95/SA100/SD100/S80 → メガ A124/D115/SA145/SD125/S100（A-10/D+20/SA+45/SD+25/S+20 = +100）
     statBoosts: { ATK: -10, DEF: 20, SPATK: 45, SPDEF: 25, SPEED: 20 },
   },
+  // ---- 優先度「中」メガ（種族値は Pokémon Showdown データ + 本編差分+100 で算出）----
+  'lucarionite': {
+    pokemon: 'lucario',
+    megaName: 'mega-lucario',
+    typeChange: ['fighting', 'steel'],
+    abilityChange: 'adaptability', // 適応力: タイプ一致技2倍
+    // ルカリオ A110/D70/SA115/SD70/S90 → メガ A145/D88/SA140/SD70/S112
+    statBoosts: { ATK: 35, DEF: 18, SPATK: 25, SPDEF: 0, SPEED: 22 },
+  },
+  'gyaradosite': {
+    pokemon: 'gyarados',
+    megaName: 'mega-gyarados',
+    typeChange: ['water', 'dark'],
+    abilityChange: 'mold-breaker', // かたやぶり（未実装）
+    // ギャラドス A125/D79/SA60/SD100/S81 → メガ A155/D109/SA70/SD130/S81
+    statBoosts: { ATK: 30, DEF: 30, SPATK: 10, SPDEF: 30, SPEED: 0 },
+  },
+  'greninjaite': {
+    pokemon: 'greninja',
+    megaName: 'mega-greninja',
+    typeChange: ['water', 'dark'],
+    abilityChange: 'protean', // へんげんじざい
+    // ゲッコウガ A95/D67/SA103/SD71/S122 → メガ A125/D77/SA133/SD81/S142
+    statBoosts: { ATK: 30, DEF: 10, SPATK: 30, SPDEF: 10, SPEED: 20 },
+  },
+  'metagrossite': {
+    pokemon: 'metagross',
+    megaName: 'mega-metagross',
+    typeChange: ['steel', 'psychic'],
+    abilityChange: 'tough-claws', // かたいツメ
+    // メタグロス A135/D130/SA95/SD90/S70 → メガ A145/D150/SA105/SD110/S110
+    statBoosts: { ATK: 10, DEF: 20, SPATK: 10, SPDEF: 20, SPEED: 40 },
+  },
+  'salamencite': {
+    pokemon: 'salamence',
+    megaName: 'mega-salamence',
+    typeChange: ['dragon', 'flying'],
+    abilityChange: 'aerilate', // スカイスキン（未実装）
+    // ボーマンダ A135/D80/SA110/SD80/S100 → メガ A145/D130/SA120/SD90/S120
+    statBoosts: { ATK: 10, DEF: 50, SPATK: 10, SPDEF: 10, SPEED: 20 },
+  },
+  'gardevoirite': {
+    pokemon: 'gardevoir',
+    megaName: 'mega-gardevoir',
+    typeChange: ['psychic', 'fairy'],
+    abilityChange: 'pixilate', // フェアリースキン（未実装）
+    // サーナイト A65/D65/SA125/SD115/S80 → メガ A85/D65/SA165/SD135/S100
+    statBoosts: { ATK: 20, DEF: 0, SPATK: 40, SPDEF: 20, SPEED: 20 },
+  },
+  'sablenite': {
+    pokemon: 'sableye',
+    megaName: 'mega-sableye',
+    typeChange: ['dark', 'ghost'],
+    abilityChange: 'magic-bounce', // マジックミラー（未実装）
+    // ヤミラミ A75/D75/SA65/SD65/S50 → メガ A85/D125/SA85/SD115/S20
+    statBoosts: { ATK: 10, DEF: 50, SPATK: 20, SPDEF: 50, SPEED: -30 },
+  },
 };
 
 // PokemonAPI本体に依存せず注入できるよう、使う分だけのインターフェースを切り出す。

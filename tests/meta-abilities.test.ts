@@ -267,6 +267,40 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(damagedDamage).toBeGreaterThan(fullHPDamage);
   });
 
+  test('適応力: タイプ一致技の威力が2倍になる（通常STAB 1.5倍より高い）', () => {
+    const makeLucario = (ability: string) => new Pokemon({
+      name: 'Lucario',
+      types: ['fighting', 'steel'],
+      ability,
+      item: null,
+      baseStats: { HP: 70, ATK: 110, DEF: 70, SPATK: 115, SPDEF: 70, SPEED: 90 },
+      stats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      moves: [move({ name: 'Close Combat', type: 'fighting', power: 120 })],
+    });
+    const makeDef = () => makePokemon('Def', 'none', { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 });
+
+    // 通常STAB（1.5倍）
+    const normal = makeLucario('none');
+    const def1 = makeDef();
+    engine.setActivePokemon(0, normal);
+    engine.setActivePokemon(1, def1);
+    const r1 = engine.useMove(normal, def1, move({ name: 'Close Combat', type: 'fighting', power: 120 }));
+    const normalDamage = r1.damage ?? 0;
+    expect(normalDamage).toBeGreaterThan(0);
+
+    // 適応力（2倍）
+    const adapt = makeLucario('adaptability');
+    const def2 = makeDef();
+    engine.setActivePokemon(0, adapt);
+    engine.setActivePokemon(1, def2);
+    const r2 = engine.useMove(adapt, def2, move({ name: 'Close Combat', type: 'fighting', power: 120 }));
+    const adaptDamage = r2.damage ?? 0;
+
+    // 2倍 / 1.5倍 = 1.333倍
+    expect(adaptDamage).toBeGreaterThan(normalDamage);
+    expect(adaptDamage).toBeLessThanOrEqual(Math.ceil(normalDamage * 1.34));
+  });
+
   test('ミラーアーマー: 相手の能力低下を反射する', () => {
     const mirrorArmor = makePokemon('MirrorArmor', 'mirror-armor', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });

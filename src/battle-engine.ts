@@ -493,7 +493,8 @@ export class BattleEngine {
     let power = move.power;
 
     if (attacker.types && attacker.types.includes(effectiveType)) {
-      power *= 1.5;
+      // STAB: タイプ一致技は1.5倍（適応力持ちは2倍）
+      power *= attacker.ability === 'adaptability' ? 2.0 : 1.5;
     }
 
     if (attacker.item === 'life-orb') {

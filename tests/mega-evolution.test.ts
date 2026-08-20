@@ -251,6 +251,24 @@ describe('MegaEvolutionSystem', () => {
     expect(getAbilityDefinition('multiscale')).toBeDefined();
   });
 
+  test('優先度「中」メガ: メガルカリオはメガ後 ability が "adaptability" になる', () => {
+    const system = new MegaEvolutionSystem();
+    const lucario = new Pokemon({
+      name: 'lucario',
+      baseName: 'lucario',
+      types: ['fighting', 'steel'],
+      ability: 'inner-focus',
+      item: 'lucarionite',
+      baseStats: { HP: 70, ATK: 110, DEF: 70, SPATK: 115, SPDEF: 70, SPEED: 90 },
+    });
+
+    system.megaEvolve(lucario);
+
+    expect(lucario.ability).toBe('adaptability'); // 適応力
+    expect(lucario.types).toEqual(['fighting', 'steel']);
+    expect(getAbilityDefinition('adaptability')).toBeDefined();
+  });
+
   test('Mega Charizard X applies its own ATK/DEF/SPATK distribution, not a flat +100', () => {
     const system = new MegaEvolutionSystem();
     const charizard = new Pokemon({

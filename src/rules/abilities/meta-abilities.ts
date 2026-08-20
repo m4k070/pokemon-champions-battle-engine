@@ -233,6 +233,12 @@ export const MULTISCALE: AbilityDefinition = {
   },
 };
 
+// 適応力: タイプ一致技の威力が1.5倍ではなく2倍になる。
+// STAB計算は battle-engine の useMove 側で name 判定して行う。
+export const ADAPTABILITY: AbilityDefinition = {
+  name: 'adaptability',
+};
+
 // へんげんじざい: 技を使うと、その技のタイプに変わる（単一タイプになる）。
 // メガシンカでタイプが typeChange にリセットされた場合も、次の技使用で再発動する
 // （メガシンカは実質的な場への再登場のため、タイプ変化もやり直される）。
@@ -344,6 +350,7 @@ export const META_ABILITIES: AbilityDefinition[] = [
   SWIFT_SWIM,
   PARENTAL_BOND,
   MULTISCALE,
+  ADAPTABILITY,
   PROTEAN,
   TOUGH_CLAWS,
   SAND_FORCE,
