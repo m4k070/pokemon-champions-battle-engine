@@ -94,37 +94,40 @@ describe('雨パ構築（メガラグラージ+すいすい）', () => {
     expect(speedRain).toBe(speedNoRain * 2);
   });
 
-  test('実戦: あまごい→メガラグラージで雨パの対戦が成立する', async () => {
-    // シングル63のシナリオ: 雨要員（ニョロトノ風）があまごい → メガラグラージで詰める
+  test('実戦: あめふらし（ニョロトノ）→メガラグラージで雨パの対戦が成立する', async () => {
+    // シングル63のシナリオ: 先発ニョロトノ（あめふらし）が場に出て雨 → メガラグラージで詰める
     const rainDancer = new Pokemon({
       name: 'Politoed',
       baseName: 'politoed',
       types: ['water'],
-      ability: 'drizzle',
+      ability: 'drizzle', // あめふらし: 場に出た時点で雨が降る（あまごい技は不要）
       item: null,
       baseStats: { HP: 90, ATK: 75, DEF: 75, SPATK: 90, SPDEF: 100, SPEED: 70 },
-      moves: [rainDance(), new Move({ name: 'Surf', type: 'water', power: 90, accuracy: 100, pp: 10, category: 'special' })],
+      moves: [new Move({ name: 'Surf', type: 'water', power: 90, accuracy: 100, pp: 10, category: 'special' })],
     });
     const swampert = makeSwampert();
 
+    // ノーマルタイプで水等倍・高HP: 1ターン目のサーフで倒れないようにする
     const opponent = new Pokemon({
       name: 'Opponent',
-      types: ['fire'],
-      ability: 'blaze',
+      types: ['normal'],
+      ability: 'none',
       item: null,
-      baseStats: { HP: 150, ATK: 80, DEF: 80, SPATK: 100, SPDEF: 80, SPEED: 90 },
+      baseStats: { HP: 250, ATK: 80, DEF: 80, SPATK: 100, SPDEF: 80, SPEED: 90 },
       moves: [new Move({ name: 'Flamethrower', type: 'fire', power: 90, accuracy: 100, pp: 10, category: 'special' })],
     });
 
     const session = await BattleSession.start([rainDancer, swampert], [opponent]);
-    session.beginTurn();
 
-    // 1ターン目: あまごい
+    // 先発ニョロトノが場に出た時点で雨（あめふらし）
+    expect(session.engine.weather).toBe('rain');
+
+    // 1ターン目: サーフで攻撃（雨で強化）
+    session.beginTurn();
     session.applyTurn(
       { action: { type: 'move', moveIndex: 0, target: 0 } },
       { action: { type: 'move', moveIndex: 0, target: 0 } }
     );
-    expect(session.engine.weather).toBe('rain');
 
     // 2ターン目: メガラグラージに交代
     session.beginTurn();
