@@ -278,6 +278,15 @@ export function createBattleServer(): McpServer {
           }
         }
 
+        // ポケモン別技習得チェック
+        for (const pokemon of [...teamA, ...teamB]) {
+          const moveNames = pokemon.moves.map((m) => m.name);
+          const { invalid } = await moveValidator.validateLearnset(pokemon.name, moveNames);
+          if (invalid.length > 0) {
+            console.error(`[警告] ${pokemon.name}は ${invalid.join(',')} を覚えないはず`);
+          }
+        }
+
         const pokemonA = teamA.map(buildPokemon);
         const pokemonB = teamB.map(buildPokemon);
 

@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { PokemonAPI, PokemonDataCache } from './api/pokemon-api.js';
 
 export interface MoveCacheEntry {
   valid: boolean;
@@ -9,18 +10,30 @@ export interface MoveCacheEntry {
   reason?: string;
 }
 
+export interface LearnsetCacheEntry {
+  pokemonName: string;
+  moves: string[];
+}
+
 export type MoveCache = Record<string, MoveCacheEntry>;
+export type LearnsetCache = Record<string, LearnsetCacheEntry>;
 
 const DEFAULT_CACHE_PATH = path.join(process.cwd(), 'data', 'move-cache.json');
+const DEFAULT_LEARNSET_PATH = path.join(process.cwd(), 'data', 'learnset-cache.json');
 
 export class MoveValidator {
   private cache: MoveCache = {};
+  private learnsetCache: LearnsetCache = {};
   private cachePath: string;
-  private pokeApiBaseUrl = 'https://pokeapi.co/api/v2';
+  private learnsetPath: string;
+  private pokemonApi: PokemonAPI;
 
-  constructor(cachePath: string = DEFAULT_CACHE_PATH) {
+  constructor(cachePath: string = DEFAULT_CACHE_PATH, learnsetPath: string = DEFAULT_LEARNSET_PATH) {
     this.cachePath = cachePath;
+    this.learnsetPath = learnsetPath;
+    this.pokemonApi = new PokemonAPI(new PokemonDataCache());
     this.loadCache();
+    this.loadLearnsetCache();
   }
 
   private loadCache(): void {
@@ -43,6 +56,29 @@ export class MoveValidator {
       fs.writeFileSync(this.cachePath, JSON.stringify(this.cache, null, 2));
     } catch {
       // キャッシュ保存失敗は無視（次回読み込み時に再構築される）
+    }
+  }
+
+  private loadLearnsetCache(): void {
+    try {
+      if (fs.existsSync(this.learnsetPath)) {
+        const data = fs.readFileSync(this.learnsetPath, 'utf-8');
+        this.learnsetCache = JSON.parse(data);
+      }
+    } catch {
+      this.learnsetCache = {};
+    }
+  }
+
+  private saveLearnsetCache(): void {
+    try {
+      const dir = path.dirname(this.learnsetPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(this.learnsetPath, JSON.stringify(this.learnsetCache, null, 2));
+    } catch {
+      // キャッシュ保存失敗は無視
     }
   }
 
@@ -96,6 +132,42 @@ export class MoveValidator {
     return this.validateAndCache(moveName);
   }
 
+  // ポケモンが技を覚えているかチェック
+  async validateLearnset(pokemonName: string, moveNames: string[]): Promise<{ valid: string[]; invalid: string[] }> {
+    const cacheKey = pokemonName.toLowerCase();
+
+    // キャッシュになければ PokeAPI から取得
+    if (!this.learnsetCache[cacheKey]) {
+      try {
+        const pokemonData = await this.pokemonApi.fetchPokemonData(cacheKey);
+        this.learnsetCache[cacheKey] = {
+          pokemonName,
+          moves: pokemonData.moves,
+        };
+        this.saveLearnsetCache();
+      } catch {
+        // PokeAPI で取得失敗した場合は全技を有効と見なす
+        return { valid: moveNames, invalid: [] };
+      }
+    }
+
+    const learnset = this.learnsetCache[cacheKey].moves;
+    const valid: string[] = [];
+    const invalid: string[] = [];
+
+    for (const move of moveNames) {
+      // 英語技名で照合（PokeAPI は英語名を返す）
+      // 日本語名の場合はそのまま照合を試みる
+      if (learnset.includes(move) || learnset.includes(move.toLowerCase())) {
+        valid.push(move);
+      } else {
+        invalid.push(move);
+      }
+    }
+
+    return { valid, invalid };
+  }
+
   // キャッシュ統計
   getStats(): { total: number; valid: number; invalid: number } {
     const entries = Object.values(this.cache);
@@ -103,6 +175,15 @@ export class MoveValidator {
       total: entries.length,
       valid: entries.filter((e) => e.valid).length,
       invalid: entries.filter((e) => !e.valid).length,
+    };
+  }
+
+  // 学習セット統計
+  getLearnsetStats(): { pokemonCount: number; totalMoves: number } {
+    const entries = Object.values(this.learnsetCache);
+    return {
+      pokemonCount: entries.length,
+      totalMoves: entries.reduce((sum, e) => sum + e.moves.length, 0),
     };
   }
 }
