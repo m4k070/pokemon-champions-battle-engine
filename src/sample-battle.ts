@@ -10,7 +10,7 @@ const kabaldonData = {
   types: ['ground' as TypeName],
   ability: 'sand-stream',
   item: 'rocky-helmet',
-  baseStats: { HP: 263, ATK: 135, DEF: 195, SPATK: 75, SPDEF: 135, SPEED: 65 } as BaseStats,
+  baseStats: { HP: 108, ATK: 112, DEF: 118, SPATK: 68, SPDEF: 72, SPEED: 47 } as BaseStats,
   moves: [
     { name: 'じしん', type: 'ground' as TypeName, power: 100, accuracy: 100, pp: 10, maxPP: 10, category: 'physical' as const, status: null, priority: 0, effectChance: null },
     { name: 'あくび', type: 'normal' as TypeName, power: 0, accuracy: 100, pp: 10, maxPP: 10, category: 'status' as const, status: 'sleep' as const, priority: 0, effectChance: null },
@@ -24,7 +24,7 @@ const windyData = {
   types: ['fire' as TypeName],
   ability: 'intimidate',
   item: 'sitrus-berry',
-  baseStats: { HP: 215, ATK: 145, DEF: 135, SPATK: 100, SPDEF: 135, SPEED: 95 } as BaseStats,
+  baseStats: { HP: 90, ATK: 110, DEF: 80, SPATK: 100, SPDEF: 80, SPEED: 95 } as BaseStats,
   moves: [
     { name: 'バークアウト', type: 'dark' as TypeName, power: 55, accuracy: 100, pp: 15, maxPP: 15, category: 'special' as const, status: null, priority: 0, effectChance: null },
     { name: 'じだんだ', type: 'ground' as TypeName, power: 75, accuracy: 100, pp: 10, maxPP: 10, category: 'physical' as const, status: null, priority: 0, effectChance: null },
@@ -38,7 +38,7 @@ const dragonData = {
   types: ['dragon', 'ghost'] as TypeName[],
   ability: 'infiltrator',
   item: 'life-orb',
-  baseStats: { HP: 168, ATK: 175, DEF: 95, SPATK: 175, SPDEF: 95, SPEED: 213 } as BaseStats,
+  baseStats: { HP: 88, ATK: 120, DEF: 75, SPATK: 100, SPDEF: 75, SPEED: 142 } as BaseStats,
   moves: [
     { name: 'りゅうのはどう', type: 'dragon' as TypeName, power: 85, accuracy: 100, pp: 10, maxPP: 10, category: 'special' as const, status: null, priority: 0, effectChance: null },
     { name: 'たたりめ', type: 'ghost' as TypeName, power: 65, accuracy: 100, pp: 10, maxPP: 10, category: 'special' as const, status: null, priority: 0, effectChance: null },
