@@ -321,7 +321,6 @@ export class BattleEngine {
       this.log.push(`${defender.name}はシュカのみで地面技のダメージを半減した`);
     }
 
-    this.events.emit('apply-damage', { defender, damage: effectiveDamage, attacker, move, engine: this });
     defender.takeDamage(effectiveDamage, this);
   }
 
@@ -329,6 +328,33 @@ export class BattleEngine {
     if (move.pp <= 0) {
       this.log.push(`${attacker.name}は${move.name}を出そうとしたが、PPが残っていない！`);
       return { success: false };
+    }
+
+    // 状態異常による行動阻害
+    if (attacker.status === 'sleep') {
+      if (attacker.statusTurnsLeft > 0) {
+        attacker.statusTurnsLeft--;
+        this.log.push(`${attacker.name}は眠っている`);
+        return { success: false };
+      } else {
+        attacker.status = null;
+        this.log.push(`${attacker.name}は目を覚ました！`);
+      }
+    }
+    if (attacker.status === 'freeze') {
+      if (Math.random() < 0.2) {
+        attacker.status = null;
+        this.log.push(`${attacker.name}はこおりがとけた！`);
+      } else {
+        this.log.push(`${attacker.name}はこごえて動けない`);
+        return { success: false };
+      }
+    }
+    if (attacker.status === 'paralysis') {
+      if (Math.random() < 0.25) {
+        this.log.push(`${attacker.name}はまひして動けない`);
+        return { success: false };
+      }
     }
 
     // マジックミラー（magic-bounce）: 変化技を跳ね返す（対象を入れ替えて再適用）。
@@ -603,6 +629,11 @@ export class BattleEngine {
       this.log.push('効果はいまひとつのようだ');
     } else if (lastEffectiveness === 0) {
       this.log.push('効果がなかった');
+      // タイプ無効時は追加効果・能力変化を発動しない
+      if (move.selfStatChange) {
+        this.applySelfStatChange(attacker, move.selfStatChange);
+      }
+      return { success: true, damage: 0, effectiveness: 0 };
     }
 
     this.log.push(`${defender.name}に${totalDamage}のダメージ`);
@@ -749,10 +780,25 @@ export class BattleEngine {
   }
 
   endTurn(teamA: Pokemon[], teamB: Pokemon[]): void {
-    this.applyStatusEffects(teamA);
-    this.applyStatusEffects(teamB);
+    // activePokemon が設定されていれば場のポケモンのみ、未設定なら全員に適用
+    // （テスト等で直接エンジンを使うケースへの後方互換）
+    const hasActivePokemon = this.activePokemon0 !== null || this.activePokemon1 !== null;
+
+    let statusWeatherTeam: Pokemon[];
+    if (hasActivePokemon) {
+      const activeA = this.activePokemon0;
+      const activeB = this.activePokemon1;
+      statusWeatherTeam = [
+        ...(activeA && teamA.includes(activeA) ? [activeA] : []),
+        ...(activeB && teamB.includes(activeB) ? [activeB] : []),
+      ];
+    } else {
+      statusWeatherTeam = [...teamA, ...teamB];
+    }
+
+    this.applyStatusEffects(statusWeatherTeam);
     this.applyLeechSeed(teamA, teamB);
-    this.applyWeatherDamage([...teamA, ...teamB]);
+    this.applyWeatherDamage(statusWeatherTeam);
     this.events.emit('end-turn', { team: [...teamA, ...teamB], engine: this });
     this.attackersDealtDamageThisTurn.clear();
   }
