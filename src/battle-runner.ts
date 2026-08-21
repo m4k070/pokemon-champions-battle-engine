@@ -221,14 +221,30 @@ export class BattleSession {
 
     const team = side === 0 ? this.teamA : this.teamB;
     const fainted = side === 0 ? this.activeA : this.activeB;
-    const replacement = team[decision.action.pokemonIndex];
-
-    if (!replacement || replacement.isFainted) {
-      throw new Error(`side=${side}の強制交代先が不正です: index=${decision.action.pokemonIndex}`);
-    }
+    const replacement = this.validateSwitchTarget(side, decision.action.pokemonIndex, '強制交代')!;
 
     this.reasoningLog.push({ turn: this.engine.turn, side, pokemonName: fainted.name, reasoning: decision.reasoning });
     this.switchTo(side, replacement, team);
+  }
+
+  // 交代先のバリデーション: 存在・瀕死・盤上重複のチェック。
+  // 通常交代はログで吸収してnullを返し、強制/pivot交代はスローする。
+  private validateSwitchTarget(side: 0 | 1, pokemonIndex: number, label: string): Pokemon | null {
+    const team = side === 0 ? this.teamA : this.teamB;
+    const active = side === 0 ? this.activeA : this.activeB;
+    const replacement = team[pokemonIndex];
+
+    if (!replacement || replacement.isFainted) {
+      const msg = `side=${side}の${label}先が不正です: index=${pokemonIndex}`;
+      if (label === '通常交代') { this.engine.log.push(msg); return null; }
+      throw new Error(msg);
+    }
+    if (replacement === active) {
+      const msg = `side=${side}の${label}先が盤上の${active.name}と同じです`;
+      if (label === '通常交代') { this.engine.log.push(msg); return null; }
+      throw new Error(msg);
+    }
+    return replacement;
   }
 
   // かげふみによる交代阻止の判定。通常交代（applyTurn内のswitch）でのみ呼ばれる。
@@ -289,17 +305,19 @@ export class BattleSession {
     // 後に発動して上書きする仕様のため、速い順(=遅い方を最後に)switchInする。
     const switchEntries: { side: 0 | 1; pokemon: Pokemon; team: Pokemon[] }[] = [];
     if (actionA.type === 'switch') {
-      if (this.isBlockedByShadowTag(0, this.teamA[actionA.pokemonIndex], actionB)) {
+      const switchTargetA = this.validateSwitchTarget(0, actionA.pokemonIndex, '通常交代');
+      if (switchTargetA && this.isBlockedByShadowTag(0, switchTargetA, actionB)) {
         this.engine.log.push(`${this.activeB.name}のかげふみで交代できない！`);
-      } else {
-        switchEntries.push({ side: 0, pokemon: this.teamA[actionA.pokemonIndex], team: this.teamA });
+      } else if (switchTargetA) {
+        switchEntries.push({ side: 0, pokemon: switchTargetA, team: this.teamA });
       }
     }
     if (actionB.type === 'switch') {
-      if (this.isBlockedByShadowTag(1, this.teamB[actionB.pokemonIndex], actionA)) {
+      const switchTargetB = this.validateSwitchTarget(1, actionB.pokemonIndex, '通常交代');
+      if (switchTargetB && this.isBlockedByShadowTag(1, switchTargetB, actionA)) {
         this.engine.log.push(`${this.activeA.name}のかげふみで交代できない！`);
-      } else {
-        switchEntries.push({ side: 1, pokemon: this.teamB[actionB.pokemonIndex], team: this.teamB });
+      } else if (switchTargetB) {
+        switchEntries.push({ side: 1, pokemon: switchTargetB, team: this.teamB });
       }
     }
     for (const entry of this.engine.orderBySpeed(switchEntries)) {
@@ -385,11 +403,7 @@ export class BattleSession {
 
     const team = side === 0 ? this.teamA : this.teamB;
     const active = side === 0 ? this.activeA : this.activeB;
-    const replacement = team[decision.action.pokemonIndex];
-
-    if (!replacement || replacement.isFainted || replacement === active) {
-      throw new Error(`side=${side}のpivot交代先が不正です: index=${decision.action.pokemonIndex}`);
-    }
+    const replacement = this.validateSwitchTarget(side, decision.action.pokemonIndex, 'pivot交代')!;
 
     this.reasoningLog.push({ turn: this.engine.turn, side, pokemonName: active.name, reasoning: decision.reasoning });
     this.switchTo(side, replacement, team);
