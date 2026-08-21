@@ -79,6 +79,7 @@ export class BattleSession {
   activeA: Pokemon;
   activeB: Pokemon;
   megaEvolutionSystem: MegaEvolutionSystem;
+  private megaUsed: [boolean, boolean] = [false, false];
   reasoningLog: TurnReasoning[] = [];
   private turnBegun = false;
   // 技の実行途中でpivot技の交代先入力を待つために、ターンの進行状態をここに保持する。
@@ -197,8 +198,13 @@ export class BattleSession {
     return this.pendingTurn === null;
   }
 
+  canMegaEvolve(side: 0 | 1): boolean {
+    if (this.megaUsed[side]) return false;
+    return this.megaEvolutionSystem.canMegaEvolve(side === 0 ? this.activeA : this.activeB);
+  }
+
   getContext(side: 0 | 1): BattleContext {
-    const canMegaEvolve = this.megaEvolutionSystem.canMegaEvolve(side === 0 ? this.activeA : this.activeB);
+    const canMegaEvolve = this.canMegaEvolve(side);
     // 瀕死交代とpivot交代はどちらも「技を選べず交代先だけを選ぶ場面」なので同じフラグに集約する。
     const mustSwitch = this.needsForcedSwitch(side) || this.needsPivotSwitch(side);
 
@@ -336,16 +342,18 @@ export class BattleSession {
     }
 
     // メガシンカは技の選択と同時に宣言される「無償の行動」。ダメージ計算前、
-    // かつすばやさ比較(素早さが変わりうる)より前に解決する。
-    if (actionA.type === 'move' && actionA.megaEvolve && this.megaEvolutionSystem.canMegaEvolve(this.activeA)) {
+    // かつすばやさ比較(素早さが変わりうる)より前に解決する。1バトル1回まで。
+    if (actionA.type === 'move' && actionA.megaEvolve && this.canMegaEvolve(0)) {
       this.megaEvolutionSystem.megaEvolve(this.activeA);
+      this.megaUsed[0] = true;
       this.engine.log.push(`${this.activeA.name}はメガシンカした！`);
       // メガシンカは実質的な場への再登場: 新特性の onSwitchIn（いかく・天候変化等）を発動する。
       // ステータス変化・状態異常などは megaEvolve 内で引き継がれる（リセットしない）。
       this.engine.events.emit('switch-in', { pokemon: this.activeA, team: this.teamA, engine: this.engine });
     }
-    if (actionB.type === 'move' && actionB.megaEvolve && this.megaEvolutionSystem.canMegaEvolve(this.activeB)) {
+    if (actionB.type === 'move' && actionB.megaEvolve && this.canMegaEvolve(1)) {
       this.megaEvolutionSystem.megaEvolve(this.activeB);
+      this.megaUsed[1] = true;
       this.engine.log.push(`${this.activeB.name}はメガシンカした！`);
       // 同上: 新特性の onSwitchIn を発動する
       this.engine.events.emit('switch-in', { pokemon: this.activeB, team: this.teamB, engine: this.engine });
