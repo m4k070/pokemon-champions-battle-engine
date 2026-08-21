@@ -776,4 +776,113 @@ describe('pivot技による攻撃後の交代', () => {
     );
     expect(session.activeB).toBe(shedShell); // 交代できている
   });
+
+  // ---- 素早さ解決（速度順）の検証 ----
+  // 2026-08-20: moon側の思考ログに「本simは素早さに関わらずプレイヤー行動が先に解決される」と
+  // 誤認があったため、素早さ順解決を直接検証するテストを追加。
+
+  test('両者が同時に技を選んだとき、素早さが高い方が先に動く', async () => {
+    // 速い攻撃者（S=150）が遅い攻撃者（S=10）を一撃で倒す火力
+    const fast = new Pokemon({
+      name: 'Fast',
+      types: ['normal'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 100, ATK: 150, DEF: 50, SPATK: 50, SPDEF: 50, SPEED: 150 },
+      moves: [new Move({ name: 'Tackle', type: 'normal', power: 100, accuracy: 100, pp: 5, category: 'physical' })],
+    });
+    const slow = new Pokemon({
+      name: 'Slow',
+      types: ['normal'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 60, ATK: 100, DEF: 50, SPATK: 50, SPDEF: 50, SPEED: 10 },
+      moves: [new Move({ name: 'Tackle', type: 'normal', power: 100, accuracy: 100, pp: 5, category: 'physical' })],
+    });
+
+    const session = await BattleSession.start([fast], [slow]);
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+    );
+
+    // fast が先に動いて slow を瀕死に → slow の攻撃は実行されない
+    expect(session.activeB.isFainted).toBe(true);
+    expect(session.engine.getLog()).toContain('FastのTackle');
+    expect(session.engine.getLog()).not.toContain('SlowのTackle');
+  });
+
+  test('すいすい+雨で素早さが逆転し、遅い方が先に動く', async () => {
+    // すいすい持ち（S=30）は雨で2倍 → 実数値約50*2=100 > 相手の約70
+    const swift = new Pokemon({
+      name: 'Swift',
+      types: ['water'],
+      ability: 'swift-swim',
+      item: null,
+      baseStats: { HP: 100, ATK: 150, DEF: 50, SPATK: 50, SPDEF: 50, SPEED: 30 },
+      moves: [new Move({ name: 'Tackle', type: 'normal', power: 150, accuracy: 100, pp: 5, category: 'physical' })],
+    });
+    const fast = new Pokemon({
+      name: 'Fast',
+      types: ['normal'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 60, ATK: 100, DEF: 50, SPATK: 50, SPDEF: 50, SPEED: 50 },
+      moves: [new Move({ name: 'Tackle', type: 'normal', power: 100, accuracy: 100, pp: 5, category: 'physical' })],
+    });
+
+    const session = await BattleSession.start([swift], [fast]);
+    session.engine.weather = 'rain'; // 雨ですいすい発動
+
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+    );
+
+    // swift が fast より先に動いて瀕死に → fast の攻撃は実行されない
+    expect(session.activeB.isFainted).toBe(true);
+    expect(session.engine.getLog()).toContain('SwiftのTackle');
+    expect(session.engine.getLog()).not.toContain('FastのTackle');
+  });
+
+  test('同速の場合はランダムに先攻が決まり、ターンは成立する', async () => {
+    // 両者 S=100（実数値同値）。先に動いた方が一撃（power150）で倒し、ターンが成立する。
+    // ポケモンインスタンスは毎回新規作成する（使い回すと前回の瀕死状態を引きずるため）。
+    const makeSameSpeed = (name: string) => new Pokemon({
+      name,
+      types: ['normal'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 60, ATK: 150, DEF: 50, SPATK: 50, SPDEF: 50, SPEED: 100 },
+      moves: [new Move({ name: 'Tackle', type: 'normal', power: 150, accuracy: 100, pp: 5, category: 'physical' })],
+    });
+
+    // 複数回実行して、Aが先攻のパターンとBが先攻のパターンの両方が起こりうることを確認
+    // （先攻が一撃で倒すので、ログに残る攻撃は先攻のものだけ）
+    let aFirst = false;
+    let bFirst = false;
+    for (let i = 0; i < 20; i++) {
+      const a = makeSameSpeed('A');
+      const b = makeSameSpeed('B');
+      const session = await BattleSession.start([a], [b]);
+      session.beginTurn();
+      session.applyTurn(
+        { action: { type: 'move', moveIndex: 0, target: 0 } },
+        { action: { type: 'move', moveIndex: 0, target: 0 } },
+      );
+      const log = session.engine.getLog();
+      if (log.includes('AのTackle') && !log.includes('BのTackle')) {
+        aFirst = true;
+      } else if (log.includes('BのTackle') && !log.includes('AのTackle')) {
+        bFirst = true;
+      }
+      // どちらかの攻撃で片方が瀕死 → ターン成立
+      expect(session.isFinished()).toBe(true);
+    }
+    // 20回中、両方のパターンが出現する（同速ランダム）
+    expect(aFirst).toBe(true);
+    expect(bFirst).toBe(true);
+  });
 });
