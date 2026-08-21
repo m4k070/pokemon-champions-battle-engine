@@ -1,0 +1,10 @@
+{
+  "tackle": {
+    "valid": true,
+    "reason": "PokeAPI validation skipped (Japanese name)"
+  },
+  "u-turn": {
+    "valid": true,
+    "reason": "PokeAPI validation skipped (Japanese name)"
+  }
+}
