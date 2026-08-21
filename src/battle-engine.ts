@@ -330,16 +330,13 @@ export class BattleEngine {
       return { success: false };
     }
 
-    // 状態異常による行動阻害
+    // 状態異常による行動阻害（カウンター減算は applyStatusEffects で行う）
     if (attacker.status === 'sleep') {
       if (attacker.statusTurnsLeft > 0) {
-        attacker.statusTurnsLeft--;
         this.log.push(`${attacker.name}は眠っている`);
         return { success: false };
-      } else {
-        attacker.status = null;
-        this.log.push(`${attacker.name}は目を覚ました！`);
       }
+      // statusTurnsLeft <= 0 なら applyStatusEffects で既に解除済み
     }
     if (attacker.status === 'freeze') {
       if (Math.random() < 0.2) {
