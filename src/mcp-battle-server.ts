@@ -72,7 +72,16 @@ const MoveInputSchema = z.object({
   contact: z.boolean().optional(),
   restoresShieldForm: z.boolean().optional(),
   inflictsSpikes: z.boolean().optional(),
-});
+  weather: z.enum(['sand', 'rain', 'sun', 'hail']).nullable().optional(),
+}).refine(
+  (data) => {
+    if (data.multiHitPowers && data.maxHits && data.multiHitPowers.length !== data.maxHits) {
+      return false;
+    }
+    return true;
+  },
+  { message: 'multiHitPowers の長さは maxHits と一致する必要があります' }
+);
 
 const PokemonInputSchema = z.object({
   name: z.string(),
@@ -111,7 +120,7 @@ interface StoredSession {
 }
 
 function buildPokemon(spec: z.infer<typeof PokemonInputSchema>): Pokemon {
-  return new Pokemon({
+  const pokemon = new Pokemon({
     name: spec.name,
     types: [...spec.types] as TypeName[],
     ability: spec.ability,
@@ -119,12 +128,16 @@ function buildPokemon(spec: z.infer<typeof PokemonInputSchema>): Pokemon {
     baseStats: spec.baseStats,
     statPoints: spec.statPoints,
     nature: spec.nature ?? null,
-    currentHP: spec.currentHP,
     status: spec.status ?? null,
     form: spec.form,
     formStats: spec.formStats,
     moves: spec.moves.map((move) => new Move(move)),
   });
+  // currentHP は maxHP を超えないようクランプ
+  if (spec.currentHP !== undefined) {
+    pokemon.currentHP = Math.min(spec.currentHP, pokemon.maxHP);
+  }
+  return pokemon;
 }
 
 function pokemonView(pokemon: Pokemon) {
@@ -325,22 +338,29 @@ export function createBattleServer(): McpServer {
         const stored = requireSession(sessionId);
         const { session } = stored.history;
 
-        stored.history.checkpoint();
-        session.beginTurn();
-
+        // バリデーションを副作用の前に行う
         if (session.needsForcedSwitch(0) || session.needsForcedSwitch(1)) {
           throw new Error('瀕死のポケモンが残っています。先にapply_forced_switchを呼んでください。');
         }
 
-        const [decisionA, decisionB] = await Promise.all([
-          resolveDecision(actionA, 0, session, reasoningA),
-          resolveDecision(actionB, 1, session, reasoningB),
-        ]);
+        stored.history.checkpoint();
+        session.beginTurn();
 
-        session.applyTurn(decisionA, decisionB);
-        // pivot技で中断した場合はターンを閉じない（apply_pivot_switchが続きを進める）。
-        if (session.isTurnComplete()) {
-          session.endTurn();
+        try {
+          const [decisionA, decisionB] = await Promise.all([
+            resolveDecision(actionA, 0, session, reasoningA),
+            resolveDecision(actionB, 1, session, reasoningB),
+          ]);
+
+          session.applyTurn(decisionA, decisionB);
+          // pivot技で中断した場合はターンを閉じない（apply_pivot_switchが続きを進める）。
+          if (session.isTurnComplete()) {
+            session.endTurn();
+          }
+        } catch (error) {
+          // エラー時はスナップショットを巻き戻す
+          stored.history.undo();
+          throw error;
         }
 
         return stateView(stored);

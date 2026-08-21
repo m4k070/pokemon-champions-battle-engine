@@ -215,6 +215,9 @@ export class BattleSession {
   }
 
   applyForcedSwitch(side: 0 | 1, decision: AgentDecision): void {
+    if (!this.needsForcedSwitch(side)) {
+      throw new Error(`side=${side}は強制交代が不要です`);
+    }
     if (decision.action.type !== 'switch') {
       throw new Error(`side=${side}は強制交代が必要ですが、switch以外の行動が渡されました: ${JSON.stringify(decision.action)}`);
     }
@@ -301,6 +304,14 @@ export class BattleSession {
     const actionA = decisionA.action;
     const actionB = decisionB.action;
 
+    // forfeit 処理: 降参した側は行動しない（ログのみ）
+    if (actionA.type === 'forfeit') {
+      this.engine.log.push(`${this.activeA.name}のチームは降参した！`);
+    }
+    if (actionB.type === 'forfeit') {
+      this.engine.log.push(`${this.activeB.name}のチームは降参した！`);
+    }
+
     // 両者が同時に交代する場合も、天候変化特性などのswitch-in効果はすばやさが遅い側が
     // 後に発動して上書きする仕様のため、速い順(=遅い方を最後に)switchInする。
     const switchEntries: { side: 0 | 1; pokemon: Pokemon; team: Pokemon[] }[] = [];
@@ -340,14 +351,33 @@ export class BattleSession {
       this.engine.events.emit('switch-in', { pokemon: this.activeB, team: this.teamB, engine: this.engine });
     }
 
-    const attackers: { side: 0 | 1; pokemon: Pokemon }[] = [];
-    if (actionA.type === 'move') attackers.push({ side: 0, pokemon: this.activeA });
-    if (actionB.type === 'move') attackers.push({ side: 1, pokemon: this.activeB });
+    const attackers: { side: 0 | 1; pokemon: Pokemon; priority: number }[] = [];
+    if (actionA.type === 'move') {
+      const moveA = this.activeA.moves[actionA.moveIndex];
+      attackers.push({ side: 0, pokemon: this.activeA, priority: moveA?.priority ?? 0 });
+    }
+    if (actionB.type === 'move') {
+      const moveB = this.activeB.moves[actionB.moveIndex];
+      attackers.push({ side: 1, pokemon: this.activeB, priority: moveB?.priority ?? 0 });
+    }
+
+    // priority 降順 → speed 降順の2段ソート（同速はランダム）
+    // orderBySpeed と同じく、先にシャッフルしてから安定ソートする
+    const shuffled = [...attackers];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const sortedAttackers = shuffled
+      .sort((a, b) => {
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        return this.engine.calculateSpeed(b.pokemon) - this.engine.calculateSpeed(a.pokemon);
+      });
 
     this.pendingTurn = {
       actionA,
       actionB,
-      remainingSides: this.engine.orderBySpeed(attackers).map(({ side }) => side),
+      remainingSides: sortedAttackers.map(({ side }) => side),
       awaitingPivotSide: null,
     };
     this.runRemainingMoves();
@@ -368,6 +398,10 @@ export class BattleSession {
       const action = side === 0 ? pending.actionA : pending.actionB;
       if (action.type !== 'move') continue;
 
+      if (action.moveIndex < 0 || action.moveIndex >= attacker.moves.length) {
+        this.engine.log.push(`${attacker.name}のmoveIndex ${action.moveIndex}は範囲外です`);
+        continue;
+      }
       const result = this.engine.useMove(attacker, defender, attacker.moves[action.moveIndex]);
       // こだわり系は「技を出した時点」で固定される（外した場合も固定される）。
       attacker.lockMove(action.moveIndex);
