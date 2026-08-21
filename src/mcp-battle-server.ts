@@ -9,6 +9,7 @@ import { BattleSession, BattleHistory } from './battle-runner.js';
 import { RandomBattleAgent } from './ai/battle-agent.js';
 import type { AgentDecision } from './ai/battle-agent.js';
 import type { AgentAction, TypeName } from './types.js';
+import { MoveValidator } from './move-validator.js';
 
 // このMCPサーバーは「ルール判定係」に徹する。行動を決めるのはMCPクライアント
 // （このサーバーを呼び出すLLM/人間）であり、サーバー側でLLMを呼ぶことはしない。
@@ -224,6 +225,7 @@ async function handle(fn: () => Promise<unknown> | unknown): Promise<CallToolRes
 export function createBattleServer(): McpServer {
   const sessions = new Map<string, StoredSession>();
   const randomAgent = new RandomBattleAgent();
+  const moveValidator = new MoveValidator();
 
   function requireSession(sessionId: string): StoredSession {
     const stored = sessions.get(sessionId);
@@ -262,6 +264,29 @@ export function createBattleServer(): McpServer {
     },
     ({ teamA, teamB, leadIndexA, leadIndexB }) =>
       handle(async () => {
+        // 技の検証: 未登録技は警告をログに残す
+        const allMoves = [...teamA, ...teamB].flatMap((p) => p.moves.map((m) => m.name));
+        const uniqueMoves = [...new Set(allMoves)];
+        for (const moveName of uniqueMoves) {
+          const cached = moveValidator.validateFromCache(moveName);
+          if (cached === null) {
+            // キャッシュにない技 → PokeAPI で検証（非同期）
+            const result = await moveValidator.validateAndCache(moveName);
+            if (!result.valid) {
+              console.error(`[警告] 未登録技: ${moveName} (${result.reason})`);
+            }
+          }
+        }
+
+        // ポケモン別技習得チェック
+        for (const pokemon of [...teamA, ...teamB]) {
+          const moveNames = pokemon.moves.map((m) => m.name);
+          const { invalid } = await moveValidator.validateLearnset(pokemon.name, moveNames);
+          if (invalid.length > 0) {
+            console.error(`[警告] ${pokemon.name}は ${invalid.join(',')} を覚えないはず`);
+          }
+        }
+
         const pokemonA = teamA.map(buildPokemon);
         const pokemonB = teamB.map(buildPokemon);
 
