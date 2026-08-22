@@ -180,13 +180,11 @@ function visiblePokemonView(pokemon: Pokemon, isOwn: boolean, isActive: boolean)
   if (isOwn) {
     return pokemonView(pokemon);
   }
-  // 相手のポケモン
+  // 相手のポケモン（HPは%のみ、正確な数値は隠す）
   const base = {
     name: pokemon.name,
     types: pokemon.types,
     isFainted: pokemon.isFainted,
-    currentHP: pokemon.currentHP,
-    maxHP: pokemon.maxHP,
     hpPercent: Math.round((pokemon.currentHP / pokemon.maxHP) * 100),
   };
   if (isActive) {
