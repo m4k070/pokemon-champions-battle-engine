@@ -170,6 +170,37 @@ function pokemonView(pokemon: Pokemon) {
   };
 }
 
+/**
+ * 不完全情報対応: プレイヤーに見える情報のみ返す。
+ * - 自分のチーム: 全情報
+ * - 相手の先頭: タイプ・HP・状態・statStages のみ（技・持ち物・特性は隠す）
+ * - 相手の控え: タイプ・HP・isFainted のみ
+ */
+function visiblePokemonView(pokemon: Pokemon, isOwn: boolean, isActive: boolean) {
+  if (isOwn) {
+    return pokemonView(pokemon);
+  }
+  // 相手のポケモン
+  const base = {
+    name: pokemon.name,
+    types: pokemon.types,
+    isFainted: pokemon.isFainted,
+    currentHP: pokemon.currentHP,
+    maxHP: pokemon.maxHP,
+    hpPercent: Math.round((pokemon.currentHP / pokemon.maxHP) * 100),
+  };
+  if (isActive) {
+    // 先頭: ステータスと能力ランクは見える
+    return {
+      ...base,
+      status: pokemon.status,
+      statStages: { ...pokemon.statStages },
+    };
+  }
+  // 控え: タイプとHPのみ
+  return base;
+}
+
 function stateView(stored: StoredSession) {
   const { session } = stored.history;
   return {
@@ -193,6 +224,45 @@ function stateView(stored: StoredSession) {
     needsForcedSwitchSide1: session.needsForcedSwitch(1),
     needsPivotSwitchSide0: session.needsPivotSwitch(0),
     needsPivotSwitchSide1: session.needsPivotSwitch(1),
+    isTurnComplete: session.isTurnComplete(),
+    isFinished: session.isFinished(),
+    winner: session.isFinished() ? session.winner() : null,
+    canUndo: stored.history.canUndo(),
+    canRedo: stored.history.canRedo(),
+  };
+}
+
+/**
+ * 不完全情報対応: 指定されたサイドから見た可視状態を返す。
+ * - 自分のチーム: 全情報
+ * - 相手の先頭: タイプ・HP・状態・statStages のみ
+ * - 相手の控え: タイプ・HP のみ
+ */
+function visibleStateView(stored: StoredSession, side: 0 | 1) {
+  const { session } = stored.history;
+  const myTeam = side === 0 ? session.teamA : session.teamB;
+  const opponentTeam = side === 0 ? session.teamB : session.teamA;
+  const myActiveIndex = side === 0 ? session.teamA.indexOf(session.activeA) : session.teamB.indexOf(session.activeB);
+  const opponentActiveIndex = side === 0 ? session.teamB.indexOf(session.activeB) : session.teamA.indexOf(session.activeA);
+
+  return {
+    turn: session.engine.turn,
+    weather: session.engine.weather,
+    weatherTurnsLeft: session.engine.weatherTurnsLeft,
+    trickRoom: session.engine.trickRoom,
+    trickRoomTurnsLeft: session.engine.trickRoomTurnsLeft,
+    stealthRock: { ...session.engine.field.stealthRock },
+    spikes: { ...session.engine.field.spikes },
+    toxicSpikes: { ...session.engine.field.toxicSpikes },
+    tailwind: { ...session.engine.field.tailwind },
+    reflect: { ...session.engine.field.reflect },
+    myTeam: myTeam.map((p, i) => visiblePokemonView(p, true, i === myActiveIndex)),
+    opponentTeam: opponentTeam.map((p, i) => visiblePokemonView(p, false, i === opponentActiveIndex)),
+    myActiveIndex,
+    opponentActiveIndex,
+    canMegaEvolve: session.canMegaEvolve(side),
+    needsForcedSwitch: session.needsForcedSwitch(side),
+    needsPivotSwitch: session.needsPivotSwitch(side),
     isTurnComplete: session.isTurnComplete(),
     isFinished: session.isFinished(),
     winner: session.isFinished() ? session.winner() : null,
@@ -310,6 +380,18 @@ export function createBattleServer(): McpServer {
       inputSchema: { sessionId: z.string() },
     },
     ({ sessionId }) => handle(() => stateView(requireSession(sessionId)))
+  );
+
+  server.registerTool(
+    'get_visible_state',
+    {
+      description: '不完全情報対応: 指定されたサイドから見た可視状態を返す。自分のチームは全情報、相手は先頭のみ詳細（技・持ち物は隠す）。',
+      inputSchema: {
+        sessionId: z.string(),
+        side: z.union([z.literal(0), z.literal(1)]),
+      },
+    },
+    ({ sessionId, side }) => handle(() => visibleStateView(requireSession(sessionId), side))
   );
 
   server.registerTool(
