@@ -527,6 +527,27 @@ export class BattleEngine {
     }
 
     if (move.status) {
+      // タイプによる状態異常無効化
+      if (move.status === 'paralysis' && defender.types.includes('electric')) {
+        this.log.push('効果がない');
+        return { success: true };
+      }
+      if (move.status === 'paralysis' && defender.types.includes('ground')) {
+        this.log.push('効果がない');
+        return { success: true };
+      }
+      if (move.status === 'burn' && defender.types.includes('fire')) {
+        this.log.push('効果がない');
+        return { success: true };
+      }
+      if (move.status === 'sleep' && defender.types.includes('grass')) {
+        this.log.push('効果がない');
+        return { success: true };
+      }
+      if (move.status === 'poison' && defender.types.includes('steel')) {
+        this.log.push('効果がない');
+        return { success: true };
+      }
       const applied = defender.applyStatus(move.status);
       if (applied) {
         this.log.push(`${defender.name}は${move.status}状態になった`);
