@@ -4,14 +4,14 @@
 
 ## 特徴
 
-- **Event System**: 特性・道具・天候をEvent Handlerとして`BattleEngine`内に実装
-- **Poke API連携**: 最新のポケモンデータを自動取得・キャッシュ
-- **Champions固有ルール**: 能力ポイント、Lv.50固定、メガシンカ対応
-- **メタチームテンプレート**: 主要アーキタイプの定義済みチーム
-- **選出AI**: アーキタイプ判定と最適選出ロジック
-- **BattleAgent / BattleSession**: LLM（OpenCode Go）・ランダム・人間など、行動選択の方式を差し替え可能。
-  1ターンずつ進行・undo/redo・分岐（fork）に対応
+-- **Poke API連携**: 最新のポケモンデータを自動取得・キャッシュ（`src/api/pokemon-api.ts`）
+- **Champions固有ルール**: 能力ポイント、Lv.50固定、メガシンカ対応（`src/rules/`）
+- **メタチームテンプレート**: 主要アーキタイプの定義済みチーム（`src/data/meta-teams.ts`）
+- **選出AI**: アーキタイプ判定と最適選出ロジック（`src/ai/selection-ai.ts`）
+- **BattleAgent / BattleSession**: LLM・ランダム・人間など、行動選択の方式を差し替え可能。1ターンずつ進行・undo/redo・分岐（fork）に対応
 - **MCPサーバー**: バトルのルール適用をMCPツールとして公開。行動の決定はMCPクライアント側が担う
+- **不完全情報対応**: `get_visible_state`でサイド別に可視情報を返す。相手の技・持ち物は隠し、使用済み技のみ記憶
+- **技検証**: PokeAPI連携の2層キャッシュで技の存在・習得を検証（`src/move-validator.ts`）
 
 ## 機能
 
@@ -63,10 +63,27 @@
 
 ### MCPサーバー
 - `src/mcp-battle-server.ts`の`createBattleServer()`が、行動の決定を一切行わない「ルール適用専任」のMCPサーバーを構築する
-- 公開ツール: `start_battle` / `get_battle_state` / `apply_forced_switch` / `apply_turn` / `apply_pivot_switch` / `undo` / `redo` / `fork_battle` / `get_battle_log` / `list_battles`
-- `apply_turn`の`actionA`/`actionB`には具体的な行動（`{type:"move",moveIndex}`等）か`"auto"`（その陣営はサーバー内蔵の`RandomBattleAgent`に任せる）を渡せる
-- pivot技で中断した場合は`isTurnComplete:false` / `needsPivotSwitchSide0|1:true`で返るので、`apply_pivot_switch`で交代先を指定して再開する
-- 起動: `npm run mcp:dev`（開発）/ `npm run mcp`（ビルド後）。stdioトランスポートで動作するため、Claude Codeなど任意のMCPクライアントからstdio起動で接続できる
+
+#### 公開ツール
+
+| ツール | 用途 |
+|--------|------|
+| `start_battle` | チーム登録・バトル開始 |
+| `get_battle_state` | 全状態取得（完全情報） |
+| `get_visible_state` | サイド別可視状態取得（不完全情報） |
+| `apply_turn` | 両陣営の行動を同時に適用 |
+| `apply_forced_switch` | 瀕死後の強制交代 |
+| `apply_pivot_switch` | pivot技後の交代 |
+| `undo` / `redo` | ターンの巻き戻し・やり直し |
+| `fork_battle` | 同一局面からの分岐 |
+| `get_battle_log` | バトルログ取得 |
+| `list_battles` | セッション一覧 |
+
+#### 使い方
+
+- `apply_turn`の`actionA`/`actionB`には具体的な行動（`{type:"move",moveIndex}`等）か`"auto"`（ランダムAI）を渡せる
+- pivot技で中断した場合は`isTurnComplete:false` / `needsPivotSwitchSide0|1:true`で返る。`apply_pivot_switch`で交代先を指定して再開
+- 起動: `npm run mcp:dev`（開発）/ `npm run mcp`（ビルド後）。stdioトランスポート
 
 ## クイックスタート
 
@@ -152,6 +169,7 @@ src/
 ├── sample-battle.ts          # サンプルバトル（BattleSession + BattleAgent）
 ├── mcp-server.ts             # MCPサーバーの起動エントリーポイント（stdio）
 ├── mcp-battle-server.ts      # MCPツール定義本体（createBattleServer）
+├── move-validator.ts         # 技検証（PokeAPI連携2層キャッシュ）
 ├── ai/
 │   ├── selection-ai.ts           # チームのアーキタイプ判定
 │   ├── battle-agent.ts           # BattleAgentインターフェース / RandomBattleAgent
@@ -159,7 +177,11 @@ src/
 ├── api/
 │   └── pokemon-api.ts    # Poke API連携・キャッシュ
 ├── data/
-│   └── meta-teams.ts     # メタチームテンプレート
+│   ├── meta-teams.ts     # メタチームテンプレート
+│   ├── move-cache.json   # 技キャッシュ（自動生成）
+│   └── learnset-cache.json # 習得キャッシュ（自動生成）
+├── docs/
+│   └── dfd.md            # データフロー図（MermaidJS）
 └── rules/
     ├── stat-point-system.ts  # 能力ポイントシステム・Lv.50固定
     └── mega-evolution.ts     # メガシンカ（Poke APIから種族値差分を算出するfromPokeApiあり）
@@ -183,8 +205,34 @@ npm test -- --testNamePattern="ダメージ計算"
 - [設計ドキュメント](docs/BATTLE_SYSTEM_DESIGN.md)
 - [エージェントインターフェース](docs/AGENT_INTERFACE.md)（Python時代の記述が残っており現状のBattleAgentとは一致しない箇所があります）
 - [実装済みアイテム](docs/IMPLEMENTED_ITEMS.md)
+- [データフロー図](docs/dfd.md)（MermaidJS形式のDFD）
 - `npm run docs`でTypeDocによるAPIリファレンスを`docs/api/`に生成できます
 
+## 不完全情報対応
+
+MCPサーバーは2つの状態取得ツールを提供する:
+
+| ツール | 用途 | 情報範囲 |
+|--------|------|----------|
+| `get_battle_state` | 完全情報（デバッグ用） | 両チーム全情報 |
+| `get_visible_state` | 不完全情報（対戦用） | 自分チーム全情報、相手はHP%・タイプ・使用済み技のみ |
+
+可視情報ルール:
+- 自分のチーム: 全情報（技・持ち物・特性・HP）
+- 相手の先頭: タイプ・HP%・状態異常・statStages（技・持ち物は隠す）
+- 相手の控え: タイプ・HP%のみ
+- 使用済み技: 名前・タイプ・カテゴリ（記憶した分のみ）
+
+## テストプレイ
+
+2人のプレイヤーエージェント（LLM・人間など）が対戦するテストプレイを実施。審判役が盤面を管理し、各プレイヤーに可視情報のみを渡す。
+
+手順:
+1. `start_battle`でバトル開始
+2. `get_visible_state`で各プレイヤーの可視情報を取得
+3. 各プレイヤーの行動を収集（後出し禁止: 自分の行動を先に決定）
+4. `apply_turn`で行動を適用
+5. 瀕死時は`apply_forced_switch`で交代先を指定
 ## 開発環境
 
 - Node.js 18+
