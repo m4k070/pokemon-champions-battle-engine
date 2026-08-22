@@ -284,6 +284,10 @@ function visibleStateView(stored: StoredSession, side: 0 | 1) {
     canMegaEvolve: session.canMegaEvolve(side),
     needsForcedSwitch: session.needsForcedSwitch(side),
     needsPivotSwitch: session.needsPivotSwitch(side),
+    // TODO: 瀕死後の強制交代時は、相手の行動入力を不可能にする制約を追加
+    // 片方がneedsForcedSwitch=trueの場合、相手は行動を入力できないようにする
+    // 実装案: opponentNeedsForcedSwitchフィールドを追加し、trueの場合はクライアント側で入力をブロック
+    opponentNeedsForcedSwitch: session.needsForcedSwitch(side === 0 ? 1 : 0),
     isTurnComplete: session.isTurnComplete(),
     isFinished: session.isFinished(),
     winner: session.isFinished() ? session.winner() : null,
