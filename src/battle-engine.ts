@@ -777,18 +777,17 @@ export class BattleEngine {
   }
 
   endTurn(teamA: Pokemon[], teamB: Pokemon[]): void {
-    // activePokemon が設定されていれば場のポケモンのみ、未設定なら全員に適用
-    // （テスト等で直接エンジンを使うケースへの後方互換）
-    const hasActivePokemon = this.activePokemon0 !== null || this.activePokemon1 !== null;
+    // 場のポケモンのみに状態異常・天候ダメージを適用（控えには適用しない）
+    // activePokemon が未設定なら全員に適用（テスト等で直接エンジンを使うケース）
+    const activeA = this.activePokemon0;
+    const activeB = this.activePokemon1;
+    const hasActivePokemon = activeA !== null || activeB !== null;
 
     let statusWeatherTeam: Pokemon[];
     if (hasActivePokemon) {
-      const activeA = this.activePokemon0;
-      const activeB = this.activePokemon1;
-      statusWeatherTeam = [
-        ...(activeA && teamA.includes(activeA) ? [activeA] : []),
-        ...(activeB && teamB.includes(activeB) ? [activeB] : []),
-      ];
+      // activePokemon が team に含まれるか確認せずにそのまま使用
+      // （setActivePokemon で設定されたオブジェクトは team 内の同一参照）
+      statusWeatherTeam = [activeA, activeB].filter((p): p is Pokemon => p !== null && !p.isFainted);
     } else {
       statusWeatherTeam = [...teamA, ...teamB];
     }
