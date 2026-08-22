@@ -15,6 +15,15 @@ export interface UseMoveResult {
   pivot?: boolean;
 }
 
+export interface MoveLogEntry {
+  turn: number;
+  side: 0 | 1;
+  pokemonName: string;
+  moveName: string;
+  moveType: string;
+  moveCategory: string;
+}
+
 // 猛毒(どくどく)のダメージ増加は本編仕様に合わせて15ターン目で頭打ちにする。
 const TOXIC_MAX_COUNTER = 15;
 
@@ -51,6 +60,7 @@ export class BattleEngine {
   trickRoomTurnsLeft: number;
   turn: number;
   log: string[];
+  moveLog: MoveLogEntry[];
   typeChart: TypeChart;
   field: BattleField;
 
@@ -68,6 +78,7 @@ export class BattleEngine {
     this.trickRoomTurnsLeft = 0;
     this.turn = 0;
     this.log = [];
+    this.moveLog = [];
     this.typeChart = TYPE_CHART;
     this.field = new BattleField();
     this.setupEventHandlers();
@@ -364,6 +375,17 @@ export class BattleEngine {
     move.pp -= 1;
 
     this.log.push(`${attacker.name}の${move.name}`);
+    const attackerSide = this.getSide(attacker);
+    if (attackerSide !== null) {
+      this.moveLog.push({
+        turn: this.turn,
+        side: attackerSide,
+        pokemonName: attacker.name,
+        moveName: move.name,
+        moveType: move.type,
+        moveCategory: move.category,
+      });
+    }
 
     // ちょうはつ: 攻撃技（category !== 'status'）の使用を阻止する。
     // メンタルハーブ: ちょうはつを1回だけ解除して技を通す（消費される）。

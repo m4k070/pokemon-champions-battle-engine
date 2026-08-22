@@ -235,6 +235,7 @@ function stateView(stored: StoredSession) {
  * - 自分のチーム: 全情報
  * - 相手の先頭: タイプ・HP・状態・statStages のみ
  * - 相手の控え: タイプ・HP のみ
+ * - 相手が使った技: 記憶した分のみ（名前・タイプ・カテゴリ）
  */
 function visibleStateView(stored: StoredSession, side: 0 | 1) {
   const { session } = stored.history;
@@ -242,6 +243,25 @@ function visibleStateView(stored: StoredSession, side: 0 | 1) {
   const opponentTeam = side === 0 ? session.teamB : session.teamA;
   const myActiveIndex = side === 0 ? session.teamA.indexOf(session.activeA) : session.teamB.indexOf(session.activeB);
   const opponentActiveIndex = side === 0 ? session.teamB.indexOf(session.activeB) : session.teamA.indexOf(session.activeA);
+
+  // 相手が使った技を記憶（moveLog から抽出）
+  const opponentMovesUsed: Record<string, { name: string; type: string; category: string }[]> = {};
+  for (const entry of session.engine.moveLog) {
+    if (entry.side !== side) {
+      const pokemonName = entry.pokemonName;
+      if (!opponentMovesUsed[pokemonName]) {
+        opponentMovesUsed[pokemonName] = [];
+      }
+      const moveName = entry.moveName;
+      if (!opponentMovesUsed[pokemonName].some(m => m.name === moveName)) {
+        opponentMovesUsed[pokemonName].push({
+          name: moveName,
+          type: entry.moveType,
+          category: entry.moveCategory,
+        });
+      }
+    }
+  }
 
   return {
     turn: session.engine.turn,
@@ -255,7 +275,10 @@ function visibleStateView(stored: StoredSession, side: 0 | 1) {
     tailwind: { ...session.engine.field.tailwind },
     reflect: { ...session.engine.field.reflect },
     myTeam: myTeam.map((p, i) => visiblePokemonView(p, true, i === myActiveIndex)),
-    opponentTeam: opponentTeam.map((p, i) => visiblePokemonView(p, false, i === opponentActiveIndex)),
+    opponentTeam: opponentTeam.map((p, i) => ({
+      ...visiblePokemonView(p, false, i === opponentActiveIndex),
+      movesUsed: opponentMovesUsed[p.name] || [],
+    })),
     myActiveIndex,
     opponentActiveIndex,
     canMegaEvolve: session.canMegaEvolve(side),
