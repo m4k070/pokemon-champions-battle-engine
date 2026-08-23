@@ -4,7 +4,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { Pokemon } from './pokemon.js';
-import { createMove, type MoveInput } from './move.js';
+import { createMove, MOVE_CATEGORIES, type MoveInput } from './move.js';
+import { TYPE_NAMES } from './type-names.js';
 import { BattleSession, BattleHistory } from './battle-runner.js';
 import { RandomBattleAgent } from './ai/battle-agent.js';
 import type { AgentDecision } from './ai/battle-agent.js';
@@ -20,14 +21,8 @@ import { ITEM_NAMES } from './item-names.js';
 // 決定済みの行動を渡す。actionA/actionBに"auto"を渡した陣営だけはRandomBattleAgentが
 // 代わりに決める（対戦相手をランダムにしたい場合向け）。
 
-const TYPE_NAMES = [
-  'normal', 'fire', 'water', 'electric', 'grass', 'ice',
-  'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug',
-  'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy',
-] as const;
-
 const TypeNameSchema = z.enum(TYPE_NAMES);
-const MoveCategorySchema = z.enum(['physical', 'special', 'status']);
+const MoveCategorySchema = z.enum(MOVE_CATEGORIES);
 const StatusConditionSchema = z.enum(['sleep', 'poison', 'burn', 'paralysis', 'freeze', 'badly-poisoned']);
 const FieldEffectSchema = z.enum(['tailwind', 'trick-room', 'reflect', 'stealth-rock', 'spikes', 'toxic-spikes']);
 const StatStageKeySchema = z.enum(['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED']);
