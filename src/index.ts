@@ -45,6 +45,8 @@ export {
   targetsOpponent,
 } from './move.js';
 export type { Move, DamageMove, MoveInput, DamageMoveInput, StatusMoveInput, MoveConstructorData } from './move.js';
+export { NO_STATUS, createStatusState, statusConditionOf, cloneStatusState } from './status-state.js';
+export type { StatusState } from './status-state.js';
 export { ABILITY_NAMES, isAbilityName } from './ability-names.js';
 export type { AbilityName } from './ability-names.js';
 export { ITEM_NAMES, isItemName } from './item-names.js';

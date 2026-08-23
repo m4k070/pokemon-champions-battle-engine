@@ -79,8 +79,7 @@ describe('BattleSession', () => {
 
   test('switching out resets the toxic counter but leaves the badly-poisoned status intact', async () => {
     const poisoned = makeAttacker('Poisoned');
-    poisoned.status = 'badly-poisoned';
-    poisoned.toxicCounter = 7;
+    poisoned.statusState = { kind: 'badly-poisoned', elapsedTurns: 7 };
     const bench = makeAttacker('Bench');
     const teamA = [poisoned, bench];
     const teamB = [makeDefender()];
@@ -93,7 +92,8 @@ describe('BattleSession', () => {
     );
 
     expect(poisoned.status).toBe('badly-poisoned'); // 交代しても状態異常自体は治らない
-    expect(poisoned.toxicCounter).toBe(0); // ただし経過ターン数はリセットされる
+    // ただし経過ターン数はリセットされる
+    expect(poisoned.statusState).toEqual({ kind: 'badly-poisoned', elapsedTurns: 0 });
   });
 
   test('switching out cures the volatile Leech Seed status (unlike major status conditions)', async () => {
