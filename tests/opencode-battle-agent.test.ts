@@ -1,8 +1,9 @@
+import { createMove } from "../src/move.js";
 import { OpenCodeBattleAgent, buildBattlePrompt } from '../src/ai/opencode-battle-agent.js';
 import { getLegalActions } from '../src/ai/battle-agent.js';
 import type { BattleContext } from '../src/ai/battle-agent.js';
 import { Pokemon } from '../src/pokemon.js';
-import { Move } from '../src/move.js';
+import type { Move } from '../src/move.js';
 
 function makePokemon(overrides: { moves?: Move[]; currentHP?: number } = {}): Pokemon {
   return new Pokemon({
@@ -13,8 +14,8 @@ function makePokemon(overrides: { moves?: Move[]; currentHP?: number } = {}): Po
     baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
     currentHP: overrides.currentHP,
     moves: overrides.moves ?? [
-      new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10 }),
-      new Move({ name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 10 }),
+      createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10 }),
+      createMove({ name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 10 }),
     ],
   });
 }
@@ -71,8 +72,8 @@ describe('buildBattlePrompt', () => {
   test('marks PP-exhausted moves as unselectable', () => {
     const self = makePokemon({
       moves: [
-        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 0 }),
-        new Move({ name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 5 }),
+        createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 0 }),
+        createMove({ name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 5 }),
       ],
     });
     const prompt = buildBattlePrompt(makeContext({ self, selfTeam: [self] }));
