@@ -409,9 +409,11 @@ export function createBattleServer(): McpServer {
           const cached = moveValidator.validateFromCache(moveName);
           if (cached === null) {
             // キャッシュにない技 → PokeAPI で検証（非同期）
-            const result = await moveValidator.validateAndCache(moveName);
-            if (!result.valid) {
-              console.error(`[警告] 未登録技: ${moveName} (${result.reason})`);
+            const entry = await moveValidator.validateAndCache(moveName);
+            // 「検証できなかった（unverified）」技は無効とは限らないため警告しない。
+            // Poke API が存在しない技だと判定したときだけ警告する。
+            if (entry.status === 'invalid') {
+              console.error(`[警告] 未登録技: ${moveName} (${entry.reason})`);
             }
           }
         }
