@@ -161,6 +161,7 @@ src/
 ├── battle-snapshot.ts        # 盤面のプレーンデータ化（snapshot/restore）
 ├── pokemon.ts                # ポケモンドメインモデル
 ├── status-state.ts           # 状態異常の状態（ねむりの残りターン・猛毒の経過ターンを含む）
+├── use-move-result.ts        # 技の解決結果（成否と、成立時に何が起きたか）
 ├── move.ts                   # 技モデル
 ├── ability-names.ts          # 特性名の列挙（AbilityName の単一の情報源）
 ├── item-names.ts             # 持ち物名の列挙（ItemName の単一の情報源）

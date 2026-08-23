@@ -11,6 +11,8 @@ import {
   isSpecialMove,
   isStatusMove,
 } from '../src/move.js';
+import { isMoveSuccessful } from '../src/use-move-result.js';
+import { asDamageResult } from './helpers/use-move-result.js';
 
 const NEUTRAL_STATS = { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
 
@@ -111,8 +113,7 @@ describe('効果フィールドを持たない変化技', () => {
     const result = engine.useMove(attacker, defender, splash);
 
     // Assert
-    expect(result.success).toBe(true);
-    expect(result.damage).toBe(0);
+    expect(result).toMatchObject({ outcome: 'no-effect', reason: 'no-applicable-effect' });
     expect(defender.currentHP).toBe(defender.maxHP);
     expect(engine.getLog()).toContain('しかし何も起こらなかった');
   });

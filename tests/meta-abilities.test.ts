@@ -4,6 +4,8 @@ import { createMove } from '../src/move.js';
 import type { MoveInput } from '../src/move.js';
 import type { BaseStats, MoveData, Stats, TypeName } from '../src/types.js';
 import type { AbilityName } from '../src/ability-names.js';
+import { isMoveSuccessful } from '../src/use-move-result.js';
+import { asDamageResult } from './helpers/use-move-result.js';
 
 const FIXED_STATS: Stats = { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
 
@@ -81,7 +83,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
     engine.setActivePokemon(1, levitate);
 
     const result = engine.useMove(attacker, levitate, move({ name: 'Earthquake', type: 'ground', power: 100 }));
-    expect(result.success).toBe(false);
+    expect(isMoveSuccessful(result)).toBe(false);
     expect(levitate.currentHP).toBe(100);
   });
 
@@ -212,7 +214,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
     engine.setActivePokemon(0, normal);
     engine.setActivePokemon(1, def1);
     const r1 = engine.useMove(normal, def1, move({ name: 'Return', type: 'normal', power: 80 }));
-    const singleDamage = r1.damage ?? 0;
+    const singleDamage = asDamageResult(r1).damage;
     expect(singleDamage).toBeGreaterThan(0);
 
     // 親子愛あり: 1回目（単発相当）+ 2回目（威力1/4）
@@ -221,7 +223,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
     engine.setActivePokemon(0, parental);
     engine.setActivePokemon(1, def2);
     const r2 = engine.useMove(parental, def2, move({ name: 'Return', type: 'normal', power: 80 }));
-    const parentalDamage = r2.damage ?? 0;
+    const parentalDamage = asDamageResult(r2).damage;
 
     expect(parentalDamage).toBeGreaterThan(singleDamage);            // 2回攻撃で単発より大きい
     expect(parentalDamage).toBeLessThan(singleDamage * 1.5);         // 2回目は1/4威力（合計≈1.25倍）
@@ -287,7 +289,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
     engine.setActivePokemon(0, normal);
     engine.setActivePokemon(1, def1);
     const r1 = engine.useMove(normal, def1, move({ name: 'Close Combat', type: 'fighting', power: 120 }));
-    const normalDamage = r1.damage ?? 0;
+    const normalDamage = asDamageResult(r1).damage;
     expect(normalDamage).toBeGreaterThan(0);
 
     // 適応力（2倍）
@@ -296,7 +298,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
     engine.setActivePokemon(0, adapt);
     engine.setActivePokemon(1, def2);
     const r2 = engine.useMove(adapt, def2, move({ name: 'Close Combat', type: 'fighting', power: 120 }));
-    const adaptDamage = r2.damage ?? 0;
+    const adaptDamage = asDamageResult(r2).damage;
 
     // 2倍 / 1.5倍 = 1.333倍
     expect(adaptDamage).toBeGreaterThan(normalDamage);
@@ -326,7 +328,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
     engine.setActivePokemon(1, defender);
 
     const r = engine.useMove(mence, defender, move({ name: 'Return', type: 'normal', power: 100 }));
-    expect(r.effectiveness).toBe(2); // ひこう技として抜群
+    expect(asDamageResult(r).effectiveness).toBe(2); // ひこう技として抜群
   });
 
   test('フェアリースキン: ノーマル技がフェアリー技として計算される', () => {
@@ -352,7 +354,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
     engine.setActivePokemon(1, defender);
 
     const r = engine.useMove(gardevoir, defender, move({ name: 'Hyper Voice', type: 'normal', power: 90 }));
-    expect(r.effectiveness).toBe(2); // フェアリー技として抜群
+    expect(asDamageResult(r).effectiveness).toBe(2); // フェアリー技として抜群
   });
 
   test('かたやぶり: 相手の特性（マルチスケイル）を無視する', () => {
@@ -507,11 +509,11 @@ describe('上位構築向け特性（meta-abilities）', () => {
 
     // 攻撃技は使えない
     const result = engine.useMove(taunted, attacker, move({ name: 'Tackle', type: 'normal', power: 40 }));
-    expect(result.success).toBe(false);
+    expect(isMoveSuccessful(result)).toBe(false);
 
     // 変化技は使える（stats変化のみの技）
     const statResult = engine.useMove(taunted, attacker, move({ name: 'Swords Dance', type: 'normal', power: 0, category: 'status', selfStatChange: [{ stat: 'ATK', delta: 2 }] }));
-    expect(statResult.success).toBe(true);
+    expect(isMoveSuccessful(statResult)).toBe(true);
   });
 
   test('メンタルハーブ: ちょうはつを1回だけ解除する', () => {
@@ -524,14 +526,14 @@ describe('上位構築向け特性（meta-abilities）', () => {
 
     // 1回目: メンタルハーブで挑発を解除して技を通す
     const result = engine.useMove(holder, attacker, move({ name: 'Tackle', type: 'normal', power: 40 }));
-    expect(result.success).toBe(true);
+    expect(isMoveSuccessful(result)).toBe(true);
     expect(holder.isTaunted).toBe(false);
     expect(holder.itemUsed).toBe(true);
 
     // 再び挑発された場合、メンタルハーブはもう使えない
     holder.applyTaunt(2);
     const result2 = engine.useMove(holder, attacker, move({ name: 'Tackle', type: 'normal', power: 40 }));
-    expect(result2.success).toBe(false); // メンタルハーブは消費済みなので挑発が残る
+    expect(isMoveSuccessful(result2)).toBe(false); // メンタルハーブは消費済みなので挑発が残る
   });
 
   test('メンタルハーブ: ターン終了時にちょうはつを解除する', () => {

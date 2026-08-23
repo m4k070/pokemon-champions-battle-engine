@@ -5,16 +5,9 @@ import { getAbilityDefinition } from './rules/abilities/registry.js';
 import type { Pokemon } from './pokemon.js';
 import type { MoveData, StatusCondition, StatStageKey, TypeName, WeatherType, TypeChart } from './types.js';
 import { isDamageMove, isPhysicalMove, isSpecialMove, isStatusMove, cloneDamageMove, targetsOpponent } from './move.js';
+import type { UseMoveResult, NoEffectReason } from './use-move-result.js';
 
-export interface UseMoveResult {
-  success: boolean;
-  damage?: number;
-  effectiveness?: number;
-  status?: string;
-  // とんぼがえり等のpivot技が成立し、使用者が交代すべき状態になったことを呼び出し元へ伝える。
-  // 交代先の決定と実行はチーム情報を持つBattleSession側の責務。
-  pivot?: boolean;
-}
+export type { UseMoveResult, MoveFailureReason, NoEffectReason } from './use-move-result.js';
 
 export interface MoveLogEntry {
   turn: number;
@@ -361,13 +354,13 @@ export class BattleEngine {
   useMove(attacker: Pokemon, defender: Pokemon, move: MoveData): UseMoveResult {
     if (move.pp <= 0) {
       this.log.push(`${attacker.name}は${move.name}を出そうとしたが、PPが残っていない！`);
-      return { success: false };
+      return { outcome: 'failed', reason: 'no-pp' };
     }
 
     // 状態異常による行動阻害（カウンター減算は applyStatusEffects で行う）
     if (attacker.statusState.kind === 'sleep' && attacker.statusState.turnsLeft > 0) {
       this.log.push(`${attacker.name}は眠っている`);
-      return { success: false };
+      return { outcome: 'failed', reason: 'asleep' };
     }
     if (attacker.status === 'freeze') {
       if (Math.random() < 0.2) {
@@ -375,13 +368,13 @@ export class BattleEngine {
         this.log.push(`${attacker.name}はこおりがとけた！`);
       } else {
         this.log.push(`${attacker.name}はこごえて動けない`);
-        return { success: false };
+        return { outcome: 'failed', reason: 'frozen' };
       }
     }
     if (attacker.status === 'paralysis') {
       if (Math.random() < 0.25) {
         this.log.push(`${attacker.name}はまひして動けない`);
-        return { success: false };
+        return { outcome: 'failed', reason: 'paralyzed' };
       }
     }
 
@@ -416,7 +409,7 @@ export class BattleEngine {
         this.log.push(`${attacker.name}はメンタルハーブで挑発を解いた`);
       } else {
         this.log.push(`${attacker.name}は挑発されて使えない！`);
-        return { success: false };
+        return { outcome: 'failed', reason: 'taunted' };
       }
     }
 
@@ -430,8 +423,17 @@ export class BattleEngine {
         this.log.push(`${defender.name}のひらいしんで特攻が上がった`);
       }
       this.log.push(`${defender.name}の${defender.ability}で効果がないようだ`);
-      return { success: false };
+      return { outcome: 'failed', reason: 'blocked-by-ability' };
     }
+
+    // 変化技が成立したときに使用者が退場するか（バトンタッチ等）。
+    // ダメージ解決と違い、この時点で使用者が倒れることはない。
+    const statusMovePivot = move.pivot === true && !attacker.isFainted;
+    // 天候・場・自分への効果が発動したときの結果。
+    const effectApplied = (): UseMoveResult => ({ outcome: 'effect-applied', pivot: statusMovePivot });
+    // 技は出たが何も起きなかったときの結果。
+    const noEffect = (reason: NoEffectReason): UseMoveResult =>
+      ({ outcome: 'no-effect', reason, pivot: statusMovePivot });
 
     // 相手を対象に取る変化技は、タイプ相性が0倍なら命中判定より前に無効化される
     // （でんじは→じめん、にらみつける→ゴースト等）。威力を持たないため、
@@ -440,7 +442,7 @@ export class BattleEngine {
       const statusMoveEffectiveness = this.resolveTypeEffectiveness(attacker, defender, move);
       if (statusMoveEffectiveness === 0) {
         this.log.push('効果がなかった');
-        return { success: true, damage: 0, effectiveness: 0 };
+        return noEffect('type-immune');
       }
     }
 
@@ -457,7 +459,7 @@ export class BattleEngine {
           this.log.push(`${attacker.name}は技がはずれてダメージを受けた！`);
           this.log.push(`${attacker.name}に${crashDmg}のダメージ`);
         }
-        return { success: false };
+        return { outcome: 'failed', reason: 'missed' };
       }
     }
 
@@ -471,7 +473,7 @@ export class BattleEngine {
         this.trickRoomTurnsLeft = 5;
         this.log.push(`${attacker.name}のトリックルームで時空がゆがんだ！`);
       }
-      return { success: true };
+      return effectApplied();
     }
 
     if (move.fieldEffect === 'tailwind') {
@@ -480,7 +482,7 @@ export class BattleEngine {
         this.field.tailwind[this.sideKey(side)] = 4;
         this.log.push(`${attacker.name}側の場に「おいかぜ」が吹き始めた`);
       }
-      return { success: true };
+      return effectApplied();
     }
 
     if (move.fieldEffect === 'reflect') {
@@ -489,7 +491,7 @@ export class BattleEngine {
         this.field.reflect[this.sideKey(side)] = 5;
         this.log.push(`${attacker.name}側の場に「リフレクター」の壁ができた`);
       }
-      return { success: true };
+      return effectApplied();
     }
 
     // --- ハザード設置技 ---
@@ -504,7 +506,7 @@ export class BattleEngine {
           this.log.push(`${attacker.name}側の場にステルスロックが散りばめられた`);
         }
       }
-      return { success: true };
+      return effectApplied();
     }
 
     if (move.fieldEffect === 'spikes') {
@@ -518,7 +520,7 @@ export class BattleEngine {
           this.log.push(`${attacker.name}側の場にまきびしが${this.field.spikes[key]}層設置された`);
         }
       }
-      return { success: true };
+      return effectApplied();
     }
 
     if (move.fieldEffect === 'toxic-spikes') {
@@ -532,7 +534,7 @@ export class BattleEngine {
           this.log.push(`${attacker.name}側の場にどくびしが${this.field.toxicSpikes[key]}層設置された`);
         }
       }
-      return { success: true };
+      return effectApplied();
     }
 
     // あまごい・にほんばれ等: 天候を5ターン変化させる。
@@ -541,7 +543,7 @@ export class BattleEngine {
       this.weatherTurnsLeft = 5;
       const weatherName = { rain: 'あめ', sun: 'にほんばれ', sand: 'すなあらし', hail: 'あられ' }[move.weather];
       this.log.push(`${attacker.name}は${weatherName}を呼び出した`);
-      return { success: true };
+      return effectApplied();
     }
 
     if (move.weatherHeal) {
@@ -549,7 +551,7 @@ export class BattleEngine {
       const heal = Math.floor(attacker.maxHP * percent);
       attacker.heal(heal);
       this.log.push(`${attacker.name}は${move.name}で${heal}回復した`);
-      return { success: true };
+      return effectApplied();
     }
 
     // キングシールド等: バトルスイッチ持ち（ギルガルド）がシールドフォルムに戻る。
@@ -559,7 +561,7 @@ export class BattleEngine {
         attacker.setForm('shield');
         this.log.push(`${attacker.name}はシールドフォルムに戻った`);
       }
-      return { success: true };
+      return effectApplied();
     }
 
     if (move.inflictsSeed) {
@@ -571,7 +573,7 @@ export class BattleEngine {
         defender.isSeeded = true;
         this.log.push(`${defender.name}にやどりぎのタネを植え付けた`);
       }
-      return { success: true };
+      return effectApplied();
     }
 
     // 能力ランク変化だけを行う変化技（つるぎのまい・にらみつける等）。
@@ -588,21 +590,20 @@ export class BattleEngine {
         if (targetChanges !== null) {
           this.applyTargetStatChange(attacker, defender, targetChanges);
         }
-        return { success: true };
+        return effectApplied();
       }
     }
 
     // 状態異常の付与は変化技だけが持つ効果（ダメージ技の追加効果は secondaryEffect が担当する）。
     if (isStatusMove(move) && move.status !== null) {
-      return this.inflictStatusCondition(defender, move.status);
+      return this.inflictStatusCondition(defender, move.status, statusMovePivot);
     }
 
     // ここに到達する変化技は、対応する効果フィールドを持たないもの（まもる・はねる等の未実装技）。
     // 威力0のためダメージ計算に進めても何も起きないので、この時点で解決を終える。
     if (isStatusMove(move)) {
       this.log.push('しかし何も起こらなかった');
-      const statusMovePivot = move.pivot === true && !attacker.isFainted;
-      return { success: true, damage: 0, effectiveness: 1, pivot: statusMovePivot };
+      return noEffect('no-applicable-effect');
     }
 
     // --- ここから先、move は DamageMoveData（物理・特殊）に絞り込まれている ---
@@ -701,7 +702,7 @@ export class BattleEngine {
       if (move.selfStatChange) {
         this.applySelfStatChange(attacker, move.selfStatChange);
       }
-      return { success: true, damage: 0, effectiveness: 0 };
+      return { outcome: 'no-effect', reason: 'type-immune', pivot: false };
     }
 
     this.log.push(`${defender.name}に${totalDamage}のダメージ`);
@@ -746,7 +747,7 @@ export class BattleEngine {
     // 相手を倒しきった場合も本編では交代が発生するが、使用者自身が倒れていたら交代はしない。
     const pivot = move.pivot === true && !attacker.isFainted;
 
-    return { success: true, damage: totalDamage, effectiveness: lastEffectiveness, pivot };
+    return { outcome: 'damaged', damage: totalDamage, effectiveness: lastEffectiveness, pivot };
   }
 
   // 通常配分（2発37.5%/3発37.5%/4発12.5%/5発12.5%）でヒット数を決める。
@@ -785,21 +786,27 @@ export class BattleEngine {
   }
 
   // 変化技による状態異常の付与を解決する。タイプ無効化を先に判定してから付与する。
-  private inflictStatusCondition(defender: Pokemon, status: StatusCondition): UseMoveResult {
+  // 既に別の状態異常なら付与できないため、その場合も「効果がなかった」として返す。
+  private inflictStatusCondition(
+    defender: Pokemon,
+    status: StatusCondition,
+    pivot: boolean
+  ): UseMoveResult {
     const immuneTypes = STATUS_IMMUNE_TYPES[status] ?? [];
     const isImmuneByType = immuneTypes.some((type) => defender.types.includes(type));
     if (isImmuneByType) {
       this.log.push('効果がない');
-      return { success: true };
+      return { outcome: 'no-effect', reason: 'status-immune', pivot };
     }
 
     const applied = defender.applyStatus(status);
-    if (applied) {
-      this.log.push(`${defender.name}は${status}状態になった`);
-    } else {
+    if (!applied) {
       this.log.push('効果がない');
+      return { outcome: 'no-effect', reason: 'status-immune', pivot };
     }
-    return { success: true, status };
+
+    this.log.push(`${defender.name}は${status}状態になった`);
+    return { outcome: 'status-inflicted', status, pivot };
   }
 
   private applySelfStatChange(pokemon: Pokemon, changes: NonNullable<MoveData['selfStatChange']>): void {
