@@ -5,6 +5,8 @@ import type { Move } from '../src/move.js';
 import type { TypeName } from '../src/types.js';
 import type { AbilityName } from '../src/ability-names.js';
 import type { ItemName } from '../src/item-names.js';
+import { isMoveSuccessful, shouldPivotAfterMove } from '../src/use-move-result.js';
+import { asDamageResult } from './helpers/use-move-result.js';
 
 // 実数値計算はカテゴリだけを参照するため、カテゴリ以外は最小構成の技で足りる。
 const probeMove = (category: 'physical' | 'special'): Move =>
@@ -72,8 +74,8 @@ describe('BattleEngine', () => {
         name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 10, category: 'physical',
       }));
 
-      expect(result.success).toBe(true);
-      expect(result.effectiveness).toBe(2.0);
+      expect(isMoveSuccessful(result)).toBe(true);
+      expect(asDamageResult(result).effectiveness).toBe(2.0);
     });
 
     test('should handle immunity', () => {
@@ -99,7 +101,7 @@ describe('BattleEngine', () => {
         name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical',
       }));
 
-      expect(result.effectiveness).toBe(0);
+      expect(result).toMatchObject({ outcome: 'no-effect', reason: 'type-immune' });
     });
   });
 
@@ -236,7 +238,7 @@ describe('BattleEngine', () => {
         name: 'outrage', type: 'dragon', power: 120, category: 'physical',
       }));
 
-      expect(result.effectiveness).toBe(2.0);
+      expect(asDamageResult(result).effectiveness).toBe(2.0);
     });
 
     test('should handle immunity', () => {
@@ -453,7 +455,7 @@ describe('BattleEngine', () => {
 
       const result = engine.useMove(attacker, defender, move);
 
-      expect(result.success).toBe(false);
+      expect(isMoveSuccessful(result)).toBe(false);
       expect(move.pp).toBe(4);
     });
 
@@ -476,7 +478,7 @@ describe('BattleEngine', () => {
 
       const result = engine.useMove(attacker, defender, move);
 
-      expect(result.success).toBe(false);
+      expect(isMoveSuccessful(result)).toBe(false);
       expect(move.pp).toBe(0);
       expect(defender.currentHP).toBe(defender.maxHP);
     });
@@ -530,8 +532,8 @@ describe('Integration Tests', () => {
       name: 'earthquake', type: 'ground', power: 100, category: 'physical',
     }));
 
-    expect(result.success).toBe(true);
-    expect(result.damage).toBeGreaterThan(0);
+    expect(isMoveSuccessful(result)).toBe(true);
+    expect(asDamageResult(result).damage).toBeGreaterThan(0);
     expect(engine.turn).toBe(1);
   });
 
@@ -677,7 +679,7 @@ describe('Weather Ball dynamic typing', () => {
 
     const result = engine.useMove(attacker, defender, attacker.moves[0]);
 
-    expect(result.effectiveness).toBe(2);
+    expect(asDamageResult(result).effectiveness).toBe(2);
   });
 });
 
@@ -714,7 +716,7 @@ describe('変化技によるまひ付与のタイプ無効化', () => {
 
     // Assert
     expect(defender.status).toBeNull();
-    expect(result.status).toBeUndefined();
+    expect(result.outcome).not.toBe('status-inflicted');
   });
 
   test('じめんタイプはノーマルの変化技ならまひする', () => {
@@ -728,7 +730,7 @@ describe('変化技によるまひ付与のタイプ無効化', () => {
 
     // Assert
     expect(defender.status).toBe('paralysis');
-    expect(result.status).toBe('paralysis');
+    expect(result).toMatchObject({ outcome: 'status-inflicted', status: 'paralysis' });
   });
 
   test('でんじははタイプ相性でじめんタイプに無効', () => {
@@ -742,7 +744,7 @@ describe('変化技によるまひ付与のタイプ無効化', () => {
 
     // Assert
     expect(defender.status).toBeNull();
-    expect(result.effectiveness).toBe(0);
+    expect(result).toMatchObject({ outcome: 'no-effect', reason: 'type-immune' });
   });
 });
 
@@ -773,7 +775,7 @@ describe('変化技のタイプ相性', () => {
 
     // Assert
     expect(steel.status).toBeNull();
-    expect(result.effectiveness).toBe(0);
+    expect(result).toMatchObject({ outcome: 'no-effect', reason: 'type-immune' });
   });
 
   test('0倍以外の相性（いまひとつ）は変化技の効果に影響しない', () => {
@@ -789,7 +791,7 @@ describe('変化技のタイプ相性', () => {
 
     // Assert
     expect(target.status).toBe('burn');
-    expect(result.status).toBe('burn');
+    expect(result).toMatchObject({ outcome: 'status-inflicted', status: 'burn' });
   });
 
   test('相手を対象に取らない変化技はタイプ相性の影響を受けない', () => {
@@ -808,7 +810,7 @@ describe('変化技のタイプ相性', () => {
 
     // Assert
     expect(user.statStages.ATK).toBe(2);
-    expect(result.success).toBe(true);
+    expect(isMoveSuccessful(result)).toBe(true);
   });
 
   test('きもったまはノーマルの変化技をゴーストタイプに通す', () => {
@@ -823,7 +825,7 @@ describe('変化技のタイプ相性', () => {
 
     // Assert
     expect(ghost.status).toBe('paralysis');
-    expect(result.status).toBe('paralysis');
+    expect(result).toMatchObject({ outcome: 'status-inflicted', status: 'paralysis' });
   });
 
   test('きもったまを持たなければノーマルの変化技はゴーストタイプに無効', () => {
@@ -838,7 +840,7 @@ describe('変化技のタイプ相性', () => {
 
     // Assert
     expect(ghost.status).toBeNull();
-    expect(result.effectiveness).toBe(0);
+    expect(result).toMatchObject({ outcome: 'no-effect', reason: 'type-immune' });
   });
 });
 
@@ -979,7 +981,7 @@ describe('Self stat-change moves', () => {
 
     const result = engine.useMove(user, target, swordsDance);
 
-    expect(result.success).toBe(true);
+    expect(isMoveSuccessful(result)).toBe(true);
     expect(user.statStages.ATK).toBe(2);
     expect(target.currentHP).toBe(target.maxHP);
   });
@@ -1001,8 +1003,8 @@ describe('Self stat-change moves', () => {
 
     const result = engine.useMove(user, target, leafStorm);
 
-    expect(result.success).toBe(true);
-    expect(result.damage).toBeGreaterThan(0);
+    expect(isMoveSuccessful(result)).toBe(true);
+    expect(asDamageResult(result).damage).toBeGreaterThan(0);
     expect(user.statStages.SPATK).toBe(-2);
   });
 
@@ -1077,8 +1079,8 @@ describe('Reflect', () => {
     engine.field.reflect.playerB = 5;
     const withReflect = engine.useMove(attacker, reflectDefender, attacker.moves[0]);
 
-    expect(withReflect.damage).toBeLessThan(withoutReflect.damage!);
-    expect(withReflect.damage).toBe(Math.floor(withoutReflect.damage! / 2));
+    expect(asDamageResult(withReflect).damage).toBeLessThan(asDamageResult(withoutReflect).damage);
+    expect(asDamageResult(withReflect).damage).toBe(Math.floor(asDamageResult(withoutReflect).damage / 2));
   });
 
   test('decrements each turn and expires after 5 turns', () => {
@@ -1168,7 +1170,7 @@ describe('変化技による能力ランク変化（にらみつける等）', (
 
     // Assert
     expect(defender.statStages.ATK).toBe(-1);
-    expect(result.success).toBe(true);
+    expect(isMoveSuccessful(result)).toBe(true);
   });
 
   test('自分と相手の両方を変化させる変化技は双方に適用される', () => {
@@ -1201,7 +1203,7 @@ describe('変化技による能力ランク変化（にらみつける等）', (
 
     // Assert
     expect(ghost.statStages.ATK).toBe(0);
-    expect(result.effectiveness).toBe(0);
+    expect(result).toMatchObject({ outcome: 'no-effect', reason: 'type-immune' });
   });
 
   test('しろいハーブは変化技による能力低下も1回だけ防ぐ', () => {
@@ -1343,7 +1345,7 @@ describe('Multi-hit moves (ロックブラスト等)', () => {
 
       const result = engine.useMove(attacker, defender, attacker.moves[0]);
 
-      expect(result.damage).toBe(singleHit.damage! * 5);
+      expect(asDamageResult(result).damage).toBe(asDamageResult(singleHit).damage * 5);
     } finally {
       randomSpy.mockRestore();
     }
@@ -1359,7 +1361,7 @@ describe('Multi-hit moves (ロックブラスト等)', () => {
     try {
       const result = engine.useMove(attacker, defender, attacker.moves[0]);
       expect(defender.isFainted).toBe(true);
-      expect(result.damage).toBeGreaterThan(0);
+      expect(asDamageResult(result).damage).toBeGreaterThan(0);
     } finally {
       randomSpy.mockRestore();
     }
@@ -1394,7 +1396,7 @@ describe('こだわり系アイテムの威力補正', () => {
     const plain = engine.useMove(makeAttacker(null), makeDefender(), makeMove());
     const banded = engine.useMove(makeAttacker('choice-band'), makeDefender(), makeMove());
 
-    expect(banded.damage).toBeGreaterThan(plain.damage!);
+    expect(asDamageResult(banded).damage).toBeGreaterThan(asDamageResult(plain).damage);
   });
 
   test('こだわりメガネは特殊技の威力を1.5倍にするが物理技には効かない', () => {
@@ -1404,11 +1406,11 @@ describe('こだわり系アイテムの威力補正', () => {
 
     const plainSpecial = engine.useMove(makeAttacker(null), makeDefender(), makeSpecial());
     const specsSpecial = engine.useMove(makeAttacker('choice-specs'), makeDefender(), makeSpecial());
-    expect(specsSpecial.damage).toBeGreaterThan(plainSpecial.damage!);
+    expect(asDamageResult(specsSpecial).damage).toBeGreaterThan(asDamageResult(plainSpecial).damage);
 
     const plainPhysical = engine.useMove(makeAttacker(null), makeDefender(), makePhysical());
     const specsPhysical = engine.useMove(makeAttacker('choice-specs'), makeDefender(), makePhysical());
-    expect(specsPhysical.damage).toBe(plainPhysical.damage);
+    expect(asDamageResult(specsPhysical).damage).toBe(asDamageResult(plainPhysical).damage);
   });
 });
 
@@ -1440,8 +1442,8 @@ describe('pivot技 (とんぼがえり/ボルトチェンジ/クイックター�
       name: 'u-turn', type: 'bug', power: 70, accuracy: 100, category: 'physical', pivot: true,
     }));
 
-    expect(result.success).toBe(true);
-    expect(result.pivot).toBe(true);
+    expect(isMoveSuccessful(result)).toBe(true);
+    expect(shouldPivotAfterMove(result)).toBe(true);
   });
 
   test('通常の技はpivot=falseを返す', () => {
@@ -1451,7 +1453,7 @@ describe('pivot技 (とんぼがえり/ボルトチェンジ/クイックター�
       name: 'bullet-punch', type: 'steel', power: 40, accuracy: 100, category: 'physical',
     }));
 
-    expect(result.pivot).toBe(false);
+    expect(shouldPivotAfterMove(result)).toBe(false);
   });
 
   test('技を外した場合はpivotが立たない', () => {
@@ -1462,8 +1464,8 @@ describe('pivot技 (とんぼがえり/ボルトチェンジ/クイックター�
       name: 'u-turn', type: 'bug', power: 70, accuracy: 50, category: 'physical', pivot: true,
     }));
 
-    expect(result.success).toBe(false);
-    expect(result.pivot).toBeUndefined();
+    expect(isMoveSuccessful(result)).toBe(false);
+    expect(shouldPivotAfterMove(result)).toBe(false);
 
     randomSpy.mockRestore();
   });
@@ -1497,7 +1499,7 @@ describe('Taunt (ちょうはつ)', () => {
     expect(attacker.isTaunted).toBe(true);
 
     const result = engine.useMove(attacker, defender, attacker.moves[0]); // earthquake (physical)
-    expect(result.success).toBe(false);
+    expect(isMoveSuccessful(result)).toBe(false);
     expect(defender.currentHP).toBe(defender.maxHP); // no damage dealt
   });
 
@@ -1509,7 +1511,7 @@ describe('Taunt (ちょうはつ)', () => {
     attacker.applyTaunt(3);
 
     const result = engine.useMove(attacker, defender, attacker.moves[1]); // swords-dance (status)
-    expect(result.success).toBe(true);
+    expect(isMoveSuccessful(result)).toBe(true);
     expect(attacker.statStages.ATK).toBe(2);
   });
 
@@ -1573,8 +1575,8 @@ describe('Mental Herb (メンタルハーブ)', () => {
     expect(attacker.isTaunted).toBe(true);
 
     const result = engine.useMove(attacker, defender, attacker.moves[0]);
-    expect(result.success).toBe(true);
-    expect(result.damage).toBeGreaterThan(0);
+    expect(isMoveSuccessful(result)).toBe(true);
+    expect(asDamageResult(result).damage).toBeGreaterThan(0);
     expect(attacker.isTaunted).toBe(false); // taunt cured
     expect(attacker.itemUsed).toBe(true); // herb consumed
   });
@@ -1606,7 +1608,7 @@ describe('Mental Herb (メンタルハーブ)', () => {
 
     // Second attempt: herb already used, taunt blocks
     const result = engine.useMove(attacker, defender, attacker.moves[0]);
-    expect(result.success).toBe(false);
+    expect(isMoveSuccessful(result)).toBe(false);
   });
 
   test('mental herb does not cure taunt if already used', () => {
@@ -1626,7 +1628,7 @@ describe('Mental Herb (メンタルハーブ)', () => {
     attacker.applyTaunt(3);
 
     const result = engine.useMove(attacker, defender, attacker.moves[0]);
-    expect(result.success).toBe(false); // still taunted
+    expect(isMoveSuccessful(result)).toBe(false); // still taunted
     expect(attacker.isTaunted).toBe(true);
   });
 
@@ -1651,12 +1653,12 @@ describe('Mental Herb (メンタルハーブ)', () => {
       const move = statusMove('stealth-rock', 'stealth-rock');
 
       const r1 = e.useMove(a, d, move);
-      expect(r1.success).toBe(true);
+      expect(isMoveSuccessful(r1)).toBe(true);
       expect(e.field.stealthRock.playerA).toBe(true);
 
       // 2回目も技は成功するが「既に設置済み」
       const r2 = e.useMove(a, d, move);
-      expect(r2.success).toBe(true);
+      expect(isMoveSuccessful(r2)).toBe(true);
       expect(e.field.stealthRock.playerA).toBe(true);
     });
 
