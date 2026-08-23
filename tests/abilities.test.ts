@@ -1,6 +1,7 @@
+import { createMove } from "../src/move.js";
 import { BattleEngine } from '../src/battle-engine.js';
 import { Pokemon } from '../src/pokemon.js';
-import { Move } from '../src/move.js';
+
 import { ABILITY_REGISTRY, getAbilityDefinition } from '../src/rules/abilities/registry.js';
 
 function makeWeatherSetter(ability: string): Pokemon {
@@ -79,9 +80,9 @@ describe('ぼうだん (Bulletproof)', () => {
   test('blocksMove reports ball/bomb moves only', () => {
     const bulletproof = getAbilityDefinition('bulletproof');
 
-    expect(bulletproof?.blocksMove?.(new Move({ name: 'focus-blast', type: 'fighting', power: 120, category: 'special' }))).toBe(true);
-    expect(bulletproof?.blocksMove?.(new Move({ name: 'shadow-ball', type: 'ghost', power: 80, category: 'special' }))).toBe(true);
-    expect(bulletproof?.blocksMove?.(new Move({ name: 'thunderbolt', type: 'electric', power: 90, category: 'special' }))).toBe(false);
+    expect(bulletproof?.blocksMove?.(createMove({ name: 'focus-blast', type: 'fighting', power: 120, category: 'special' }))).toBe(true);
+    expect(bulletproof?.blocksMove?.(createMove({ name: 'shadow-ball', type: 'ghost', power: 80, category: 'special' }))).toBe(true);
+    expect(bulletproof?.blocksMove?.(createMove({ name: 'thunderbolt', type: 'electric', power: 90, category: 'special' }))).toBe(false);
   });
 
   test('a ball/bomb move deals no damage to a Bulletproof Pokemon', () => {
@@ -90,7 +91,7 @@ describe('ぼうだん (Bulletproof)', () => {
     const defender = makeBulletproofDefender();
     const hpBefore = defender.currentHP;
 
-    const result = engine.useMove(attacker, defender, new Move({
+    const result = engine.useMove(attacker, defender, createMove({
       name: 'focus-blast', type: 'fighting', power: 120, accuracy: 100, category: 'special',
     }));
 
@@ -104,7 +105,7 @@ describe('ぼうだん (Bulletproof)', () => {
     const attacker = makeAttacker();
     const defender = makeBulletproofDefender();
 
-    const result = engine.useMove(attacker, defender, new Move({
+    const result = engine.useMove(attacker, defender, createMove({
       name: 'thunderbolt', type: 'electric', power: 90, accuracy: 100, category: 'special',
     }));
 
@@ -114,7 +115,7 @@ describe('ぼうだん (Bulletproof)', () => {
 
   test('PP is consumed even when the move is blocked', () => {
     const engine = new BattleEngine();
-    const move = new Move({ name: 'focus-blast', type: 'fighting', power: 120, accuracy: 100, category: 'special', pp: 5, maxPP: 5 });
+    const move = createMove({ name: 'focus-blast', type: 'fighting', power: 120, accuracy: 100, category: 'special', pp: 5, maxPP: 5 });
 
     engine.useMove(makeAttacker(), makeBulletproofDefender(), move);
 

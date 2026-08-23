@@ -3,7 +3,8 @@ import { TYPE_CHART } from './type-chart.js';
 import { BattleField } from './battle-field.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
 import type { Pokemon } from './pokemon.js';
-import type { MoveData, StatStageKey, TypeName, WeatherType, TypeChart } from './types.js';
+import type { MoveData, StatusCondition, StatStageKey, TypeName, WeatherType, TypeChart } from './types.js';
+import { isDamageMove, isPhysicalMove, isSpecialMove, isStatusMove, cloneDamageMove, targetsOpponent } from './move.js';
 
 export interface UseMoveResult {
   success: boolean;
@@ -51,6 +52,16 @@ const MULTI_HIT_TABLE: { hits: number; weight: number }[] = [
   { hits: 4, weight: 0.125 },
   { hits: 5, weight: 0.125 },
 ];
+
+// 変化技による状態異常付与を無効化するタイプ。
+// 該当タイプを1つでも持つ相手には状態異常が入らない。
+// じめんタイプはでんじはを無効化するが、まひそのものは通るため paralysis には含めない。
+const STATUS_IMMUNE_TYPES: Partial<Record<StatusCondition, TypeName[]>> = {
+  paralysis: ['electric'],
+  burn: ['fire'],
+  sleep: ['grass'],
+  poison: ['steel'],
+};
 
 export class BattleEngine {
   events: EventEmitter;
@@ -212,8 +223,8 @@ export class BattleEngine {
     });
   }
 
-  calculateAttack(attacker: Pokemon, move: { category: string }): number {
-    const statKey: StatStageKey = move.category === 'physical' ? 'ATK' : 'SPATK';
+  calculateAttack(attacker: Pokemon, move: MoveData): number {
+    const statKey: StatStageKey = isPhysicalMove(move) ? 'ATK' : 'SPATK';
     // 防御側がてんねん(ignoresOpponentStatChanges)なら、攻撃側の能力ランクを無視する。
     const defender = this.getOpponent(attacker);
     const ignoreStages = defender
@@ -222,13 +233,13 @@ export class BattleEngine {
     const stageMultiplier = ignoreStages ? 1 : attacker.getStatStageMultiplier(statKey);
     let attack = Math.floor(attacker.stats[statKey] * stageMultiplier);
 
-    if (attacker.status === 'burn' && move.category === 'physical') {
+    if (attacker.status === 'burn' && isPhysicalMove(move)) {
       attack = Math.floor(attack / 2);
     }
 
     const ability = getAbilityDefinition(attacker.ability);
     if (ability?.modifyAttack) {
-      attack = ability.modifyAttack({ pokemon: attacker, move: move as MoveData, value: attack, engine: this });
+      attack = ability.modifyAttack({ pokemon: attacker, move, value: attack, engine: this });
     }
 
     this.events.emit('calculate-attack', { attacker, move, attack });
@@ -236,8 +247,8 @@ export class BattleEngine {
     return attack;
   }
 
-  calculateDefense(defender: Pokemon, move: { category: string }): number {
-    const statKey: StatStageKey = move.category === 'physical' ? 'DEF' : 'SPDEF';
+  calculateDefense(defender: Pokemon, move: MoveData): number {
+    const statKey: StatStageKey = isPhysicalMove(move) ? 'DEF' : 'SPDEF';
     // 攻撃側がてんねん(ignoresOpponentStatChanges)なら、防御側の能力ランクを無視する。
     const attacker = this.getOpponent(defender);
     const ignoreStages = attacker
@@ -250,7 +261,7 @@ export class BattleEngine {
     // かたやぶり（mold-breaker）持ちの攻撃は防御側の特性（あついしぼう等）を無視する
     const moldBreaker = attacker ? attacker.ability === 'mold-breaker' : false;
     if (ability?.modifyDefense && !moldBreaker) {
-      defense = ability.modifyDefense({ pokemon: defender, move: move as MoveData, value: defense, engine: this });
+      defense = ability.modifyDefense({ pokemon: defender, move, value: defense, engine: this });
     }
 
     this.events.emit('calculate-defense', { defender, move, defense });
@@ -290,22 +301,28 @@ export class BattleEngine {
     return effectiveness;
   }
 
-  applyModifiers(baseDamage: number, attacker: Pokemon, defender: Pokemon, move: MoveData): { finalDamage: number; effectiveness: number } {
-    let effectiveness = this.getTypeEffectiveness(move.type, defender.types);
+  // タイプ相性を求める。攻撃側の特性による補正（きもったま等）も反映する。
+  // 変化技の無効判定とダメージ技の倍率計算の双方から使う。
+  resolveTypeEffectiveness(attacker: Pokemon, defender: Pokemon, move: MoveData): number {
+    const baseEffectiveness = this.getTypeEffectiveness(move.type, defender.types);
     // 攻撃側の特性によるタイプ相性補正（きもったま: Normal/Fighting→Ghost 有効化等）
     const attackerAbility = getAbilityDefinition(attacker.ability);
-    if (attackerAbility?.modifyTypeEffectiveness) {
-      effectiveness = attackerAbility.modifyTypeEffectiveness({
-        attackType: move.type,
-        defenderTypes: defender.types,
-        effectiveness,
-        engine: this,
-      });
-    }
+    if (!attackerAbility?.modifyTypeEffectiveness) return baseEffectiveness;
+
+    return attackerAbility.modifyTypeEffectiveness({
+      attackType: move.type,
+      defenderTypes: defender.types,
+      effectiveness: baseEffectiveness,
+      engine: this,
+    });
+  }
+
+  applyModifiers(baseDamage: number, attacker: Pokemon, defender: Pokemon, move: MoveData): { finalDamage: number; effectiveness: number } {
+    const effectiveness = this.resolveTypeEffectiveness(attacker, defender, move);
     let finalDamage = Math.floor(baseDamage * effectiveness);
 
     const defenderSide = this.getSide(defender);
-    if (move.category === 'physical' && defenderSide !== null && this.field.reflect[this.sideKey(defenderSide)] > 0) {
+    if (isPhysicalMove(move) && defenderSide !== null && this.field.reflect[this.sideKey(defenderSide)] > 0) {
       finalDamage = Math.floor(finalDamage / 2);
     }
 
@@ -367,7 +384,7 @@ export class BattleEngine {
 
     // マジックミラー（magic-bounce）: 変化技を跳ね返す（対象を入れ替えて再適用）。
     // 両者マジックミラーなら跳ね返し合いにならない（1回だけ跳ね返す）。
-    if (move.category === 'status' && defender.ability === 'magic-bounce' && attacker.ability !== 'magic-bounce') {
+    if (isStatusMove(move) && defender.ability === 'magic-bounce' && attacker.ability !== 'magic-bounce') {
       this.log.push(`${defender.name}のマジックミラーが${attacker.name}の${move.name}を跳ね返した！`);
       return this.useMove(defender, attacker, move);
     }
@@ -389,7 +406,7 @@ export class BattleEngine {
 
     // ちょうはつ: 攻撃技（category !== 'status'）の使用を阻止する。
     // メンタルハーブ: ちょうはつを1回だけ解除して技を通す（消費される）。
-    if (attacker.isTaunted && move.category !== 'status') {
+    if (attacker.isTaunted && isDamageMove(move)) {
       if (attacker.item === 'mental-herb' && !attacker.itemUsed) {
         attacker.resetTaunt();
         attacker.itemUsed = true;
@@ -413,6 +430,17 @@ export class BattleEngine {
       return { success: false };
     }
 
+    // 相手を対象に取る変化技は、タイプ相性が0倍なら命中判定より前に無効化される
+    // （でんじは→じめん、にらみつける→ゴースト等）。威力を持たないため、
+    // 0倍以外の倍率（抜群・いまひとつ）は変化技の効果に影響しない。
+    if (isStatusMove(move) && targetsOpponent(move)) {
+      const statusMoveEffectiveness = this.resolveTypeEffectiveness(attacker, defender, move);
+      if (statusMoveEffectiveness === 0) {
+        this.log.push('効果がなかった');
+        return { success: true, damage: 0, effectiveness: 0 };
+      }
+    }
+
     if (move.accuracy < 100) {
       // ノーガード(no-guard): 攻撃側・防御側どちらかが持てば命中率100%になる。
       const attackerNoGuard = getAbilityDefinition(attacker.ability)?.name === 'no-guard';
@@ -420,7 +448,7 @@ export class BattleEngine {
       if (!attackerNoGuard && !defenderNoGuard && Math.random() * 100 > move.accuracy) {
         this.log.push('技は外れた');
         // 飛び膝蹴り等のクラッシュダメージ（最大HPの50%）
-        if (move.crashDamage) {
+        if (isDamageMove(move) && move.crashDamage) {
           const crashDmg = Math.floor(attacker.maxHP / 2);
           this.applyDamage(attacker, crashDmg, attacker, move);
           this.log.push(`${attacker.name}は技がはずれてダメージを受けた！`);
@@ -543,41 +571,38 @@ export class BattleEngine {
       return { success: true };
     }
 
-    if (move.selfStatChange && move.power === 0) {
-      this.applySelfStatChange(attacker, move.selfStatChange);
-      return { success: true };
+    // 能力ランク変化だけを行う変化技（つるぎのまい・にらみつける等）。
+    // 自分と相手の両方を変化させる技もあるため、どちらも適用してから終える。
+    // 威力を持つ技の selfStatChange（リーフストーム等）はダメージ解決後に適用する。
+    if (isStatusMove(move)) {
+      const selfChanges = move.selfStatChange ?? null;
+      const targetChanges = move.targetStatChange ?? null;
+
+      if (selfChanges !== null || targetChanges !== null) {
+        if (selfChanges !== null) {
+          this.applySelfStatChange(attacker, selfChanges);
+        }
+        if (targetChanges !== null) {
+          this.applyTargetStatChange(attacker, defender, targetChanges);
+        }
+        return { success: true };
+      }
     }
 
-    if (move.status) {
-      // タイプによる状態異常無効化
-      if (move.status === 'paralysis' && defender.types.includes('electric')) {
-        this.log.push('効果がない');
-        return { success: true };
-      }
-      if (move.status === 'paralysis' && defender.types.includes('ground')) {
-        this.log.push('効果がない');
-        return { success: true };
-      }
-      if (move.status === 'burn' && defender.types.includes('fire')) {
-        this.log.push('効果がない');
-        return { success: true };
-      }
-      if (move.status === 'sleep' && defender.types.includes('grass')) {
-        this.log.push('効果がない');
-        return { success: true };
-      }
-      if (move.status === 'poison' && defender.types.includes('steel')) {
-        this.log.push('効果がない');
-        return { success: true };
-      }
-      const applied = defender.applyStatus(move.status);
-      if (applied) {
-        this.log.push(`${defender.name}は${move.status}状態になった`);
-      } else {
-        this.log.push('効果がない');
-      }
-      return { success: true, status: move.status };
+    // 状態異常の付与は変化技だけが持つ効果（ダメージ技の追加効果は secondaryEffect が担当する）。
+    if (isStatusMove(move) && move.status !== null) {
+      return this.inflictStatusCondition(defender, move.status);
     }
+
+    // ここに到達する変化技は、対応する効果フィールドを持たないもの（まもる・はねる等の未実装技）。
+    // 威力0のためダメージ計算に進めても何も起きないので、この時点で解決を終える。
+    if (isStatusMove(move)) {
+      this.log.push('しかし何も起こらなかった');
+      const statusMovePivot = move.pivot === true && !attacker.isFainted;
+      return { success: true, damage: 0, effectiveness: 1, pivot: statusMovePivot };
+    }
+
+    // --- ここから先、move は DamageMoveData（物理・特殊）に絞り込まれている ---
 
     // ウェザーボールは天候下でタイプが変化する。
     let effectiveType = move.name === 'weather-ball' && this.weather && WEATHER_BALL_TYPE[this.weather]
@@ -608,9 +633,9 @@ export class BattleEngine {
     }
 
     // こだわりハチマキ/メガネは該当カテゴリの威力を1.5倍にする（技は使用後に固定される）。
-    if (attacker.item === 'choice-band' && move.category === 'physical') {
+    if (attacker.item === 'choice-band' && isPhysicalMove(move)) {
       power *= 1.5;
-    } else if (attacker.item === 'choice-specs' && move.category === 'special') {
+    } else if (attacker.item === 'choice-specs' && isSpecialMove(move)) {
       power *= 1.5;
     }
 
@@ -620,7 +645,7 @@ export class BattleEngine {
       power = powerAbility.modifyMovePower({ pokemon: attacker, move, value: power, engine: this });
     }
 
-    const moveWithStab: MoveData = { ...move, power, type: effectiveType };
+    const moveWithStab = cloneDamageMove(move, { power, type: effectiveType });
 
     // おやこあい: 攻撃技が2回ヒットする（2回目は威力1/4）。命中判定は1回（本編仕様）。
     const isParentalBond = attacker.ability === 'parental-bond';
@@ -642,7 +667,7 @@ export class BattleEngine {
       } else if (isParentalBond && hit > 0) {
         hitPower = Math.floor(moveWithStab.power / 4);
       }
-      const hitMove: MoveData = { ...moveWithStab, power: hitPower };
+      const hitMove = cloneDamageMove(moveWithStab, { power: hitPower });
 
       const attack = this.calculateAttack(attacker, hitMove);
       const defense = this.calculateDefense(defender, hitMove);
@@ -754,6 +779,24 @@ export class BattleEngine {
       const direction = applied > 0 ? '上がった' : '下がった';
       this.log.push(`${pokemon.name}の${change.stat}が${direction}`);
     }
+  }
+
+  // 変化技による状態異常の付与を解決する。タイプ無効化を先に判定してから付与する。
+  private inflictStatusCondition(defender: Pokemon, status: StatusCondition): UseMoveResult {
+    const immuneTypes = STATUS_IMMUNE_TYPES[status] ?? [];
+    const isImmuneByType = immuneTypes.some((type) => defender.types.includes(type));
+    if (isImmuneByType) {
+      this.log.push('効果がない');
+      return { success: true };
+    }
+
+    const applied = defender.applyStatus(status);
+    if (applied) {
+      this.log.push(`${defender.name}は${status}状態になった`);
+    } else {
+      this.log.push('効果がない');
+    }
+    return { success: true, status };
   }
 
   private applySelfStatChange(pokemon: Pokemon, changes: NonNullable<MoveData['selfStatChange']>): void {

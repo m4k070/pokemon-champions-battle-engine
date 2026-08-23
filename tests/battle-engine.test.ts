@@ -1,6 +1,12 @@
 import { BattleEngine } from '../src/battle-engine.js';
 import { Pokemon } from '../src/pokemon.js';
-import { Move } from '../src/move.js';
+import { createMove } from '../src/move.js';
+import type { Move } from '../src/move.js';
+import type { TypeName } from '../src/types.js';
+
+// 実数値計算はカテゴリだけを参照するため、カテゴリ以外は最小構成の技で足りる。
+const probeMove = (category: 'physical' | 'special'): Move =>
+  createMove({ name: `probe-${category}`, type: 'normal', power: 1, category });
 
 describe('BattleEngine', () => {
   let engine: BattleEngine;
@@ -20,7 +26,7 @@ describe('BattleEngine', () => {
       });
 
       attacker.status = 'burn';
-      const attack = engine.calculateAttack(attacker, { category: 'physical' });
+      const attack = engine.calculateAttack(attacker, probeMove('physical'));
       expect(attack).toBeLessThan(120);
     });
   });
@@ -35,7 +41,7 @@ describe('BattleEngine', () => {
         baseStats: { HP: 95, ATK: 65, DEF: 65, SPATK: 110, SPDEF: 130, SPEED: 60 },
       });
 
-      const defense = engine.calculateDefense(defender, { category: 'special' });
+      const defense = engine.calculateDefense(defender, probeMove('special'));
       expect(defense).toBeGreaterThan(0);
     });
   });
@@ -60,7 +66,7 @@ describe('BattleEngine', () => {
         baseStats: { HP: 91, ATK: 134, DEF: 95, SPATK: 100, SPDEF: 100, SPEED: 80 },
       });
 
-      const result = engine.useMove(attacker, defender, new Move({
+      const result = engine.useMove(attacker, defender, createMove({
         name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 10, category: 'physical',
       }));
 
@@ -87,7 +93,7 @@ describe('BattleEngine', () => {
         baseStats: { HP: 85, ATK: 50, DEF: 95, SPATK: 120, SPDEF: 115, SPEED: 80 },
       });
 
-      const result = engine.useMove(attacker, defender, new Move({
+      const result = engine.useMove(attacker, defender, createMove({
         name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical',
       }));
 
@@ -122,7 +128,7 @@ describe('BattleEngine', () => {
       engine.switchIn(garchomp, [garchomp]);
 
       expect(garchomp.statStages.ATK).toBe(-1);
-      expect(engine.calculateAttack(garchomp, { category: 'physical' })).toBeLessThan(garchomp.stats.ATK);
+      expect(engine.calculateAttack(garchomp, probeMove('physical'))).toBeLessThan(garchomp.stats.ATK);
     });
   });
 
@@ -151,7 +157,7 @@ describe('BattleEngine', () => {
         ability: 'none',
         item: 'life-orb',
         baseStats: { HP: 100, ATK: 100, DEF: 50, SPATK: 50, SPDEF: 50, SPEED: 100 },
-        moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+        moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
       });
 
       const bench = new Pokemon({
@@ -186,7 +192,7 @@ describe('BattleEngine', () => {
         ability: 'none',
         item: 'life-orb',
         baseStats: { HP: 100, ATK: 100, DEF: 50, SPATK: 50, SPDEF: 50, SPEED: 100 },
-        moves: [new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 5, category: 'physical' })],
+        moves: [createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 5, category: 'physical' })],
       });
 
       const flyingDefender = new Pokemon({
@@ -224,7 +230,7 @@ describe('BattleEngine', () => {
         baseStats: { HP: 91, ATK: 134, DEF: 95, SPATK: 100, SPDEF: 100, SPEED: 80 },
       });
 
-      const result = engine.useMove(attacker, defender, new Move({
+      const result = engine.useMove(attacker, defender, createMove({
         name: 'outrage', type: 'dragon', power: 120, category: 'physical',
       }));
 
@@ -419,7 +425,7 @@ describe('BattleEngine', () => {
         item: null,
         baseStats: { HP: 85, ATK: 50, DEF: 95, SPATK: 120, SPDEF: 115, SPEED: 80 },
       });
-      const move = new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10 });
+      const move = createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10 });
 
       engine.useMove(attacker, defender, move);
 
@@ -441,7 +447,7 @@ describe('BattleEngine', () => {
         item: null,
         baseStats: { HP: 85, ATK: 50, DEF: 95, SPATK: 120, SPDEF: 115, SPEED: 80 },
       });
-      const move = new Move({ name: 'stone-edge', type: 'rock', power: 100, accuracy: 0, pp: 5 });
+      const move = createMove({ name: 'stone-edge', type: 'rock', power: 100, accuracy: 0, pp: 5 });
 
       const result = engine.useMove(attacker, defender, move);
 
@@ -464,7 +470,7 @@ describe('BattleEngine', () => {
         item: null,
         baseStats: { HP: 85, ATK: 50, DEF: 95, SPATK: 120, SPDEF: 115, SPEED: 80 },
       });
-      const move = new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 0 });
+      const move = createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 0 });
 
       const result = engine.useMove(attacker, defender, move);
 
@@ -518,7 +524,7 @@ describe('Integration Tests', () => {
 
     engine.startTurn();
 
-    const result = engine.useMove(teamA[0], teamB[0], new Move({
+    const result = engine.useMove(teamA[0], teamB[0], createMove({
       name: 'earthquake', type: 'ground', power: 100, category: 'physical',
     }));
 
@@ -571,13 +577,13 @@ describe('Stat stage integration', () => {
     const engine = new BattleEngine();
     const pokemon = makeAttacker();
 
-    const baseAttack = engine.calculateAttack(pokemon, { category: 'physical' });
+    const baseAttack = engine.calculateAttack(pokemon, probeMove('physical'));
     const baseSpeed = engine.calculateSpeed(pokemon);
 
     pokemon.modifyStatStage('ATK', 2); // x2
     pokemon.modifyStatStage('SPEED', -2); // x0.5
 
-    expect(engine.calculateAttack(pokemon, { category: 'physical' })).toBe(baseAttack * 2);
+    expect(engine.calculateAttack(pokemon, probeMove('physical'))).toBe(baseAttack * 2);
     expect(engine.calculateSpeed(pokemon)).toBe(Math.floor(baseSpeed * 0.5));
   });
 });
@@ -590,7 +596,7 @@ describe('Field-effect moves (Tailwind / Trick Room)', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: speed },
-      moves: [new Move({ name: 'tailwind', type: 'flying', power: 0, accuracy: 100, pp: 15, category: 'status', fieldEffect: 'tailwind' })],
+      moves: [createMove({ name: 'tailwind', type: 'flying', power: 0, accuracy: 100, pp: 15, category: 'status', fieldEffect: 'tailwind' })],
     });
   }
 
@@ -622,7 +628,7 @@ describe('Field-effect moves (Tailwind / Trick Room)', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 50 },
-      moves: [new Move({ name: 'trick-room', type: 'psychic', power: 0, accuracy: 100, pp: 5, category: 'status', fieldEffect: 'trick-room' })],
+      moves: [createMove({ name: 'trick-room', type: 'psychic', power: 0, accuracy: 100, pp: 5, category: 'status', fieldEffect: 'trick-room' })],
     });
     const other = new Pokemon({
       name: 'Other',
@@ -655,7 +661,7 @@ describe('Weather Ball dynamic typing', () => {
       ability: 'drizzle',
       item: null,
       baseStats: { HP: 60, ATK: 50, DEF: 100, SPATK: 95, SPDEF: 70, SPEED: 65 },
-      moves: [new Move({ name: 'weather-ball', type: 'normal', power: 50, accuracy: 100, pp: 10, category: 'special' })],
+      moves: [createMove({ name: 'weather-ball', type: 'normal', power: 50, accuracy: 100, pp: 10, category: 'special' })],
     });
 
     // 炎タイプは水技で2倍弱点になるはず（ノーマル技のままなら等倍のまま変化しないので判別できる）
@@ -673,6 +679,167 @@ describe('Weather Ball dynamic typing', () => {
   });
 });
 
+describe('変化技によるまひ付与のタイプ無効化', () => {
+  function makeParalyzer(): Pokemon {
+    return new Pokemon({
+      name: 'Paralyzer', types: ['normal'], ability: 'none', item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+    });
+  }
+
+  function makeTarget(name: string, types: TypeName[]): Pokemon {
+    return new Pokemon({
+      name, types, ability: 'none', item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+    });
+  }
+
+  // でんじは（でんきタイプ）とへびにらみ（ノーマルタイプ）は、いずれもまひを与える変化技。
+  // まひ耐性はタイプ相性とは別に判定されるため、技のタイプを変えて切り分ける。
+  const thunderWave = () =>
+    createMove({ name: 'thunder-wave', type: 'electric', category: 'status', accuracy: 100, pp: 20, status: 'paralysis' });
+  const glare = () =>
+    createMove({ name: 'glare', type: 'normal', category: 'status', accuracy: 100, pp: 30, status: 'paralysis' });
+
+  test('でんきタイプはまひしない', () => {
+    // Arrange
+    const engine = new BattleEngine();
+    const attacker = makeParalyzer();
+    const defender = makeTarget('Pikachu', ['electric']);
+
+    // Act
+    const result = engine.useMove(attacker, defender, glare());
+
+    // Assert
+    expect(defender.status).toBeNull();
+    expect(result.status).toBeUndefined();
+  });
+
+  test('じめんタイプはノーマルの変化技ならまひする', () => {
+    // Arrange
+    const engine = new BattleEngine();
+    const attacker = makeParalyzer();
+    const defender = makeTarget('Garchomp', ['dragon', 'ground']);
+
+    // Act
+    const result = engine.useMove(attacker, defender, glare());
+
+    // Assert
+    expect(defender.status).toBe('paralysis');
+    expect(result.status).toBe('paralysis');
+  });
+
+  test('でんじははタイプ相性でじめんタイプに無効', () => {
+    // Arrange
+    const engine = new BattleEngine();
+    const attacker = makeParalyzer();
+    const defender = makeTarget('Garchomp', ['dragon', 'ground']);
+
+    // Act
+    const result = engine.useMove(attacker, defender, thunderWave());
+
+    // Assert
+    expect(defender.status).toBeNull();
+    expect(result.effectiveness).toBe(0);
+  });
+});
+
+describe('変化技のタイプ相性', () => {
+  function makeUser(ability = 'none'): Pokemon {
+    return new Pokemon({
+      name: 'User', types: ['normal'], ability, item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+    });
+  }
+
+  function makeTarget(name: string, types: TypeName[]): Pokemon {
+    return new Pokemon({
+      name, types, ability: 'none', item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+    });
+  }
+
+  test('どく技の変化技ははがねタイプに無効', () => {
+    // Arrange
+    const engine = new BattleEngine();
+    const user = makeUser();
+    const steel = makeTarget('Steelix', ['steel', 'ground']);
+    const toxic = createMove({ name: 'toxic', type: 'poison', category: 'status', accuracy: 100, pp: 10, status: 'badly-poisoned' });
+
+    // Act
+    const result = engine.useMove(user, steel, toxic);
+
+    // Assert
+    expect(steel.status).toBeNull();
+    expect(result.effectiveness).toBe(0);
+  });
+
+  test('0倍以外の相性（いまひとつ）は変化技の効果に影響しない', () => {
+    // Arrange
+    const engine = new BattleEngine();
+    const user = makeUser();
+    // ほのお技はみずタイプに0.5倍だが、変化技なので効果はそのまま通る。
+    const target = makeTarget('Vaporeon', ['water']);
+    const willOWisp = createMove({ name: 'will-o-wisp', type: 'fire', category: 'status', accuracy: 100, pp: 15, status: 'burn' });
+
+    // Act
+    const result = engine.useMove(user, target, willOWisp);
+
+    // Assert
+    expect(target.status).toBe('burn');
+    expect(result.status).toBe('burn');
+  });
+
+  test('相手を対象に取らない変化技はタイプ相性の影響を受けない', () => {
+    // Arrange
+    const engine = new BattleEngine();
+    const user = makeUser();
+    // ノーマル技はゴーストに無効だが、つるぎのまいは自分が対象なので発動する。
+    const ghost = makeTarget('Gengar', ['ghost', 'poison']);
+    const swordsDance = createMove({
+      name: 'swords-dance', type: 'normal', category: 'status', accuracy: 100, pp: 20,
+      selfStatChange: [{ stat: 'ATK', delta: 2 }],
+    });
+
+    // Act
+    const result = engine.useMove(user, ghost, swordsDance);
+
+    // Assert
+    expect(user.statStages.ATK).toBe(2);
+    expect(result.success).toBe(true);
+  });
+
+  test('きもったまはノーマルの変化技をゴーストタイプに通す', () => {
+    // Arrange
+    const engine = new BattleEngine();
+    const scrappyUser = makeUser('scrappy');
+    const ghost = makeTarget('Gengar', ['ghost', 'poison']);
+    const glare = createMove({ name: 'glare', type: 'normal', category: 'status', accuracy: 100, pp: 30, status: 'paralysis' });
+
+    // Act
+    const result = engine.useMove(scrappyUser, ghost, glare);
+
+    // Assert
+    expect(ghost.status).toBe('paralysis');
+    expect(result.status).toBe('paralysis');
+  });
+
+  test('きもったまを持たなければノーマルの変化技はゴーストタイプに無効', () => {
+    // Arrange
+    const engine = new BattleEngine();
+    const user = makeUser();
+    const ghost = makeTarget('Gengar', ['ghost', 'poison']);
+    const glare = createMove({ name: 'glare', type: 'normal', category: 'status', accuracy: 100, pp: 30, status: 'paralysis' });
+
+    // Act
+    const result = engine.useMove(user, ghost, glare);
+
+    // Assert
+    expect(ghost.status).toBeNull();
+    expect(result.effectiveness).toBe(0);
+  });
+});
+
 describe('Secondary status effects', () => {
   test('applies the secondary status when the random roll is under the chance', () => {
     const engine = new BattleEngine();
@@ -685,7 +852,7 @@ describe('Secondary status effects', () => {
         ability: 'sturdy',
         item: null,
         baseStats: { HP: 80, ATK: 120, DEF: 130, SPATK: 55, SPDEF: 65, SPEED: 45 },
-        moves: [new Move({
+        moves: [createMove({
           name: 'ice-punch', type: 'ice', power: 75, accuracy: 100, pp: 15, category: 'physical',
           secondaryEffect: { status: 'freeze', chance: 10 },
         })],
@@ -717,7 +884,7 @@ describe('Secondary status effects', () => {
         ability: 'sturdy',
         item: null,
         baseStats: { HP: 80, ATK: 120, DEF: 130, SPATK: 55, SPDEF: 65, SPEED: 45 },
-        moves: [new Move({
+        moves: [createMove({
           name: 'ice-punch', type: 'ice', power: 75, accuracy: 100, pp: 15, category: 'physical',
           secondaryEffect: { status: 'freeze', chance: 10 },
         })],
@@ -803,7 +970,7 @@ describe('Self stat-change moves', () => {
     const engine = new BattleEngine();
     const user = makeUser();
     const target = makeUser();
-    const swordsDance = new Move({
+    const swordsDance = createMove({
       name: 'swords-dance', type: 'normal', power: 0, accuracy: 100, pp: 20, category: 'status',
       selfStatChange: [{ stat: 'ATK', delta: 2 }],
     });
@@ -825,7 +992,7 @@ describe('Self stat-change moves', () => {
       item: null,
       baseStats: { HP: 255, ATK: 10, DEF: 10, SPATK: 75, SPDEF: 135, SPEED: 55 },
     });
-    const leafStorm = new Move({
+    const leafStorm = createMove({
       name: 'leaf-storm', type: 'grass', power: 130, accuracy: 100, pp: 5, category: 'special',
       selfStatChange: [{ stat: 'SPATK', delta: -2 }],
     });
@@ -841,7 +1008,7 @@ describe('Self stat-change moves', () => {
     const engine = new BattleEngine();
     const user = makeUser('contrary');
     const target = makeUser('contrary');
-    const leafStorm = new Move({
+    const leafStorm = createMove({
       name: 'leaf-storm', type: 'grass', power: 130, accuracy: 100, pp: 5, category: 'special',
       selfStatChange: [{ stat: 'SPATK', delta: -2 }],
     });
@@ -879,7 +1046,7 @@ describe('Reflect', () => {
       ability: 'rough-skin',
       item: null,
       baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
-      moves: [new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' })],
+      moves: [createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' })],
     });
   }
 
@@ -925,7 +1092,7 @@ describe('Reflect', () => {
 describe('Leech Seed (やどりぎのタネ)', () => {
   function makeSeedMove(): Move {
     // accuracy自体は実戦で90だが、テストの決定論性のため100にして命中判定の揺れを排除する。
-    return new Move({ name: 'leech-seed', type: 'grass', power: 0, accuracy: 100, pp: 10, category: 'status', inflictsSeed: true });
+    return createMove({ name: 'leech-seed', type: 'grass', power: 0, accuracy: 100, pp: 10, category: 'status', inflictsSeed: true });
   }
 
   test('seeds a non-Grass target and does nothing to a Grass-type target', () => {
@@ -974,12 +1141,89 @@ describe('Leech Seed (やどりぎのタネ)', () => {
   });
 });
 
+describe('変化技による能力ランク変化（にらみつける等）', () => {
+  function makePokemon(name: string, types: TypeName[] = ['normal']): Pokemon {
+    return new Pokemon({
+      name, types, ability: 'none', item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+    });
+  }
+
+  const growl = () =>
+    createMove({
+      name: 'growl', type: 'normal', category: 'status', accuracy: 100, pp: 40,
+      targetStatChange: [{ stat: 'ATK', delta: -1, chance: 100 }],
+    });
+
+  test('相手の能力ランクだけを下げる変化技が効果を発揮する', () => {
+    // Arrange
+    const engine = new BattleEngine();
+    const attacker = makePokemon('Attacker');
+    const defender = makePokemon('Defender');
+
+    // Act
+    const result = engine.useMove(attacker, defender, growl());
+
+    // Assert
+    expect(defender.statStages.ATK).toBe(-1);
+    expect(result.success).toBe(true);
+  });
+
+  test('自分と相手の両方を変化させる変化技は双方に適用される', () => {
+    // Arrange
+    const engine = new BattleEngine();
+    const attacker = makePokemon('Attacker');
+    const defender = makePokemon('Defender');
+    const bothWays = createMove({
+      name: 'both-ways', type: 'normal', category: 'status', accuracy: 100, pp: 10,
+      selfStatChange: [{ stat: 'ATK', delta: 2 }],
+      targetStatChange: [{ stat: 'DEF', delta: -1, chance: 100 }],
+    });
+
+    // Act
+    engine.useMove(attacker, defender, bothWays);
+
+    // Assert
+    expect(attacker.statStages.ATK).toBe(2);
+    expect(defender.statStages.DEF).toBe(-1);
+  });
+
+  test('タイプ相性が0倍なら能力ランクは変化しない', () => {
+    // Arrange: ノーマル技はゴーストタイプに無効
+    const engine = new BattleEngine();
+    const attacker = makePokemon('Attacker');
+    const ghost = makePokemon('Gengar', ['ghost', 'poison']);
+
+    // Act
+    const result = engine.useMove(attacker, ghost, growl());
+
+    // Assert
+    expect(ghost.statStages.ATK).toBe(0);
+    expect(result.effectiveness).toBe(0);
+  });
+
+  test('しろいハーブは変化技による能力低下も1回だけ防ぐ', () => {
+    // Arrange
+    const engine = new BattleEngine();
+    const attacker = makePokemon('Attacker');
+    const defender = makePokemon('Defender');
+    defender.item = 'white-herb';
+
+    // Act
+    engine.useMove(attacker, defender, growl());
+
+    // Assert
+    expect(defender.statStages.ATK).toBe(0);
+    expect(defender.itemUsed).toBe(true);
+  });
+});
+
 describe('Target stat-change moves (バークアウト等)', () => {
   function makeAttacker(): Pokemon {
     return new Pokemon({
       name: 'Arcanine', types: ['fire'], ability: 'intimidate', item: null,
       baseStats: { HP: 90, ATK: 110, DEF: 80, SPATK: 100, SPDEF: 80, SPEED: 95 },
-      moves: [new Move({
+      moves: [createMove({
         name: 'snarl', type: 'dark', power: 55, accuracy: 100, pp: 15, category: 'special',
         targetStatChange: [{ stat: 'SPATK', delta: -1, chance: 100 }],
       })],
@@ -1022,7 +1266,7 @@ describe('Weather-scaled self-heal moves (あさのひざし等)', () => {
       name: 'Arcanine', types: ['fire'], ability: 'intimidate', item: null,
       baseStats: { HP: 90, ATK: 110, DEF: 80, SPATK: 100, SPDEF: 80, SPEED: 95 },
       currentHP: 1,
-      moves: [new Move({ name: 'morning-sun', type: 'normal', power: 0, accuracy: 100, pp: 5, category: 'status', weatherHeal: true })],
+      moves: [createMove({ name: 'morning-sun', type: 'normal', power: 0, accuracy: 100, pp: 5, category: 'status', weatherHeal: true })],
     });
   }
 
@@ -1057,11 +1301,12 @@ describe('Weather-scaled self-heal moves (あさのひざし等)', () => {
 });
 
 describe('Multi-hit moves (ロックブラスト等)', () => {
-  function makeAttacker(): Pokemon {
+  // multiHit を false にすると、同じ威力の単発技として比較対象に使える。
+  function makeAttacker({ multiHit = true }: { multiHit?: boolean } = {}): Pokemon {
     return new Pokemon({
       name: 'Excadrill', types: ['ground', 'steel'], ability: 'mold-breaker', item: null,
       baseStats: { HP: 110, ATK: 135, DEF: 60, SPATK: 50, SPDEF: 65, SPEED: 88 },
-      moves: [new Move({ name: 'rock-blast', type: 'rock', power: 25, accuracy: 90, pp: 10, category: 'physical', multiHit: true })],
+      moves: [createMove({ name: 'rock-blast', type: 'rock', power: 25, accuracy: 90, pp: 10, category: 'physical', multiHit })],
     });
   }
 
@@ -1090,9 +1335,8 @@ describe('Multi-hit moves (ロックブラスト等)', () => {
     const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.9);
     try {
       const singleHitEngine = new BattleEngine();
-      const singleHitAttacker = makeAttacker();
+      const singleHitAttacker = makeAttacker({ multiHit: false });
       const singleHitDefender = makeDefender();
-      singleHitAttacker.moves[0].multiHit = false;
       const singleHit = singleHitEngine.useMove(singleHitAttacker, singleHitDefender, singleHitAttacker.moves[0]);
 
       const result = engine.useMove(attacker, defender, attacker.moves[0]);
@@ -1143,7 +1387,7 @@ describe('こだわり系アイテムの威力補正', () => {
 
   test('こだわりハチマキは物理技の威力を1.5倍にする', () => {
     const engine = new BattleEngine();
-    const makeMove = () => new Move({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, category: 'physical' });
+    const makeMove = () => createMove({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, category: 'physical' });
 
     const plain = engine.useMove(makeAttacker(null), makeDefender(), makeMove());
     const banded = engine.useMove(makeAttacker('choice-band'), makeDefender(), makeMove());
@@ -1153,8 +1397,8 @@ describe('こだわり系アイテムの威力補正', () => {
 
   test('こだわりメガネは特殊技の威力を1.5倍にするが物理技には効かない', () => {
     const engine = new BattleEngine();
-    const makePhysical = () => new Move({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, category: 'physical' });
-    const makeSpecial = () => new Move({ name: 'hyper-voice', type: 'normal', power: 90, accuracy: 100, category: 'special' });
+    const makePhysical = () => createMove({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, category: 'physical' });
+    const makeSpecial = () => createMove({ name: 'hyper-voice', type: 'normal', power: 90, accuracy: 100, category: 'special' });
 
     const plainSpecial = engine.useMove(makeAttacker(null), makeDefender(), makeSpecial());
     const specsSpecial = engine.useMove(makeAttacker('choice-specs'), makeDefender(), makeSpecial());
@@ -1190,7 +1434,7 @@ describe('pivot技 (とんぼがえり/ボルトチェンジ/クイックター�
   test('pivot技が成功するとpivot=trueを返す', () => {
     const engine = new BattleEngine();
 
-    const result = engine.useMove(makeAttacker(), makeDefender(), new Move({
+    const result = engine.useMove(makeAttacker(), makeDefender(), createMove({
       name: 'u-turn', type: 'bug', power: 70, accuracy: 100, category: 'physical', pivot: true,
     }));
 
@@ -1201,7 +1445,7 @@ describe('pivot技 (とんぼがえり/ボルトチェンジ/クイックター�
   test('通常の技はpivot=falseを返す', () => {
     const engine = new BattleEngine();
 
-    const result = engine.useMove(makeAttacker(), makeDefender(), new Move({
+    const result = engine.useMove(makeAttacker(), makeDefender(), createMove({
       name: 'bullet-punch', type: 'steel', power: 40, accuracy: 100, category: 'physical',
     }));
 
@@ -1212,7 +1456,7 @@ describe('pivot技 (とんぼがえり/ボルトチェンジ/クイックター�
     const engine = new BattleEngine();
     const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.99);
 
-    const result = engine.useMove(makeAttacker(), makeDefender(), new Move({
+    const result = engine.useMove(makeAttacker(), makeDefender(), createMove({
       name: 'u-turn', type: 'bug', power: 70, accuracy: 50, category: 'physical', pivot: true,
     }));
 
@@ -1229,8 +1473,8 @@ describe('Taunt (ちょうはつ)', () => {
       name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: null,
       baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
       moves: [
-        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
-        new Move({ name: 'swords-dance', type: 'normal', power: 0, accuracy: 100, pp: 20, category: 'status', selfStatChange: [{ stat: 'ATK', delta: 2 }] }),
+        createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+        createMove({ name: 'swords-dance', type: 'normal', power: 0, accuracy: 100, pp: 20, category: 'status', selfStatChange: [{ stat: 'ATK', delta: 2 }] }),
       ],
     });
   }
@@ -1315,7 +1559,7 @@ describe('Mental Herb (メンタルハーブ)', () => {
       name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'mental-herb', itemUsed: false,
       baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
       moves: [
-        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+        createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
       ],
     });
     const defender = new Pokemon({
@@ -1339,7 +1583,7 @@ describe('Mental Herb (メンタルハーブ)', () => {
       name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'mental-herb', itemUsed: false,
       baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
       moves: [
-        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+        createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
       ],
     });
     const defender = new Pokemon({
@@ -1369,7 +1613,7 @@ describe('Mental Herb (メンタルハーブ)', () => {
       name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'mental-herb', itemUsed: true,
       baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
       moves: [
-        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+        createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
       ],
     });
     const defender = new Pokemon({
@@ -1393,7 +1637,7 @@ describe('Mental Herb (メンタルハーブ)', () => {
       });
     }
     function statusMove(name: string, fieldEffect: string): Move {
-      return new Move({ name, type: 'normal', power: 0, accuracy: 100, pp: 10, category: 'status', fieldEffect: fieldEffect as any });
+      return createMove({ name, type: 'normal', power: 0, accuracy: 100, pp: 10, category: 'status', fieldEffect: fieldEffect as any });
     }
 
     test('stealth-rock: sets on attacker side, blocks if already set', () => {

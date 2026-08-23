@@ -13,6 +13,12 @@ export type {
   SelfStatChange,
   TargetStatChange,
   MoveData,
+  DamageMoveData,
+  PhysicalMoveData,
+  SpecialMoveData,
+  StatusMoveData,
+  CommonMoveEffects,
+  DamageOnlyEffects,
   TypeChart,
   BattleEventName,
   EventData,
@@ -26,8 +32,19 @@ export type {
 export { EventEmitter } from './event-emitter.js';
 export { Pokemon } from './pokemon.js';
 export type { PokémonConstructorData } from './pokemon.js';
-export { Move } from './move.js';
-export type { MoveConstructorData } from './move.js';
+export {
+  PhysicalMove,
+  SpecialMove,
+  StatusMove,
+  createMove,
+  cloneDamageMove,
+  isDamageMove,
+  isStatusMove,
+  isPhysicalMove,
+  isSpecialMove,
+  targetsOpponent,
+} from './move.js';
+export type { Move, DamageMove, MoveInput, DamageMoveInput, StatusMoveInput, MoveConstructorData } from './move.js';
 export { Ability } from './ability.js';
 export type { AbilityConstructorData } from './ability.js';
 export { Item } from './item.js';
