@@ -1,10 +1,10 @@
 {
   "tackle": {
-    "valid": true,
-    "reason": "PokeAPI validation skipped (Japanese name)"
+    "status": "unverified",
+    "reason": "Poke API は英語の技名しか引けないため照合していない"
   },
   "u-turn": {
-    "valid": true,
-    "reason": "PokeAPI validation skipped (Japanese name)"
+    "status": "unverified",
+    "reason": "Poke API は英語の技名しか引けないため照合していない"
   }
 }
