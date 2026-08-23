@@ -96,8 +96,8 @@ const PokemonInputSchema = z.object({
   currentHP: z.number().int().nonnegative().optional(),
   status: StatusConditionSchema.nullable().optional(),
   // フォルムチェンジ（バトルスイッチ等）。現在のフォルム名と、フォルム別種族値。
-  form: z.string().optional(),
-  formStats: z.record(z.string(), BaseStatsSchema).optional(),
+  form: z.enum(['normal', 'shield', 'blade']).optional(),
+  formStats: z.record(z.string(), z.object({ baseStats: BaseStatsSchema })).optional(),
 });
 
 const ConcreteActionSchema = z.discriminatedUnion('type', [
