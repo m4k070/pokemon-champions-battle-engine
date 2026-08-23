@@ -186,12 +186,14 @@ export class BattleSession {
 
   // pivot技を使った側が、攻撃後の交代先の入力を待っている状態か。
   needsPivotSwitch(side: 0 | 1): boolean {
-    return this.pendingTurn?.awaitingPivotSide === side;
+    return this.pendingPivotSide() === side;
   }
 
   // 入力待ちの側（いなければnull）。呼び出し側がループを回すために使う。
   pendingPivotSide(): 0 | 1 | null {
-    return this.pendingTurn?.awaitingPivotSide ?? null;
+    const pending = this.pendingTurn;
+    if (pending === null || pending.phase !== 'awaiting-pivot-switch') return null;
+    return pending.pivotSide;
   }
 
   // 技フェーズが完了しているか。falseの間はendTurn()を呼べない。
@@ -231,30 +233,49 @@ export class BattleSession {
 
     const team = side === 0 ? this.teamA : this.teamB;
     const fainted = side === 0 ? this.activeA : this.activeB;
-    const replacement = this.validateSwitchTarget(side, decision.action.pokemonIndex, '強制交代')!;
+    const replacement = this.requireSwitchTarget(side, decision.action.pokemonIndex, '強制交代');
 
     this.reasoningLog.push({ turn: this.engine.turn, side, pokemonName: fainted.name, reasoning: decision.reasoning });
     this.switchTo(side, replacement, team);
   }
 
-  // 交代先のバリデーション: 存在・瀕死・盤上重複のチェック。
-  // 通常交代はログで吸収してnullを返し、強制/pivot交代はスローする。
-  private validateSwitchTarget(side: 0 | 1, pokemonIndex: number, label: string): Pokemon | null {
+  // 交代先が使えるかを調べる。使えなければ理由を返す（存在しない・瀕死・盤上と同じ）。
+  private checkSwitchTarget(
+    side: 0 | 1,
+    pokemonIndex: number,
+    label: string
+  ): { pokemon: Pokemon } | { pokemon: null; reason: string } {
     const team = side === 0 ? this.teamA : this.teamB;
     const active = side === 0 ? this.activeA : this.activeB;
     const replacement = team[pokemonIndex];
 
     if (!replacement || replacement.isFainted) {
-      const msg = `side=${side}の${label}先が不正です: index=${pokemonIndex}`;
-      if (label === '通常交代') { this.engine.log.push(msg); return null; }
-      throw new Error(msg);
+      return { pokemon: null, reason: `side=${side}の${label}先が不正です: index=${pokemonIndex}` };
     }
     if (replacement === active) {
-      const msg = `side=${side}の${label}先が盤上の${active.name}と同じです`;
-      if (label === '通常交代') { this.engine.log.push(msg); return null; }
-      throw new Error(msg);
+      return { pokemon: null, reason: `side=${side}の${label}先が盤上の${active.name}と同じです` };
     }
-    return replacement;
+    return { pokemon: replacement };
+  }
+
+  // 通常交代の交代先を探す。不正ならログに残して null を返し、そのターンの交代を見送る。
+  private findSwitchTarget(side: 0 | 1, pokemonIndex: number): Pokemon | null {
+    const checked = this.checkSwitchTarget(side, pokemonIndex, '通常交代');
+    if (checked.pokemon === null) {
+      this.engine.log.push(checked.reason);
+      return null;
+    }
+    return checked.pokemon;
+  }
+
+  // 強制交代・pivot交代の交代先を取得する。
+  // 交代しないという選択肢がない場面なので、不正なら続行できずスローする。
+  private requireSwitchTarget(side: 0 | 1, pokemonIndex: number, label: string): Pokemon {
+    const checked = this.checkSwitchTarget(side, pokemonIndex, label);
+    if (checked.pokemon === null) {
+      throw new Error(checked.reason);
+    }
+    return checked.pokemon;
   }
 
   // かげふみによる交代阻止の判定。通常交代（applyTurn内のswitch）でのみ呼ばれる。
@@ -323,7 +344,7 @@ export class BattleSession {
     // 後に発動して上書きする仕様のため、速い順(=遅い方を最後に)switchInする。
     const switchEntries: { side: 0 | 1; pokemon: Pokemon; team: Pokemon[] }[] = [];
     if (actionA.type === 'switch') {
-      const switchTargetA = this.validateSwitchTarget(0, actionA.pokemonIndex, '通常交代');
+      const switchTargetA = this.findSwitchTarget(0, actionA.pokemonIndex);
       if (switchTargetA && this.isBlockedByShadowTag(0, switchTargetA, actionB)) {
         this.engine.log.push(`${this.activeB.name}のかげふみで交代できない！`);
       } else if (switchTargetA) {
@@ -331,7 +352,7 @@ export class BattleSession {
       }
     }
     if (actionB.type === 'switch') {
-      const switchTargetB = this.validateSwitchTarget(1, actionB.pokemonIndex, '通常交代');
+      const switchTargetB = this.findSwitchTarget(1, actionB.pokemonIndex);
       if (switchTargetB && this.isBlockedByShadowTag(1, switchTargetB, actionA)) {
         this.engine.log.push(`${this.activeA.name}のかげふみで交代できない！`);
       } else if (switchTargetB) {
@@ -384,10 +405,10 @@ export class BattleSession {
       });
 
     this.pendingTurn = {
+      phase: 'resolving-moves',
       actionA,
       actionB,
       remainingSides: sortedAttackers.map(({ side }) => side),
-      awaitingPivotSide: null,
     };
     this.runRemainingMoves();
   }
@@ -396,10 +417,16 @@ export class BattleSession {
   // （呼び出し側がapplyPivotSwitchで再開する）。最後まで進んだらpendingTurnをnullに戻す。
   private runRemainingMoves(): void {
     const pending = this.pendingTurn;
-    if (pending === null || pending.awaitingPivotSide !== null) return;
+    // 入力待ちの間は技を進めない（applyPivotSwitch が解決してから再開する）。
+    if (pending === null || pending.phase !== 'resolving-moves') return;
 
-    while (pending.remainingSides.length > 0) {
-      const side = pending.remainingSides.shift()!;
+    // remainingSides から先頭を取り出して順に解決する。
+    // pivot技で中断したときは残りが配列に残り、applyPivotSwitch からの再開で続きを処理する。
+    for (
+      let side = pending.remainingSides.shift();
+      side !== undefined;
+      side = pending.remainingSides.shift()
+    ) {
       const attacker = side === 0 ? this.activeA : this.activeB;
       const defender = side === 0 ? this.activeB : this.activeA;
       if (attacker.isFainted || defender.isFainted) continue;
@@ -420,7 +447,13 @@ export class BattleSession {
       // pivot技は交代先を「技の解決を見てから」選べるのが強みなので、ここで中断して入力を待つ。
       // 控えが全員瀕死なら交代しようがないため、そのまま続行する（本編仕様）。
       if (shouldPivotAfterMove(result) && this.hasAvailableBench(side)) {
-        pending.awaitingPivotSide = side;
+        this.pendingTurn = {
+          phase: 'awaiting-pivot-switch',
+          actionA: pending.actionA,
+          actionB: pending.actionB,
+          remainingSides: pending.remainingSides,
+          pivotSide: side,
+        };
         return;
       }
     }
@@ -437,7 +470,9 @@ export class BattleSession {
   // pivot技を使った側の交代先を適用し、ターンの残りを再開する。
   // needsPivotSwitch(side)がtrueの間だけ有効。
   applyPivotSwitch(side: 0 | 1, decision: AgentDecision): void {
-    if (!this.needsPivotSwitch(side)) {
+    // 入力待ちであることを型として取り出す（後段で中断時の行動・残りを引き継ぐため）。
+    const pending = this.pendingTurn;
+    if (pending === null || pending.phase !== 'awaiting-pivot-switch' || pending.pivotSide !== side) {
       throw new Error(`side=${side}はpivot技による交代先の入力待ちではありません`);
     }
     if (decision.action.type !== 'switch') {
@@ -446,12 +481,18 @@ export class BattleSession {
 
     const team = side === 0 ? this.teamA : this.teamB;
     const active = side === 0 ? this.activeA : this.activeB;
-    const replacement = this.validateSwitchTarget(side, decision.action.pokemonIndex, 'pivot交代')!;
+    const replacement = this.requireSwitchTarget(side, decision.action.pokemonIndex, 'pivot交代');
 
     this.reasoningLog.push({ turn: this.engine.turn, side, pokemonName: active.name, reasoning: decision.reasoning });
     this.switchTo(side, replacement, team);
 
-    this.pendingTurn!.awaitingPivotSide = null;
+    // 交代が済んだので、残りの技を解決できる状態へ戻す。
+    this.pendingTurn = {
+      phase: 'resolving-moves',
+      actionA: pending.actionA,
+      actionB: pending.actionB,
+      remainingSides: pending.remainingSides,
+    };
     this.runRemainingMoves();
   }
 
