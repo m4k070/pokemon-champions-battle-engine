@@ -6,6 +6,7 @@ import type { AgentAction } from './types.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './ai/battle-agent.js';
 import { snapshotBattle, restoreBattle } from './battle-snapshot.js';
 import type { BattleSnapshot, PendingTurn } from './battle-snapshot.js';
+import { shouldPivotAfterMove } from './use-move-result.js';
 
 export interface TurnReasoning {
   turn: number;
@@ -418,7 +419,7 @@ export class BattleSession {
 
       // pivot技は交代先を「技の解決を見てから」選べるのが強みなので、ここで中断して入力を待つ。
       // 控えが全員瀕死なら交代しようがないため、そのまま続行する（本編仕様）。
-      if (result.pivot && this.hasAvailableBench(side)) {
+      if (shouldPivotAfterMove(result) && this.hasAvailableBench(side)) {
         pending.awaitingPivotSide = side;
         return;
       }

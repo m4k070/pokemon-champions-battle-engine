@@ -4,6 +4,8 @@ import { Pokemon } from '../src/pokemon.js';
 
 import { ABILITY_REGISTRY, getAbilityDefinition } from '../src/rules/abilities/registry.js';
 import type { AbilityName } from '../src/ability-names.js';
+import { isMoveSuccessful } from '../src/use-move-result.js';
+import { asDamageResult } from './helpers/use-move-result.js';
 
 function makeWeatherSetter(ability: AbilityName): Pokemon {
   return new Pokemon({
@@ -97,7 +99,7 @@ describe('ぼうだん (Bulletproof)', () => {
       name: 'focus-blast', type: 'fighting', power: 120, accuracy: 100, category: 'special',
     }));
 
-    expect(result.success).toBe(false);
+    expect(isMoveSuccessful(result)).toBe(false);
     expect(defender.currentHP).toBe(hpBefore);
     expect(engine.log.some((line) => line.includes('bulletproof'))).toBe(true);
   });
@@ -111,8 +113,8 @@ describe('ぼうだん (Bulletproof)', () => {
       name: 'thunderbolt', type: 'electric', power: 90, accuracy: 100, category: 'special',
     }));
 
-    expect(result.success).toBe(true);
-    expect(result.damage).toBeGreaterThan(0);
+    expect(isMoveSuccessful(result)).toBe(true);
+    expect(asDamageResult(result).damage).toBeGreaterThan(0);
   });
 
   test('PP is consumed even when the move is blocked', () => {
