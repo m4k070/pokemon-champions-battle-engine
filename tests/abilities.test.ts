@@ -3,8 +3,9 @@ import { BattleEngine } from '../src/battle-engine.js';
 import { Pokemon } from '../src/pokemon.js';
 
 import { ABILITY_REGISTRY, getAbilityDefinition } from '../src/rules/abilities/registry.js';
+import type { AbilityName } from '../src/ability-names.js';
 
-function makeWeatherSetter(ability: string): Pokemon {
+function makeWeatherSetter(ability: AbilityName): Pokemon {
   return new Pokemon({
     name: 'Weather Setter',
     types: ['normal'],
@@ -17,7 +18,8 @@ function makeWeatherSetter(ability: string): Pokemon {
 describe('Ability registry', () => {
   test('exposes every registered ability by name', () => {
     expect(getAbilityDefinition('sand-stream')).toBe(ABILITY_REGISTRY['sand-stream']);
-    expect(getAbilityDefinition('unknown-ability-xyz')).toBeUndefined();
+    // 外部データ経由で未知の特性名が入り込んだ場合の防御を実行時にも確認する。
+    expect(getAbilityDefinition('unknown-ability-xyz' as AbilityName)).toBeUndefined();
   });
 
   test.each([

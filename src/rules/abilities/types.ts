@@ -1,6 +1,7 @@
 import type { Pokemon } from '../../pokemon.js';
 import type { BattleEngine } from '../../battle-engine.js';
 import type { MoveData, StatStageKey } from '../../types.js';
+import type { AbilityName } from '../../ability-names.js';
 
 export interface AbilitySwitchInContext {
   pokemon: Pokemon;
@@ -51,7 +52,7 @@ export interface AbilityStatChangeContext {
 
 // フックは特性ごとに発動タイミングが異なるため、必要なものだけ実装すればよい。
 export interface AbilityDefinition {
-  name: string;
+  name: AbilityName;
   onSwitchIn?(context: AbilitySwitchInContext): void;
   // 場を離れるとき（通常交代・強制交代・pivot技による交代のいずれも呼ばれる）。
   onSwitchOut?(context: AbilitySwitchOutContext): void;

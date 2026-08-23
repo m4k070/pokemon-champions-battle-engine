@@ -3,8 +3,9 @@ import { RandomBattleAgent, getLegalActions } from '../src/ai/battle-agent.js';
 import type { BattleContext } from '../src/ai/battle-agent.js';
 import { Pokemon } from '../src/pokemon.js';
 import type { Move } from '../src/move.js';
+import type { ItemName } from '../src/item-names.js';
 
-function makePokemon(overrides: { moves?: Move[]; item?: string | null } = {}): Pokemon {
+function makePokemon(overrides: { moves?: Move[]; item?: ItemName | null } = {}): Pokemon {
   return new Pokemon({
     name: 'Garchomp',
     types: ['dragon', 'ground'],
