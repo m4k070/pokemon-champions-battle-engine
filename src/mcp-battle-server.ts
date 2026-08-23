@@ -4,6 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { Pokemon } from './pokemon.js';
+import { TYPE_CHART } from './type-chart.js';
 import { createMove, MOVE_CATEGORIES, type MoveInput } from './move.js';
 import { TYPE_NAMES } from './type-names.js';
 import { BattleSession, BattleHistory } from './battle-runner.js';
@@ -179,7 +180,22 @@ function buildPokemon(spec: z.infer<typeof PokemonInputSchema>): Pokemon {
   return pokemon;
 }
 
-function pokemonView(pokemon: Pokemon) {
+// タイプ相性のラベルを返す（本編の技リスト表示と同じ）
+function getEffectivenessLabel(attackType: TypeName, defenderTypes: TypeName[]): string {
+  let effectiveness = 1.0;
+  for (const type of defenderTypes) {
+    const chart = TYPE_CHART[attackType];
+    if (chart) {
+      effectiveness *= chart[type] !== undefined ? chart[type]! : 1.0;
+    }
+  }
+  if (effectiveness === 0) return '無効';
+  if (effectiveness >= 2) return '効果ばつぐん';
+  if (effectiveness <= 0.5) return '効果いまひとつ';
+  return '';
+}
+
+function pokemonView(pokemon: Pokemon, opponentTypes?: TypeName[]) {
   return {
     name: pokemon.name,
     types: pokemon.types,
@@ -204,6 +220,9 @@ function pokemonView(pokemon: Pokemon) {
       pp: move.pp,
       maxPP: move.maxPP,
       pivot: move.pivot ?? false,
+      // タイプ相性の目安（相手の先頭ポケモンに対して）
+      // 実際のダメージは特性・道具等で変動するため、これは参考情報
+      effectiveness: opponentTypes && move.category !== 'status' ? getEffectivenessLabel(move.type, opponentTypes) : undefined,
     })),
   };
 }
@@ -214,9 +233,9 @@ function pokemonView(pokemon: Pokemon) {
  * - 相手の先頭: タイプ・HP・状態・statStages のみ（技・持ち物・特性は隠す）
  * - 相手の控え: タイプ・HP・isFainted のみ
  */
-function visiblePokemonView(pokemon: Pokemon, isOwn: boolean, isActive: boolean) {
+function visiblePokemonView(pokemon: Pokemon, isOwn: boolean, isActive: boolean, opponentTypes?: TypeName[]) {
   if (isOwn) {
-    return pokemonView(pokemon);
+    return pokemonView(pokemon, opponentTypes);
   }
   // 相手のポケモン（HPは%のみ、正確な数値は隠す）
   const base = {
@@ -250,8 +269,8 @@ function stateView(stored: StoredSession) {
     toxicSpikes: { ...session.engine.field.toxicSpikes },
     tailwind: { ...session.engine.field.tailwind },
     reflect: { ...session.engine.field.reflect },
-    teamA: session.teamA.map(pokemonView),
-    teamB: session.teamB.map(pokemonView),
+    teamA: session.teamA.map((p) => pokemonView(p)),
+    teamB: session.teamB.map((p) => pokemonView(p)),
     activeIndexA: session.teamA.indexOf(session.activeA),
     activeIndexB: session.teamB.indexOf(session.activeB),
     canMegaEvolveSide0: session.canMegaEvolve(0),
@@ -281,6 +300,8 @@ function visibleStateView(stored: StoredSession, side: 0 | 1) {
   const opponentTeam = side === 0 ? session.teamB : session.teamA;
   const myActiveIndex = side === 0 ? session.teamA.indexOf(session.activeA) : session.teamB.indexOf(session.activeB);
   const opponentActiveIndex = side === 0 ? session.teamB.indexOf(session.activeB) : session.teamA.indexOf(session.activeA);
+  const myActive = myTeam[myActiveIndex];
+  const opponentActive = opponentTeam[opponentActiveIndex];
 
   // 相手が使った技を記憶（moveLog から抽出）
   const opponentMovesUsed: Record<string, { name: string; type: string; category: string }[]> = {};
@@ -312,9 +333,9 @@ function visibleStateView(stored: StoredSession, side: 0 | 1) {
     toxicSpikes: { ...session.engine.field.toxicSpikes },
     tailwind: { ...session.engine.field.tailwind },
     reflect: { ...session.engine.field.reflect },
-    myTeam: myTeam.map((p, i) => visiblePokemonView(p, true, i === myActiveIndex)),
+    myTeam: myTeam.map((p, i) => visiblePokemonView(p, true, i === myActiveIndex, opponentActive?.types)),
     opponentTeam: opponentTeam.map((p, i) => ({
-      ...visiblePokemonView(p, false, i === opponentActiveIndex),
+      ...visiblePokemonView(p, false, i === opponentActiveIndex, myActive?.types),
       movesUsed: opponentMovesUsed[p.name] || [],
     })),
     myActiveIndex,
