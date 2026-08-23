@@ -3,7 +3,8 @@ import { BattleSession, BattleHistory } from './battle-runner.js';
 import { RandomBattleAgent } from './ai/battle-agent.js';
 import { OpenCodeBattleAgent } from './ai/opencode-battle-agent.js';
 import type { BattleAgent } from './ai/battle-agent.js';
-import type { BaseStats, MoveData, TypeName } from './types.js';
+import { createMove } from './move.js';
+import type { BaseStats, TypeName } from './types.js';
 
 const kabaldonData = {
   name: 'カバルドン',
@@ -12,11 +13,11 @@ const kabaldonData = {
   item: 'rocky-helmet',
   baseStats: { HP: 108, ATK: 112, DEF: 118, SPATK: 68, SPDEF: 72, SPEED: 47 } as BaseStats,
   moves: [
-    { name: 'じしん', type: 'ground' as TypeName, power: 100, accuracy: 100, pp: 10, maxPP: 10, category: 'physical' as const, status: null, priority: 0, effectChance: null },
-    { name: 'あくび', type: 'normal' as TypeName, power: 0, accuracy: 100, pp: 10, maxPP: 10, category: 'status' as const, status: 'sleep' as const, priority: 0, effectChance: null },
-    { name: 'こおりのキバ', type: 'ice' as TypeName, power: 65, accuracy: 95, pp: 15, maxPP: 15, category: 'physical' as const, status: null, priority: 0, effectChance: null },
-    { name: 'まもる', type: 'normal' as TypeName, power: 0, accuracy: 100, pp: 10, maxPP: 10, category: 'status' as const, status: null, priority: 0, effectChance: null },
-  ] as MoveData[],
+    createMove({ name: 'じしん', type: 'ground', power: 100, accuracy: 100, pp: 10 }),
+    createMove({ name: 'あくび', type: 'normal', category: 'status', accuracy: 100, pp: 10, status: 'sleep' }),
+    createMove({ name: 'こおりのキバ', type: 'ice', power: 65, accuracy: 95, pp: 15 }),
+    createMove({ name: 'まもる', type: 'normal', category: 'status', accuracy: 100, pp: 10 }),
+  ],
 };
 
 const windyData = {
@@ -26,11 +27,11 @@ const windyData = {
   item: 'sitrus-berry',
   baseStats: { HP: 90, ATK: 110, DEF: 80, SPATK: 100, SPDEF: 80, SPEED: 95 } as BaseStats,
   moves: [
-    { name: 'バークアウト', type: 'dark' as TypeName, power: 55, accuracy: 100, pp: 15, maxPP: 15, category: 'special' as const, status: null, priority: 0, effectChance: null },
-    { name: 'じだんだ', type: 'ground' as TypeName, power: 75, accuracy: 100, pp: 10, maxPP: 10, category: 'physical' as const, status: null, priority: 0, effectChance: null },
-    { name: 'おにび', type: 'fire' as TypeName, power: 0, accuracy: 85, pp: 15, maxPP: 15, category: 'status' as const, status: 'burn' as const, priority: 0, effectChance: null },
-    { name: 'あさのひざし', type: 'normal' as TypeName, power: 0, accuracy: 100, pp: 5, maxPP: 5, category: 'status' as const, status: null, priority: 0, effectChance: null },
-  ] as MoveData[],
+    createMove({ name: 'バークアウト', type: 'dark', category: 'special', power: 55, accuracy: 100, pp: 15 }),
+    createMove({ name: 'じだんだ', type: 'ground', power: 75, accuracy: 100, pp: 10 }),
+    createMove({ name: 'おにび', type: 'fire', category: 'status', accuracy: 85, pp: 15, status: 'burn' }),
+    createMove({ name: 'あさのひざし', type: 'normal', category: 'status', accuracy: 100, pp: 5 }),
+  ],
 };
 
 const dragonData = {
@@ -40,11 +41,11 @@ const dragonData = {
   item: 'life-orb',
   baseStats: { HP: 88, ATK: 120, DEF: 75, SPATK: 100, SPDEF: 75, SPEED: 142 } as BaseStats,
   moves: [
-    { name: 'りゅうのはどう', type: 'dragon' as TypeName, power: 85, accuracy: 100, pp: 10, maxPP: 10, category: 'special' as const, status: null, priority: 0, effectChance: null },
-    { name: 'たたりめ', type: 'ghost' as TypeName, power: 65, accuracy: 100, pp: 10, maxPP: 10, category: 'special' as const, status: null, priority: 0, effectChance: null },
-    { name: '10まんボルト', type: 'electric' as TypeName, power: 90, accuracy: 100, pp: 15, maxPP: 15, category: 'special' as const, status: null, priority: 0, effectChance: null },
-    { name: 'かえんほうしゃ', type: 'fire' as TypeName, power: 90, accuracy: 100, pp: 15, maxPP: 15, category: 'special' as const, status: null, priority: 0, effectChance: null },
-  ] as MoveData[],
+    createMove({ name: 'りゅうのはどう', type: 'dragon', category: 'special', power: 85, accuracy: 100, pp: 10 }),
+    createMove({ name: 'たたりめ', type: 'ghost', category: 'special', power: 65, accuracy: 100, pp: 10 }),
+    createMove({ name: '10まんボルト', type: 'electric', category: 'special', power: 90, accuracy: 100, pp: 15 }),
+    createMove({ name: 'かえんほうしゃ', type: 'fire', category: 'special', power: 90, accuracy: 100, pp: 15 }),
+  ],
 };
 
 export { kabaldonData, windyData, dragonData };
