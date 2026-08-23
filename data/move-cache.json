@@ -1,10 +1,14 @@
 {
   "tackle": {
-    "valid": true,
-    "reason": "PokeAPI validation skipped (Japanese name)"
+    "status": "valid",
+    "type": "normal",
+    "power": 40,
+    "category": "physical"
   },
   "u-turn": {
-    "valid": true,
-    "reason": "PokeAPI validation skipped (Japanese name)"
+    "status": "valid",
+    "type": "bug",
+    "power": 70,
+    "category": "physical"
   }
 }

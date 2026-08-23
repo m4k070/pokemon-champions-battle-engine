@@ -1,5 +1,23 @@
 const POKE_API_BASE = 'https://pokeapi.co/api/v2';
 
+// Poke API がエラー応答を返したことを、HTTPステータス付きで伝える。
+// 「存在しないリソース(404)」と「一時的な障害」を呼び出し側が区別できるようにする。
+export class PokeApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    options?: { cause?: unknown }
+  ) {
+    super(message, options);
+    this.name = 'PokeApiError';
+  }
+
+  // 照会したリソースが存在しない（技名・ポケモン名が間違っている等）。
+  get isNotFound(): boolean {
+    return this.status === 404;
+  }
+}
+
 export interface PokeApiPokemonData {
   id: number;
   name: string;
@@ -80,7 +98,7 @@ export class PokemonAPI {
     const response = await fetch(url);
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch Pokemon ${pokemonId}: ${response.statusText}`);
+      throw new PokeApiError(`Failed to fetch Pokemon ${pokemonId}: ${response.statusText}`, response.status);
     }
 
     const data = await response.json() as any;
@@ -122,7 +140,7 @@ export class PokemonAPI {
     const response = await fetch(url);
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch move ${moveName}: ${response.statusText}`);
+      throw new PokeApiError(`Failed to fetch move ${moveName}: ${response.statusText}`, response.status);
     }
 
     const data = await response.json() as any;

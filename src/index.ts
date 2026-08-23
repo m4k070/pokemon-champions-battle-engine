@@ -42,7 +42,9 @@ export {
   isStatusMove,
   isPhysicalMove,
   isSpecialMove,
+  isMoveCategory,
   targetsOpponent,
+  MOVE_CATEGORIES,
 } from './move.js';
 export type { Move, DamageMove, MoveInput, DamageMoveInput, StatusMoveInput, MoveConstructorData } from './move.js';
 export { isMoveSuccessful, isDamageResult, shouldPivotAfterMove } from './use-move-result.js';
@@ -88,7 +90,10 @@ export type { BattleSnapshot, PokemonSnapshot, FieldSnapshot, SessionSnapshot, P
 export { BattleSession, BattleHistory, runBattle } from './battle-runner.js';
 export type { StartSessionOptions, RunBattleOptions, BattleResult, TurnReasoning } from './battle-runner.js';
 
-export { PokemonDataCache, PokemonAPI } from './api/pokemon-api.js';
+export { MoveValidator, isValidMove, isUnconfirmedMove } from './move-validator.js';
+export type { MoveCacheEntry, MoveCache, LearnsetCacheEntry, LearnsetCache, MoveDataFetcher } from './move-validator.js';
+export { TYPE_NAMES, isTypeName } from './type-names.js';
+export { PokemonDataCache, PokemonAPI, PokeApiError } from './api/pokemon-api.js';
 export type { PokeApiPokemonData, PokeApiMoveData } from './api/pokemon-api.js';
 
 export { META_TEAMS } from './data/meta-teams.js';
