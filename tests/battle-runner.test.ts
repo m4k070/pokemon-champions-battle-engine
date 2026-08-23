@@ -4,6 +4,7 @@ import { MegaEvolutionSystem } from '../src/rules/mega-evolution.js';
 import { Pokemon } from '../src/pokemon.js';
 import { Move, createMove } from '../src/move.js';
 import type { ItemName } from '../src/item-names.js';
+import type { AgentDecision } from '../src/ai/battle-agent.js';
 
 // 素早いAttacker(単一技・確定OHKO)とのろまなDefenderで、
 // 「先攻が必ず勝つ」決定論的なシナリオを作る（Randomでも選択肢が1つしかないため揺れない）。
@@ -666,7 +667,7 @@ describe('pivot技による攻撃後の交代', () => {
     session.applyTurn(moveAction, moveAction);
 
     const snapshot = structuredClone(session.snapshot());
-    expect(snapshot.session?.pendingTurn?.awaitingPivotSide).toBe(0);
+    expect(snapshot.session?.pendingTurn).toMatchObject({ phase: 'awaiting-pivot-switch', pivotSide: 0 });
 
     const restored = BattleSession.fromSnapshot(snapshot);
     expect(restored.needsPivotSwitch(0)).toBe(true);
@@ -885,5 +886,71 @@ describe('pivot技による攻撃後の交代', () => {
     // 20回中、両方のパターンが出現する（同速ランダム）
     expect(aFirst).toBe(true);
     expect(bFirst).toBe(true);
+  });
+});
+
+describe('技フェーズの進行状態（PendingTurn）', () => {
+  const moveAction: AgentDecision = { action: { type: 'move', moveIndex: 0, target: 0 } };
+
+  function makePivoter(): Pokemon {
+    return new Pokemon({
+      name: 'Pivoter', types: ['bug'], ability: 'none', item: null,
+      baseStats: { HP: 100, ATK: 120, DEF: 80, SPATK: 80, SPDEF: 80, SPEED: 150 },
+      moves: [createMove({ name: 'u-turn', type: 'bug', power: 70, accuracy: 100, pp: 10, pivot: true })],
+    });
+  }
+
+  function makeTank(name: string): Pokemon {
+    return new Pokemon({
+      name, types: ['steel'], ability: 'none', item: null,
+      baseStats: { HP: 200, ATK: 40, DEF: 200, SPATK: 40, SPDEF: 200, SPEED: 10 },
+      moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 20 })],
+    });
+  }
+
+  test('技を解決している間は交代待ちの側がいない', async () => {
+    // Arrange
+    const session = await BattleSession.start([makeTank('A'), makeTank('BenchA')], [makeTank('B')]);
+
+    // Act
+    session.beginTurn();
+    session.applyTurn(moveAction, moveAction);
+
+    // Assert: 中断せず最後まで進むので、進行状態そのものが残らない
+    expect(session.isTurnComplete()).toBe(true);
+    expect(session.pendingPivotSide()).toBeNull();
+  });
+
+  test('pivot技で中断すると交代待ちの側が特定できる', async () => {
+    // Arrange
+    const session = await BattleSession.start([makePivoter(), makeTank('BenchA')], [makeTank('B')]);
+
+    // Act
+    session.beginTurn();
+    session.applyTurn(moveAction, moveAction);
+
+    // Assert
+    expect(session.pendingPivotSide()).toBe(0);
+    expect(session.needsPivotSwitch(0)).toBe(true);
+    expect(session.needsPivotSwitch(1)).toBe(false);
+    expect(session.isTurnComplete()).toBe(false);
+  });
+
+  test('交代先を入力すると進行状態に戻り、残りの技が解決される', async () => {
+    // Arrange
+    const session = await BattleSession.start([makePivoter(), makeTank('BenchA')], [makeTank('B')]);
+    session.beginTurn();
+    session.applyTurn(moveAction, moveAction);
+    const bench = session.teamA[1];
+    const benchHpBeforeResume = bench.currentHP;
+
+    // Act
+    session.applyPivotSwitch(0, { action: { type: 'switch', pokemonIndex: 1 } });
+
+    // Assert: 交代待ちが解消し、まだ動いていなかった相手の技が交代先に当たる
+    expect(session.pendingPivotSide()).toBeNull();
+    expect(session.isTurnComplete()).toBe(true);
+    expect(session.activeA).toBe(bench);
+    expect(bench.currentHP).toBeLessThan(benchHpBeforeResume);
   });
 });
