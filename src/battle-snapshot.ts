@@ -3,6 +3,8 @@ import { Pokemon } from './pokemon.js';
 import type { BattleField, SideFlags, SideHazards } from './battle-field.js';
 import type { AgentAction, BaseStats, MoveData, Stats, StatStages, StatusCondition, TypeName, WeatherType } from './types.js';
 import type { NatureInput, StatPointsInput } from './rules/stat-point-system.js';
+import { cloneStatusState } from './status-state.js';
+import type { StatusState } from './status-state.js';
 import type { AbilityName } from './ability-names.js';
 import type { ItemName } from './item-names.js';
 
@@ -24,11 +26,9 @@ export interface PokemonSnapshot {
   stats: Stats;
   moves: MoveData[];
   currentHP: number;
-  status: StatusCondition | null;
-  statusTurnsLeft: number;
+  statusState: StatusState;
   isMega: boolean;
   statStages: StatStages;
-  toxicCounter: number;
   isSeeded: boolean;
 }
 
@@ -92,11 +92,9 @@ export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
     stats: { ...pokemon.stats },
     moves: pokemon.moves.map((move) => ({ ...move })),
     currentHP: pokemon.currentHP,
-    status: pokemon.status,
-    statusTurnsLeft: pokemon.statusTurnsLeft,
+    statusState: cloneStatusState(pokemon.statusState),
     isMega: pokemon.isMega,
     statStages: { ...pokemon.statStages },
-    toxicCounter: pokemon.toxicCounter,
     isSeeded: pokemon.isSeeded,
   };
 }
@@ -118,11 +116,9 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
     stats: { ...snapshot.stats },
     moves: snapshot.moves.map((move) => ({ ...move })),
     currentHP: snapshot.currentHP,
-    status: snapshot.status,
-    statusTurnsLeft: snapshot.statusTurnsLeft,
+    statusState: cloneStatusState(snapshot.statusState),
     isMega: snapshot.isMega,
     statStages: { ...snapshot.statStages },
-    toxicCounter: snapshot.toxicCounter,
     isSeeded: snapshot.isSeeded,
   });
 }

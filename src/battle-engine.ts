@@ -28,6 +28,12 @@ export interface MoveLogEntry {
 // 猛毒(どくどく)のダメージ増加は本編仕様に合わせて15ターン目で頭打ちにする。
 const TOXIC_MAX_COUNTER = 15;
 
+// ターン終了時の割合ダメージの分母（やけどは最大HPの1/16、どくは1/8）。
+// 猛毒は経過ターン数 n に対して maxHP * n / 16。
+const BURN_DAMAGE_DENOMINATOR = 16;
+const POISON_DAMAGE_DENOMINATOR = 8;
+const TOXIC_DAMAGE_DENOMINATOR = 16;
+
 // ウェザーボールは天候下でタイプが変化する（無天候時はノーマル固定のまま）。
 const WEATHER_BALL_TYPE: Partial<Record<WeatherType, TypeName>> = {
   rain: 'water',
@@ -359,16 +365,13 @@ export class BattleEngine {
     }
 
     // 状態異常による行動阻害（カウンター減算は applyStatusEffects で行う）
-    if (attacker.status === 'sleep') {
-      if (attacker.statusTurnsLeft > 0) {
-        this.log.push(`${attacker.name}は眠っている`);
-        return { success: false };
-      }
-      // statusTurnsLeft <= 0 なら applyStatusEffects で既に解除済み
+    if (attacker.statusState.kind === 'sleep' && attacker.statusState.turnsLeft > 0) {
+      this.log.push(`${attacker.name}は眠っている`);
+      return { success: false };
     }
     if (attacker.status === 'freeze') {
       if (Math.random() < 0.2) {
-        attacker.status = null;
+        attacker.removeStatus();
         this.log.push(`${attacker.name}はこおりがとけた！`);
       } else {
         this.log.push(`${attacker.name}はこごえて動けない`);
@@ -922,28 +925,58 @@ export class BattleEngine {
   applyStatusEffects(team: Pokemon[]): void {
     for (const pokemon of team) {
       if (pokemon.isFainted) continue;
+      this.applyStatusEffect(pokemon);
+    }
+  }
 
-      if (pokemon.status === 'burn') {
-        const damage = Math.floor(pokemon.maxHP / 16);
+  // ターン終了時の状態異常処理。状態の種類を網羅的に分岐するため、
+  // StatusCondition に状態を追加するとここが型エラーになり、実装漏れを防げる。
+  private applyStatusEffect(pokemon: Pokemon): void {
+    const state = pokemon.statusState;
+
+    switch (state.kind) {
+      // まひ・こおりの行動阻害は技を出す直前（useMove）で判定するため、ターン終了時は何もしない。
+      case 'none':
+      case 'paralysis':
+      case 'freeze':
+        return;
+
+      case 'burn': {
+        const damage = Math.floor(pokemon.maxHP / BURN_DAMAGE_DENOMINATOR);
         pokemon.takeDamage(damage, this);
         this.log.push(`${pokemon.name}は火傷ダメージで${damage}のダメージを受けた`);
-      } else if (pokemon.status === 'poison') {
-        const damage = Math.floor(pokemon.maxHP / 8);
+        return;
+      }
+
+      case 'poison': {
+        const damage = Math.floor(pokemon.maxHP / POISON_DAMAGE_DENOMINATOR);
         pokemon.takeDamage(damage, this);
         this.log.push(`${pokemon.name}は毒ダメージで${damage}のダメージを受けた`);
-      } else if (pokemon.status === 'badly-poisoned') {
-        pokemon.toxicCounter = Math.min(pokemon.toxicCounter + 1, TOXIC_MAX_COUNTER);
-        const damage = Math.floor((pokemon.maxHP * pokemon.toxicCounter) / 16);
+        return;
+      }
+
+      case 'badly-poisoned': {
+        // 猛毒は経過ターン数に比例してダメージが増える（floor(maxHP * n / 16)）。
+        const elapsedTurns = pokemon.advanceToxicCounter(TOXIC_MAX_COUNTER);
+        const damage = Math.floor((pokemon.maxHP * elapsedTurns) / TOXIC_DAMAGE_DENOMINATOR);
         pokemon.takeDamage(damage, this);
-        this.log.push(`${pokemon.name}は猛毒ダメージで${damage}のダメージを受けた（${pokemon.toxicCounter}ターン目）`);
-      } else if (pokemon.status === 'sleep') {
-        pokemon.statusTurnsLeft--;
-        if (pokemon.statusTurnsLeft <= 0) {
-          pokemon.removeStatus();
+        this.log.push(`${pokemon.name}は猛毒ダメージで${damage}のダメージを受けた（${elapsedTurns}ターン目）`);
+        return;
+      }
+
+      case 'sleep': {
+        const turnsLeft = pokemon.consumeSleepTurn();
+        if (turnsLeft <= 0) {
           this.log.push(`${pokemon.name}は眠りから覚めた`);
         } else {
-          this.log.push(`${pokemon.name}は眠り続けている（残り${pokemon.statusTurnsLeft}ターン）`);
+          this.log.push(`${pokemon.name}は眠り続けている（残り${turnsLeft}ターン）`);
         }
+        return;
+      }
+
+      default: {
+        const unreachable: never = state;
+        throw new TypeError(`未知の状態異常です: ${JSON.stringify(unreachable)}`);
       }
     }
   }

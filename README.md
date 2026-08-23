@@ -160,6 +160,7 @@ src/
 ├── battle-runner.ts          # BattleSession（1ターンずつ進行・snapshot/restore/fork）/ BattleHistory（undo/redo）
 ├── battle-snapshot.ts        # 盤面のプレーンデータ化（snapshot/restore）
 ├── pokemon.ts                # ポケモンドメインモデル
+├── status-state.ts           # 状態異常の状態（ねむりの残りターン・猛毒の経過ターンを含む）
 ├── move.ts                   # 技モデル
 ├── ability-names.ts          # 特性名の列挙（AbilityName の単一の情報源）
 ├── item-names.ts             # 持ち物名の列挙（ItemName の単一の情報源）

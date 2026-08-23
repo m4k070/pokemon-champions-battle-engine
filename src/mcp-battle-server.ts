@@ -10,6 +10,7 @@ import { RandomBattleAgent } from './ai/battle-agent.js';
 import type { AgentDecision } from './ai/battle-agent.js';
 import type { AgentAction, TypeName } from './types.js';
 import { MoveValidator } from './move-validator.js';
+import { createStatusState, NO_STATUS } from './status-state.js';
 import { ABILITY_NAMES } from './ability-names.js';
 import { ITEM_NAMES } from './item-names.js';
 
@@ -171,7 +172,7 @@ function buildPokemon(spec: z.infer<typeof PokemonInputSchema>): Pokemon {
     baseStats: spec.baseStats,
     statPoints: spec.statPoints,
     nature: spec.nature ?? null,
-    status: spec.status ?? null,
+    statusState: spec.status ? createStatusState(spec.status) : NO_STATUS,
     form: spec.form,
     formStats: spec.formStats,
     moves: spec.moves.map((move) => createMove(toMoveInput(move))),
@@ -191,7 +192,7 @@ function pokemonView(pokemon: Pokemon) {
     item: pokemon.item,
     status: pokemon.status,
     statStages: { ...pokemon.statStages },
-    toxicCounter: pokemon.toxicCounter,
+    toxicCounter: pokemon.statusState.kind === 'badly-poisoned' ? pokemon.statusState.elapsedTurns : 0,
     isSeeded: pokemon.isSeeded,
     lockedMove: pokemon.lockedMove,
     isFainted: pokemon.isFainted,

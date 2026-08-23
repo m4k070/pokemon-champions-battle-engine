@@ -579,7 +579,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
 
     // すでに状態異常の相手には発動しない
     const statusAttacker = makePokemon('StatusAttacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
-    statusAttacker.status = 'poison';
+    statusAttacker.applyStatus('poison');
     engine.setActivePokemon(0, statusAttacker);
     engine.applyDamage(defender, 10, statusAttacker, move({ name: 'Tackle', type: 'normal', power: 40, category: 'physical' }));
     expect(statusAttacker.status).toBe('poison'); // 変わらない
