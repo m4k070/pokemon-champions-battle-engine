@@ -4,14 +4,14 @@ import { RandomBattleAgent } from './ai/battle-agent.js';
 import { OpenCodeBattleAgent } from './ai/opencode-battle-agent.js';
 import type { BattleAgent } from './ai/battle-agent.js';
 import { createMove } from './move.js';
-import type { BaseStats, TypeName } from './types.js';
+import type { PokémonConstructorData } from './pokemon.js';
 
-const kabaldonData = {
+const kabaldonData: PokémonConstructorData = {
   name: 'カバルドン',
-  types: ['ground' as TypeName],
+  types: ['ground'],
   ability: 'sand-stream',
   item: 'rocky-helmet',
-  baseStats: { HP: 108, ATK: 112, DEF: 118, SPATK: 68, SPDEF: 72, SPEED: 47 } as BaseStats,
+  baseStats: { HP: 108, ATK: 112, DEF: 118, SPATK: 68, SPDEF: 72, SPEED: 47 },
   moves: [
     createMove({ name: 'じしん', type: 'ground', power: 100, accuracy: 100, pp: 10 }),
     createMove({ name: 'あくび', type: 'normal', category: 'status', accuracy: 100, pp: 10, status: 'sleep' }),
@@ -20,12 +20,12 @@ const kabaldonData = {
   ],
 };
 
-const windyData = {
+const windyData: PokémonConstructorData = {
   name: 'ウインディ',
-  types: ['fire' as TypeName],
+  types: ['fire'],
   ability: 'intimidate',
   item: 'sitrus-berry',
-  baseStats: { HP: 90, ATK: 110, DEF: 80, SPATK: 100, SPDEF: 80, SPEED: 95 } as BaseStats,
+  baseStats: { HP: 90, ATK: 110, DEF: 80, SPATK: 100, SPDEF: 80, SPEED: 95 },
   moves: [
     createMove({ name: 'バークアウト', type: 'dark', category: 'special', power: 55, accuracy: 100, pp: 15 }),
     createMove({ name: 'じだんだ', type: 'ground', power: 75, accuracy: 100, pp: 10 }),
@@ -34,12 +34,12 @@ const windyData = {
   ],
 };
 
-const dragonData = {
+const dragonData: PokémonConstructorData = {
   name: 'ドラパルト',
-  types: ['dragon', 'ghost'] as TypeName[],
+  types: ['dragon', 'ghost'],
   ability: 'infiltrator',
   item: 'life-orb',
-  baseStats: { HP: 88, ATK: 120, DEF: 75, SPATK: 100, SPDEF: 75, SPEED: 142 } as BaseStats,
+  baseStats: { HP: 88, ATK: 120, DEF: 75, SPATK: 100, SPDEF: 75, SPEED: 142 },
   moves: [
     createMove({ name: 'りゅうのはどう', type: 'dragon', category: 'special', power: 85, accuracy: 100, pp: 10 }),
     createMove({ name: 'たたりめ', type: 'ghost', category: 'special', power: 65, accuracy: 100, pp: 10 }),

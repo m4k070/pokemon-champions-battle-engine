@@ -45,10 +45,10 @@ export {
   targetsOpponent,
 } from './move.js';
 export type { Move, DamageMove, MoveInput, DamageMoveInput, StatusMoveInput, MoveConstructorData } from './move.js';
-export { Ability } from './ability.js';
-export type { AbilityConstructorData } from './ability.js';
-export { Item } from './item.js';
-export type { ItemConstructorData } from './item.js';
+export { ABILITY_NAMES, isAbilityName } from './ability-names.js';
+export type { AbilityName } from './ability-names.js';
+export { ITEM_NAMES, isItemName } from './item-names.js';
+export type { ItemName } from './item-names.js';
 export { Team } from './team.js';
 export type { SwitchOption } from './team.js';
 export { BattleField } from './battle-field.js';

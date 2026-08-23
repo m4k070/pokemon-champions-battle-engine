@@ -161,8 +161,8 @@ src/
 ├── battle-snapshot.ts        # 盤面のプレーンデータ化（snapshot/restore）
 ├── pokemon.ts                # ポケモンドメインモデル
 ├── move.ts                   # 技モデル
-├── ability.ts                # 特性モデル
-├── item.ts                   # アイテムモデル
+├── ability-names.ts          # 特性名の列挙（AbilityName の単一の情報源）
+├── item-names.ts             # 持ち物名の列挙（ItemName の単一の情報源）
 ├── team.ts                   # チームモデル
 ├── type-chart.ts             # タイプ相性表
 ├── event-emitter.ts          # Event System

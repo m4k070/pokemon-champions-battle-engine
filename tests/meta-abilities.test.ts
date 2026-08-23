@@ -3,10 +3,11 @@ import { Pokemon } from '../src/pokemon.js';
 import { createMove } from '../src/move.js';
 import type { MoveInput } from '../src/move.js';
 import type { BaseStats, MoveData, Stats, TypeName } from '../src/types.js';
+import type { AbilityName } from '../src/ability-names.js';
 
 const FIXED_STATS: Stats = { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
 
-function makePokemon(name: string, ability: string, baseStats: BaseStats, moves: MoveData[] = []): Pokemon {
+function makePokemon(name: string, ability: AbilityName, baseStats: BaseStats, moves: MoveData[] = []): Pokemon {
   // テストでは実数値を固定する（Lv.50計算の個体値補正に依存しないため）。
   return new Pokemon({ name, types: ['normal'], ability, item: null, baseStats, stats: { ...FIXED_STATS }, moves });
 }
@@ -22,7 +23,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('てんねん: 相手の攻撃能力上昇を無視する', () => {
-    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     const unaware = makePokemon('Unaware', 'unaware', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, attacker);
     engine.setActivePokemon(1, unaware);
@@ -35,7 +36,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
   test('テクニシャン: 威力60以下の技が1.5倍になる', () => {
     const attacker = makePokemon('Technician', 'technician', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, attacker);
-    const defender = makePokemon('Defender', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const defender = makePokemon('Defender', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(1, defender);
 
     // modifyMovePower を直接検証（バトル全体だと乱数が入るため）
@@ -49,7 +50,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
   test('ちからもち: 攻撃が2倍になる', () => {
     const attacker = makePokemon('HugePower', 'huge-power', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, attacker);
-    const defender = makePokemon('Defender', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const defender = makePokemon('Defender', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(1, defender);
 
     const attack = engine.calculateAttack(attacker, move({ name: 'probe', type: 'normal', power: 1 }));
@@ -58,7 +59,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
 
   test('がんじょう: HP満タン時の一撃をHP1で耐える', () => {
     const sturdy = makePokemon('Sturdy', 'sturdy', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
-    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, attacker);
     engine.setActivePokemon(1, sturdy);
 
@@ -75,7 +76,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
 
   test('ふゆう: 地面技を無効化する', () => {
     const levitate = makePokemon('Levitate', 'levitate', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
-    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, attacker);
     engine.setActivePokemon(1, levitate);
 
@@ -86,7 +87,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
 
   test('じきゅうりょく: 攻撃を受けると防御が上がる', () => {
     const stamina = makePokemon('Stamina', 'stamina', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
-    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, attacker);
     engine.setActivePokemon(1, stamina);
 
@@ -96,7 +97,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
 
   test('あついしぼう: ほのお技のダメージが半減する', () => {
     const thickFat = makePokemon('ThickFat', 'thick-fat', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
-    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, attacker);
     engine.setActivePokemon(1, thickFat);
 
@@ -120,7 +121,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
       form: 'shield',
       formStats,
     });
-    const defender = makePokemon('Defender', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const defender = makePokemon('Defender', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, aegislash);
     engine.setActivePokemon(1, defender);
 
@@ -145,7 +146,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
       stats: { ...FIXED_STATS },
       moves: [move({ name: 'Ice Beam', type: 'ice', power: 90 })],
     });
-    const defender = makePokemon('Defender', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const defender = makePokemon('Defender', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, greninja);
     engine.setActivePokemon(1, defender);
 
@@ -165,7 +166,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
       stats: { ...FIXED_STATS },
       moves: [move({ name: 'Surf', type: 'water', power: 90 })],
     });
-    const defender = makePokemon('Defender', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const defender = makePokemon('Defender', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, greninja);
     engine.setActivePokemon(1, defender);
 
@@ -194,7 +195,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('おやこあい: 攻撃技が2回ヒットし、2回目は威力1/4', () => {
-    const makeKangaskhan = (ability: string) => new Pokemon({
+    const makeKangaskhan = (ability: AbilityName) => new Pokemon({
       name: 'Kangaskhan',
       types: ['normal'],
       ability,
@@ -203,7 +204,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
       stats: { HP: 200, ATK: 100, DEF: 100, SPATK: 60, SPDEF: 100, SPEED: 100 },
       moves: [move({ name: 'Return', type: 'normal', power: 80 })],
     });
-    const makeDef = () => makePokemon('Defender', 'normal-ability', { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 });
+    const makeDef = () => makePokemon('Defender', 'none', { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 });
 
     // 親子愛なしの単発ダメージを基準にする
     const normal = makeKangaskhan('none');
@@ -241,7 +242,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('マルチスケイル: HP満タン時に受けるダメージが半減する', () => {
-    const makeDef = (ability: string) => makePokemon('Def', ability, { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 });
+    const makeDef = (ability: AbilityName) => makePokemon('Def', ability, { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 });
     const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
 
     // 基準: マルチスケイルなしの実際のダメージ（currentHPの変化で測る）
@@ -269,7 +270,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('適応力: タイプ一致技の威力が2倍になる（通常STAB 1.5倍より高い）', () => {
-    const makeLucario = (ability: string) => new Pokemon({
+    const makeLucario = (ability: AbilityName) => new Pokemon({
       name: 'Lucario',
       types: ['fighting', 'steel'],
       ability,
@@ -355,7 +356,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('かたやぶり: 相手の特性（マルチスケイル）を無視する', () => {
-    const makeDef = (ability: string) => makePokemon('Def', ability, { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 });
+    const makeDef = (ability: AbilityName) => makePokemon('Def', ability, { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 });
     const attacker = makePokemon('Attacker', 'mold-breaker', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     const attackerNoMB = makePokemon('Attacker2', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
 
@@ -400,7 +401,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
 
   test('ミラーアーマー: 相手の能力低下を反射する', () => {
     const mirrorArmor = makePokemon('MirrorArmor', 'mirror-armor', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
-    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, attacker);
     engine.setActivePokemon(1, mirrorArmor);
 
@@ -431,9 +432,9 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('しろいハーブ: 能力低下を1回防ぐ', () => {
-    const whiteHerb = makePokemon('WhiteHerb', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const whiteHerb = makePokemon('WhiteHerb', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     whiteHerb.item = 'white-herb';
-    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, attacker);
     engine.setActivePokemon(1, whiteHerb);
 
@@ -455,7 +456,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('くろいてっきゅう: 素早さが半減する', () => {
-    const slow = makePokemon('Slow', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const slow = makePokemon('Slow', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     slow.item = 'iron-ball';
     engine.setActivePokemon(0, slow);
 
@@ -463,7 +464,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('スピーダー: ターン終了時に素早さが1段階上がる（消耗品）', () => {
-    const speedy = makePokemon('Speedy', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const speedy = makePokemon('Speedy', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     speedy.item = 'x-speed';
     engine.setActivePokemon(0, speedy);
 
@@ -479,7 +480,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
   test('マジシャン: 攻撃を当てた相手の持ち物を奪う', () => {
     const magician = makePokemon('Magician', 'magician', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     magician.item = null;
-    const defender = makePokemon('Defender', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const defender = makePokemon('Defender', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     defender.item = 'leftovers';
     engine.setActivePokemon(0, magician);
     engine.setActivePokemon(1, defender);
@@ -489,7 +490,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(defender.item).toBeNull(); // 相手は失う
 
     // 持ち物を持っている相手からは奪えない
-    const defender2 = makePokemon('Defender2', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const defender2 = makePokemon('Defender2', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     defender2.item = 'life-orb';
     engine.setActivePokemon(1, defender2);
     engine.useMove(magician, defender2, move({ name: 'Tackle', type: 'normal', power: 40 }));
@@ -498,8 +499,8 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('ちょうはつ: 変化技以外を使用できない', () => {
-    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
-    const taunted = makePokemon('Taunted', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const taunted = makePokemon('Taunted', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     taunted.applyTaunt(3);
     engine.setActivePokemon(0, attacker);
     engine.setActivePokemon(1, taunted);
@@ -514,8 +515,8 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('メンタルハーブ: ちょうはつを1回だけ解除する', () => {
-    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
-    const holder = makePokemon('Holder', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const holder = makePokemon('Holder', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     holder.item = 'mental-herb';
     holder.applyTaunt(3);
     engine.setActivePokemon(0, attacker);
@@ -534,7 +535,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('メンタルハーブ: ターン終了時にちょうはつを解除する', () => {
-    const holder = makePokemon('Holder', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const holder = makePokemon('Holder', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     holder.item = 'mental-herb';
     holder.applyTaunt(3);
     engine.setActivePokemon(0, holder);
@@ -546,7 +547,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('ちょうはつ: 交代で解除される', () => {
-    const pokemon = makePokemon('Pokemon', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const pokemon = makePokemon('Pokemon', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     pokemon.applyTaunt(3);
     pokemon.resetTaunt();
     expect(pokemon.isTaunted).toBe(false);
@@ -555,7 +556,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
   test('とびだすハバネロ: 攻撃技でダメージを受けたとき、攻撃者をやけどにする', () => {
     const { SPICY_SPRAY } = require('../src/rules/abilities/meta-abilities.js') as typeof import('../src/rules/abilities/meta-abilities.js');
     const defender = makePokemon('Scovillain', 'spicy-spray', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
-    const attacker = makePokemon('Attacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
 
     // 物理技で攻撃 → やける
     engine.setActivePokemon(0, attacker);
@@ -564,20 +565,20 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(attacker.status).toBe('burn');
 
     // 特殊技でも発動する（フレレイムボディと違い）
-    const attacker2 = makePokemon('Attacker2', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const attacker2 = makePokemon('Attacker2', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, attacker2);
     engine.applyDamage(defender, 10, attacker2, move({ name: 'Thunderbolt', type: 'electric', power: 90, category: 'special' }));
     expect(attacker2.status).toBe('burn');
 
     // ほのおタイプは無効
-    const fireAttacker = makePokemon('FireAttacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const fireAttacker = makePokemon('FireAttacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     fireAttacker.types = ['fire'];
     engine.setActivePokemon(0, fireAttacker);
     engine.applyDamage(defender, 10, fireAttacker, move({ name: 'Ember', type: 'fire', power: 40, category: 'special' }));
     expect(fireAttacker.status).toBeNull();
 
     // すでに状態異常の相手には発動しない
-    const statusAttacker = makePokemon('StatusAttacker', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const statusAttacker = makePokemon('StatusAttacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     statusAttacker.status = 'poison';
     engine.setActivePokemon(0, statusAttacker);
     engine.applyDamage(defender, 10, statusAttacker, move({ name: 'Tackle', type: 'normal', power: 40, category: 'physical' }));
@@ -614,7 +615,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
 
   test('ひでり: 入場時に天候をはれにする', () => {
     const drought = makePokemon('Drought', 'drought', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
-    const defender = makePokemon('Defender', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const defender = makePokemon('Defender', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(0, drought);
     engine.setActivePokemon(1, defender);
 
