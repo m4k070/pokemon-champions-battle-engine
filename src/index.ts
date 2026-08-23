@@ -45,6 +45,8 @@ export {
   targetsOpponent,
 } from './move.js';
 export type { Move, DamageMove, MoveInput, DamageMoveInput, StatusMoveInput, MoveConstructorData } from './move.js';
+export { isMoveSuccessful, isDamageResult, shouldPivotAfterMove } from './use-move-result.js';
+export type { MoveFailureReason, NoEffectReason } from './use-move-result.js';
 export { NO_STATUS, createStatusState, statusConditionOf, cloneStatusState } from './status-state.js';
 export type { StatusState } from './status-state.js';
 export { ABILITY_NAMES, isAbilityName } from './ability-names.js';
@@ -56,7 +58,7 @@ export type { SwitchOption } from './team.js';
 export { BattleField } from './battle-field.js';
 export type { SideHazards, SideFlags } from './battle-field.js';
 export { BattleEngine } from './battle-engine.js';
-export type { UseMoveResult } from './battle-engine.js';
+export type { UseMoveResult } from './use-move-result.js';
 
 export { StatPointSystem, Level50System, MegaEvolutionSystem, MEGA_STONE_SEEDS } from './rules/index.js';
 export type {
