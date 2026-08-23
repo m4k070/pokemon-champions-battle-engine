@@ -2,6 +2,10 @@ import type { Pokemon } from '../pokemon.js';
 import type { TypeName } from '../types.js';
 import type { PokeApiPokemonData } from '../api/pokemon-api.js';
 import { StatPointSystem } from './stat-point-system.js';
+import { isAbilityName } from '../ability-names.js';
+import { isItemName } from '../item-names.js';
+import type { AbilityName } from '../ability-names.js';
+import type { ItemName } from '../item-names.js';
 
 const statPointSystem = new StatPointSystem();
 
@@ -15,7 +19,7 @@ export interface MegaStoneConfig {
   pokemon: string;
   megaName: string;
   typeChange: TypeName[];
-  abilityChange: string;
+  abilityChange: AbilityName;
   // ポケモンごとに配分が異なる種族値上昇分（HPを除く5ステータス、合計は必ず+100）。
   // マイナス値もありうる（例: メガガブリアスは素早さが-10される）。
   statBoosts: MegaStatBoosts;
@@ -29,7 +33,7 @@ export interface MegaStoneSeed {
   megaName: string;
 }
 
-export const MEGA_STONE_SEEDS: Record<string, MegaStoneSeed> = {
+export const MEGA_STONE_SEEDS: Partial<Record<ItemName, MegaStoneSeed>> = {
   'charizardite-x': { pokemon: 'charizard', megaApiName: 'charizard-mega-x', megaName: 'mega-charizard-x' },
   'charizardite-y': { pokemon: 'charizard', megaApiName: 'charizard-mega-y', megaName: 'mega-charizard-y' },
   'garchompite': { pokemon: 'garchomp', megaApiName: 'garchomp-mega', megaName: 'mega-garchomp' },
@@ -244,9 +248,9 @@ export interface PokemonDataFetcher {
 }
 
 export class MegaEvolutionSystem {
-  megaStones: Record<string, MegaStoneConfig>;
+  megaStones: Partial<Record<ItemName, MegaStoneConfig>>;
 
-  constructor(megaStones: Record<string, MegaStoneConfig> = DEFAULT_MEGA_STONES) {
+  constructor(megaStones: Partial<Record<ItemName, MegaStoneConfig>> = DEFAULT_MEGA_STONES) {
     this.megaStones = megaStones;
 
     for (const [item, stone] of Object.entries(this.megaStones)) {
@@ -267,11 +271,17 @@ export class MegaEvolutionSystem {
   // 自体はPoke API側に構造化データがないため静的に渡す必要がある。
   static async fromPokeApi(
     fetcher: PokemonDataFetcher,
-    seeds: Record<string, MegaStoneSeed> = MEGA_STONE_SEEDS
+    seeds: Partial<Record<ItemName, MegaStoneSeed>> = MEGA_STONE_SEEDS
   ): Promise<MegaEvolutionSystem> {
-    const megaStones: Record<string, MegaStoneConfig> = {};
+    const megaStones: Partial<Record<ItemName, MegaStoneConfig>> = {};
 
-    for (const [item, seed] of Object.entries(seeds)) {
+    for (const [rawItem, seed] of Object.entries(seeds)) {
+      if (!isItemName(rawItem)) {
+        throw new Error(`未知の持ち物名です: ${rawItem}。src/item-names.ts に追加してください`);
+      }
+      const item = rawItem;
+      if (seed === undefined) continue;
+
       const [base, mega] = await Promise.all([
         fetcher.fetchPokemonData(seed.pokemon),
         fetcher.fetchPokemonData(seed.megaApiName),
@@ -287,11 +297,20 @@ export class MegaEvolutionSystem {
         MEGA_STAT_KEYS.map((stat) => [stat, mega.baseStats[stat] - base.baseStats[stat]])
       ) as MegaStatBoosts;
 
+      // Poke API が返す特性名は任意の文字列なので、既知の特性名かをここで検証する。
+      // 未知の名前をそのまま通すと、メガシンカ後に特性が効かないまま静かに進んでしまう。
+      const abilityChange = mega.abilities[0]?.name ?? base.abilities[0]?.name ?? '';
+      if (!isAbilityName(abilityChange)) {
+        throw new Error(
+          `未知の特性名を検出しました: ${item} のメガ形態の特性「${abilityChange}」。src/ability-names.ts に追加してください`
+        );
+      }
+
       megaStones[item] = {
         pokemon: seed.pokemon,
         megaName: seed.megaName,
         typeChange: mega.types as TypeName[],
-        abilityChange: mega.abilities[0]?.name ?? base.abilities[0]?.name ?? '',
+        abilityChange,
         statBoosts,
       };
     }
@@ -315,7 +334,10 @@ export class MegaEvolutionSystem {
       throw new Error(`${pokemon.name}はメガシンカできません`);
     }
 
-    const stone = this.megaStones[pokemon.item!];
+    const stone = pokemon.item !== null ? this.megaStones[pokemon.item] : undefined;
+    if (stone === undefined) {
+      throw new Error(`${pokemon.name}のメガストーンが見つかりません`);
+    }
 
     pokemon.baseName = pokemon.name;
     pokemon.name = stone.megaName;

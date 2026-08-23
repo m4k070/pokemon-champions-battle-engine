@@ -415,7 +415,11 @@ describe('MegaEvolutionSystem.fromPokeApi', () => {
           return fakePokemonData({ baseStats: { HP: 78, ATK: 84, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 } });
         }
         // ATK+46のみで他が変化しない、合計100にならない壊れたレスポンス
-        return fakePokemonData({ baseStats: { HP: 78, ATK: 130, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 } });
+        // （特性は正常な値にして、種族値配分の検証だけが働くようにする）
+        return fakePokemonData({
+          abilities: [{ name: 'tough-claws', isHidden: false }],
+          baseStats: { HP: 78, ATK: 130, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 },
+        });
       },
     };
     const seeds: Record<string, MegaStoneSeed> = {

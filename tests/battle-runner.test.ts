@@ -3,6 +3,7 @@ import { RandomBattleAgent, getLegalActions } from '../src/ai/battle-agent.js';
 import { MegaEvolutionSystem } from '../src/rules/mega-evolution.js';
 import { Pokemon } from '../src/pokemon.js';
 import { Move, createMove } from '../src/move.js';
+import type { ItemName } from '../src/item-names.js';
 
 // 素早いAttacker(単一技・確定OHKO)とのろまなDefenderで、
 // 「先攻が必ず勝つ」決定論的なシナリオを作る（Randomでも選択肢が1つしかないため揺れない）。
@@ -402,7 +403,7 @@ describe('runBattle', () => {
 });
 
 describe('こだわり系の技固定', () => {
-  function makeChooser(item: string | null): Pokemon {
+  function makeChooser(item: ItemName | null): Pokemon {
     return new Pokemon({
       name: 'Chooser',
       types: ['normal'],

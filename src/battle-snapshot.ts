@@ -3,6 +3,8 @@ import { Pokemon } from './pokemon.js';
 import type { BattleField, SideFlags, SideHazards } from './battle-field.js';
 import type { AgentAction, BaseStats, MoveData, Stats, StatStages, StatusCondition, TypeName, WeatherType } from './types.js';
 import type { NatureInput, StatPointsInput } from './rules/stat-point-system.js';
+import type { AbilityName } from './ability-names.js';
+import type { ItemName } from './item-names.js';
 
 // Pokemon/BattleEngine/BattleFieldはミュータブルなクラス＋イベントハンドラ(関数)を持つため
 // structuredCloneでそのまま複製できない。盤面の「値」だけを抜き出したプレーンデータに変換し、
@@ -11,8 +13,8 @@ export interface PokemonSnapshot {
   name: string;
   baseName: string;
   types: TypeName[];
-  ability: string;
-  item: string | null;
+  ability: AbilityName;
+  item: ItemName | null;
   itemUsed: boolean;
   lockedMove: number | null;
   baseStats: BaseStats;
