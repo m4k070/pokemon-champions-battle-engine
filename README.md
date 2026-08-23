@@ -168,6 +168,7 @@ src/
 ├── team.ts                   # チームモデル
 ├── type-names.ts             # タイプ名の列挙（TypeName の単一の情報源）
 ├── type-chart.ts             # タイプ相性表
+├── form-registry.ts          # フォルム定義の登録（ポケモン種族ごとの有効フォルム）
 ├── event-emitter.ts          # Event System
 ├── sample-battle.ts          # サンプルバトル（BattleSession + BattleAgent）
 ├── mcp-server.ts             # MCPサーバーの起動エントリーポイント（stdio）
@@ -210,6 +211,58 @@ npm test -- --testNamePattern="ダメージ計算"
 - [実装済みアイテム](docs/IMPLEMENTED_ITEMS.md)
 - [データフロー図](docs/dfd.md)（MermaidJS形式のDFD）
 - `npm run docs`でTypeDocによるAPIリファレンスを`docs/api/`に生成できます
+
+## フォルム型設計
+
+フォルムチェンジ（ギルガルド等）を型安全に管理する。
+
+### フォルム名の制約
+
+```typescript
+// types.ts — single source of truth
+export const FORM_NAMES = ['normal', 'shield', 'blade'] as const;
+export type FormName = typeof FORM_NAMES[number];  // 'normal' | 'shield' | 'blade'
+```
+
+存在しないフォルム名（`'invalid'` 等）を型レベルでブロック。
+
+### フォルム定義
+
+```typescript
+export interface FormDefinition {
+  baseStats: BaseStats;
+  // 将来的にフォルム固有の技・特性を追加可能
+}
+```
+
+### フォルムチェンジの結果
+
+```typescript
+export type FormChangeResult =
+  | { outcome: 'changed'; from: FormName; to: FormName }
+  | { outcome: 'unchanged'; reason: 'same-form' | 'unknown-form' | 'no-forms' };
+```
+
+`setForm` の戻り値が `boolean` ではなく、成功/失敗とその理由を型で表現。
+
+### 使用例
+
+```typescript
+const aegislash = new Pokemon({
+  name: 'Aegislash',
+  form: 'shield',
+  formStats: {
+    shield: { baseStats: { HP: 60, ATK: 50, DEF: 150, SPATK: 50, SPDEF: 150, SPEED: 60 } },
+    blade:  { baseStats: { HP: 60, ATK: 150, DEF: 50, SPATK: 150, SPDEF: 50, SPEED: 60 } },
+  },
+  // ...
+});
+
+const result = aegislash.setForm('blade');
+if (result.outcome === 'changed') {
+  console.log(`${result.from} → ${result.to}`);
+}
+```
 
 ## 不完全情報対応
 
