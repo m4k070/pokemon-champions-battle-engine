@@ -1,10 +1,14 @@
 {
   "tackle": {
-    "status": "unverified",
-    "reason": "Poke API は英語の技名しか引けないため照合していない"
+    "status": "valid",
+    "type": "normal",
+    "power": 40,
+    "category": "physical"
   },
   "u-turn": {
-    "status": "unverified",
-    "reason": "Poke API は英語の技名しか引けないため照合していない"
+    "status": "valid",
+    "type": "bug",
+    "power": 70,
+    "category": "physical"
   }
 }
