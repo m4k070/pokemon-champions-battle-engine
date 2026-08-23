@@ -119,6 +119,23 @@ export type DamageMoveData = PhysicalMoveData | SpecialMoveData;
 // 型の絞り込みには move.ts の isDamageMove / isStatusMove を使う。
 export type MoveData = DamageMoveData | StatusMoveData;
 
+// --- フォルム関連の型 ---
+
+// フォルム名の列挙（single source of truth）。
+// 新しいフォルムを追加するときはここに追加する。
+export const FORM_NAMES = ['normal', 'shield', 'blade'] as const;
+export type FormName = typeof FORM_NAMES[number];
+
+// フォルム定義（種族値のみ。将来的にフォルム固有の技・特性を追加可能）。
+export interface FormDefinition {
+  baseStats: BaseStats;
+}
+
+// フォルムチェンジの結果（discriminated union）。
+export type FormChangeResult =
+  | { outcome: 'changed'; from: FormName; to: FormName }
+  | { outcome: 'unchanged'; reason: 'same-form' | 'unknown-form' | 'no-forms' };
+
 export type TypeChart = Record<TypeName, Partial<Record<TypeName, number>>>;
 
 export type BattleEventName =

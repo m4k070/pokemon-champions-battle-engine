@@ -109,15 +109,15 @@ describe('上位構築向け特性（meta-abilities）', () => {
 
   test('バトルスイッチ: 攻撃技でブレード、キングシールドでシールドに戻る', () => {
     const formStats = {
-      shield: { HP: 60, ATK: 50, DEF: 150, SPATK: 50, SPDEF: 150, SPEED: 60 },
-      blade: { HP: 60, ATK: 150, DEF: 50, SPATK: 150, SPDEF: 50, SPEED: 60 },
+      shield: { baseStats: { HP: 60, ATK: 50, DEF: 150, SPATK: 50, SPDEF: 150, SPEED: 60 } },
+      blade: { baseStats: { HP: 60, ATK: 150, DEF: 50, SPATK: 150, SPDEF: 50, SPEED: 60 } },
     };
     const aegislash = new Pokemon({
       name: 'Aegislash',
       types: ['steel', 'ghost'],
       ability: 'battle-switch',
       item: null,
-      baseStats: formStats.shield,
+      baseStats: formStats.shield.baseStats,
       stats: { ...FIXED_STATS },
       moves: [move({ name: 'Iron Head', type: 'steel', power: 80 })],
       form: 'shield',

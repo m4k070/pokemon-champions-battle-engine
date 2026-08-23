@@ -1,4 +1,4 @@
-import type { BaseStats, MoveData, StatusCondition, Stats, StatStageKey, StatStages, TypeName } from './types.js';
+import type { BaseStats, MoveData, StatusCondition, Stats, StatStageKey, StatStages, TypeName, FormName, FormDefinition, FormChangeResult } from './types.js';
 import type { BattleEngine } from './battle-engine.js';
 import type { AbilityName } from './ability-names.js';
 import type { ItemName } from './item-names.js';
@@ -43,8 +43,8 @@ export interface PokémonConstructorData {
   // ちょうはつ: trueの間、攻撃技を使えない（2〜4ターン）。交代で解除。
   tauntTurnsLeft?: number;
   // フォルムチェンジ（バトルスイッチ等）。現在のフォルム名と、フォルム別種族値。
-  form?: string;
-  formStats?: Record<string, BaseStats>;
+  form?: FormName;
+  formStats?: Record<string, FormDefinition>;
 }
 
 export class Pokemon {
@@ -71,9 +71,9 @@ export class Pokemon {
   // ちょうはつ: trueの間、攻撃技を使えない（2〜4ターン）。交代で解除。
   tauntTurnsLeft: number;
   // フォルムチェンジ（バトルスイッチ等）。現在のフォルム名。formStats 未指定なら 'normal'。
-  form: string;
-  // フォルム別種族値。例: ギルガルド { shield: {...}, blade: {...} }。未指定なら変更不可。
-  formStats: Record<string, BaseStats> | null;
+  form: FormName;
+  // フォルム別定義。例: ギルガルド { shield: { baseStats: {...} }, blade: { baseStats: {...} } }。未指定なら変更不可。
+  formStats: Record<string, FormDefinition> | null;
   // レベル（実数値の再計算に使用）。省略時は50。
   level: number;
 
@@ -138,13 +138,15 @@ export class Pokemon {
   // フォルムチェンジ。formStats に存在するフォルムへ移行し、種族値を差し替えて
   // 実数値を再計算する。HP はフォルム間で変わらない前提（ギルガルド等）で維持する。
   // 存在しないフォルム名・formStats 未指定なら何もしない。
-  setForm(form: string): boolean {
-    if (!this.formStats || !this.formStats[form]) return false;
-    if (this.form === form) return false;
+  setForm(form: FormName): FormChangeResult {
+    if (!this.formStats) return { outcome: 'unchanged', reason: 'no-forms' };
+    if (!this.formStats[form]) return { outcome: 'unchanged', reason: 'unknown-form' };
+    if (this.form === form) return { outcome: 'unchanged', reason: 'same-form' };
+    const from = this.form;
     this.form = form;
     const level = this.level;
-    this.stats = statPointSystem.calculateStats(this.formStats[form], this.statPoints, this.nature, level);
-    return true;
+    this.stats = statPointSystem.calculateStats(this.formStats[form].baseStats, this.statPoints, this.nature, level);
+    return { outcome: 'changed', from, to: form };
   }
 
   // 状態異常の種類のみを返す派生プロパティ（statusStateが唯一の情報源）。
