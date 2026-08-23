@@ -1,4 +1,5 @@
 import type { AbilityDefinition } from './types.js';
+import { isDamageMove, isPhysicalMove, isStatusMove } from '../../move.js';
 import type { MoveData } from '../../types.js';
 
 // ============================================================
@@ -27,7 +28,7 @@ export const REGENERATOR: AbilityDefinition = {
 export const ROUGH_SKIN: AbilityDefinition = {
   name: 'rough-skin',
   onDamaged: ({ defender, attacker, move }) => {
-    if (move.contact) {
+    if (isDamageMove(move) && move.contact) {
       const damage = Math.floor(defender.maxHP / 8);
       attacker.takeDamage(Math.max(1, damage));
       // takeDamage は engine なしで呼ぶためログはこちらで出す。
@@ -187,7 +188,7 @@ export const INNER_FOCUS: AbilityDefinition = {
 export const SPICY_SPRAY: AbilityDefinition = {
   name: 'spicy-spray',
   onDamaged: ({ defender, attacker, move }) => {
-    if (move.category === 'status') return;
+    if (isStatusMove(move)) return;
     if (attacker.status) return;
     if (attacker.types.includes('fire')) return;
     attacker.applyStatus('burn');
@@ -277,7 +278,7 @@ export const PROTEAN: AbilityDefinition = {
 // つめかえなし: 接触技の威力が1.3倍になる。
 export const TOUGH_CLAWS: AbilityDefinition = {
   name: 'tough-claws',
-  modifyMovePower: ({ move, value }) => (move.contact ? Math.floor(value * 1.3) : value),
+  modifyMovePower: ({ move, value }) => (isDamageMove(move) && move.contact ? Math.floor(value * 1.3) : value),
 };
 
 // すなふぶき: すなあらし中、いわ・じめん・はがねタイプの技の威力が1.3倍になる。
@@ -307,7 +308,7 @@ export const LIGHTNING_ROD: AbilityDefinition = {
 export const WEAK_ARMOR: AbilityDefinition = {
   name: 'weak-armor',
   onDamaged: ({ defender, move, engine }) => {
-    if (move.category === 'physical') {
+    if (isPhysicalMove(move)) {
       defender.modifyStatStage('DEF', -1);
       defender.modifyStatStage('SPEED', 2);
       engine.log.push(`${defender.name}のくだけるよろいで防御が下がり、素早さが上がった`);
@@ -334,7 +335,7 @@ export const SCRAPPY: AbilityDefinition = {
 export const POISON_POINT: AbilityDefinition = {
   name: 'poison-point',
   onDamaged: ({ defender, attacker, move, engine }) => {
-    if (move.category !== 'physical') return;
+    if (!isPhysicalMove(move)) return;
     // 攻撃者のサイドにどくびしを設置
     const attackerSide = engine.getSide(attacker);
     if (attackerSide === null) return;

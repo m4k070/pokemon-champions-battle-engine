@@ -1,7 +1,7 @@
+import { createMove } from "../src/move.js";
 import { snapshotBattle, restoreBattle, snapshotPokemon, restorePokemon } from '../src/battle-snapshot.js';
 import { BattleEngine } from '../src/battle-engine.js';
 import { Pokemon } from '../src/pokemon.js';
-import { Move } from '../src/move.js';
 
 function makeGarchomp(): Pokemon {
   return new Pokemon({
@@ -10,7 +10,7 @@ function makeGarchomp(): Pokemon {
     ability: 'rough-skin',
     item: 'choice-scarf',
     baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
-    moves: [new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10 })],
+    moves: [createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10 })],
   });
 }
 

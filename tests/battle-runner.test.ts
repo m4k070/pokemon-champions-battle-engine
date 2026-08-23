@@ -2,7 +2,7 @@ import { BattleSession, BattleHistory, runBattle } from '../src/battle-runner.js
 import { RandomBattleAgent, getLegalActions } from '../src/ai/battle-agent.js';
 import { MegaEvolutionSystem } from '../src/rules/mega-evolution.js';
 import { Pokemon } from '../src/pokemon.js';
-import { Move } from '../src/move.js';
+import { Move, createMove } from '../src/move.js';
 
 // 素早いAttacker(単一技・確定OHKO)とのろまなDefenderで、
 // 「先攻が必ず勝つ」決定論的なシナリオを作る（Randomでも選択肢が1つしかないため揺れない）。
@@ -13,7 +13,7 @@ function makeAttacker(name = 'Attacker'): Pokemon {
     ability: 'none',
     item: null,
     baseStats: { HP: 100, ATK: 100, DEF: 50, SPATK: 50, SPDEF: 50, SPEED: 100 },
-    moves: [new Move({ name: 'tackle', type: 'normal', power: 100, accuracy: 100, pp: 5, category: 'physical' })],
+    moves: [createMove({ name: 'tackle', type: 'normal', power: 100, accuracy: 100, pp: 5, category: 'physical' })],
   });
 }
 
@@ -24,7 +24,7 @@ function makeDefender(name = 'Defender'): Pokemon {
     ability: 'none',
     item: null,
     baseStats: { HP: 1, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 1 },
-    moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+    moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
   });
 }
 
@@ -130,7 +130,7 @@ describe('BattleSession', () => {
       ability: 'blaze',
       item: 'charizardite-y',
       baseStats: { HP: 78, ATK: 84, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 },
-      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
+      moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
     });
     const defender = makeDefender();
     const session = await BattleSession.start([charizard], [defender]);
@@ -158,7 +158,7 @@ describe('BattleSession', () => {
       ability: 'blaze',
       item: 'charizardite-y',
       baseStats: { HP: 78, ATK: 84, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 },
-      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
+      moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
     });
     const defender = makeDefender();
     const session = await BattleSession.start([charizard], [defender]);
@@ -186,7 +186,7 @@ describe('BattleSession', () => {
       ability: 'static',
       item: 'raichunite-x',
       baseStats: { HP: 60, ATK: 90, DEF: 55, SPATK: 90, SPDEF: 80, SPEED: 110 },
-      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
+      moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
     });
     const defender = makeDefender();
     const session = await BattleSession.start([raichu], [defender]);
@@ -224,8 +224,8 @@ describe('BattleSession', () => {
       item: 'greninjaite',
       baseStats: { HP: 72, ATK: 95, DEF: 67, SPATK: 103, SPDEF: 71, SPEED: 122 },
       moves: [
-        new Move({ name: 'surf', type: 'water', power: 90, accuracy: 100, pp: 10, category: 'special' }),
-        new Move({ name: 'knock-off', type: 'dark', power: 65, accuracy: 100, pp: 10, category: 'physical' }),
+        createMove({ name: 'surf', type: 'water', power: 90, accuracy: 100, pp: 10, category: 'special' }),
+        createMove({ name: 'knock-off', type: 'dark', power: 65, accuracy: 100, pp: 10, category: 'physical' }),
       ],
     });
     const defender = new Pokemon({
@@ -234,7 +234,7 @@ describe('BattleSession', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 200, ATK: 10, DEF: 100, SPATK: 10, SPDEF: 100, SPEED: 1 },
-      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+      moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
     });
     const session = await BattleSession.start([greninja], [defender], { megaEvolutionSystem: megaSystem });
     session.beginTurn();
@@ -390,7 +390,7 @@ describe('runBattle', () => {
         ability: 'none',
         item: null,
         baseStats: { HP: 200, ATK: 1, DEF: 200, SPATK: 1, SPDEF: 200, SPEED: 50 },
-        moves: [new Move({ name: 'splash', type: 'normal', power: 0, accuracy: 100, pp: 40, category: 'status' })],
+        moves: [createMove({ name: 'splash', type: 'normal', power: 0, accuracy: 100, pp: 40, category: 'status' })],
       });
     const random = new RandomBattleAgent();
 
@@ -410,8 +410,8 @@ describe('こだわり系の技固定', () => {
       item,
       baseStats: { HP: 100, ATK: 100, DEF: 80, SPATK: 80, SPDEF: 80, SPEED: 100 },
       moves: [
-        new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' }),
-        new Move({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, pp: 10, category: 'physical' }),
+        createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' }),
+        createMove({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, pp: 10, category: 'physical' }),
       ],
     });
   }
@@ -423,7 +423,7 @@ describe('こだわり系の技固定', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 255, ATK: 10, DEF: 200, SPATK: 10, SPDEF: 200, SPEED: 1 },
-      moves: [new Move({ name: 'splash', type: 'normal', power: 0, accuracy: 100, pp: 10, category: 'status' })],
+      moves: [createMove({ name: 'splash', type: 'normal', power: 0, accuracy: 100, pp: 10, category: 'status' })],
     });
   }
 
@@ -495,7 +495,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 100, ATK: 60, DEF: 80, SPATK: 50, SPDEF: 80, SPEED: 200 },
-      moves: [new Move({ name: 'u-turn', type: 'bug', power: 70, accuracy: 100, pp: 10, category: 'physical', pivot: true })],
+      moves: [createMove({ name: 'u-turn', type: 'bug', power: 70, accuracy: 100, pp: 10, category: 'physical', pivot: true })],
     });
   }
 
@@ -506,7 +506,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 150, ATK: 60, DEF: 80, SPATK: 50, SPDEF: 80, SPEED: 50 },
-      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
+      moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 10, category: 'physical' })],
     });
   }
 
@@ -517,7 +517,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 200, ATK: 120, DEF: 100, SPATK: 50, SPDEF: 100, SPEED: 1 },
-      moves: [new Move({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, pp: 10, category: 'physical' })],
+      moves: [createMove({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, pp: 10, category: 'physical' })],
     });
   }
 
@@ -695,7 +695,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'shadow-tag',
       item: null,
       baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
-      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+      moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
     });
     const bench = new Pokemon({
       name: 'Bench',
@@ -703,7 +703,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
-      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+      moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
     });
     const opponent = makeAttacker('Opponent');
     const teamA = [shadowTag, bench];
@@ -726,7 +726,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'shadow-tag',
       item: null,
       baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
-      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+      moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
     });
     const ghostBench = new Pokemon({
       name: 'GhostBench',
@@ -734,7 +734,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
-      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+      moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
     });
     const opponent = makeAttacker('Opponent');
     const session = await BattleSession.start([shadowTag], [opponent, ghostBench]);
@@ -755,7 +755,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'shadow-tag',
       item: null,
       baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
-      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+      moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
     });
     const shedShell = new Pokemon({
       name: 'ShedShell',
@@ -763,7 +763,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'none',
       item: 'shed-shell',
       baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
-      moves: [new Move({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+      moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
     });
     const opponent = makeAttacker('Opponent');
     const session = await BattleSession.start([shadowTag], [opponent, shedShell]);
@@ -789,7 +789,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 100, ATK: 150, DEF: 50, SPATK: 50, SPDEF: 50, SPEED: 150 },
-      moves: [new Move({ name: 'Tackle', type: 'normal', power: 100, accuracy: 100, pp: 5, category: 'physical' })],
+      moves: [createMove({ name: 'Tackle', type: 'normal', power: 100, accuracy: 100, pp: 5, category: 'physical' })],
     });
     const slow = new Pokemon({
       name: 'Slow',
@@ -797,7 +797,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 60, ATK: 100, DEF: 50, SPATK: 50, SPDEF: 50, SPEED: 10 },
-      moves: [new Move({ name: 'Tackle', type: 'normal', power: 100, accuracy: 100, pp: 5, category: 'physical' })],
+      moves: [createMove({ name: 'Tackle', type: 'normal', power: 100, accuracy: 100, pp: 5, category: 'physical' })],
     });
 
     const session = await BattleSession.start([fast], [slow]);
@@ -821,7 +821,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'swift-swim',
       item: null,
       baseStats: { HP: 100, ATK: 150, DEF: 50, SPATK: 50, SPDEF: 50, SPEED: 30 },
-      moves: [new Move({ name: 'Tackle', type: 'normal', power: 150, accuracy: 100, pp: 5, category: 'physical' })],
+      moves: [createMove({ name: 'Tackle', type: 'normal', power: 150, accuracy: 100, pp: 5, category: 'physical' })],
     });
     const fast = new Pokemon({
       name: 'Fast',
@@ -829,7 +829,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 60, ATK: 100, DEF: 50, SPATK: 50, SPDEF: 50, SPEED: 50 },
-      moves: [new Move({ name: 'Tackle', type: 'normal', power: 100, accuracy: 100, pp: 5, category: 'physical' })],
+      moves: [createMove({ name: 'Tackle', type: 'normal', power: 100, accuracy: 100, pp: 5, category: 'physical' })],
     });
 
     const session = await BattleSession.start([swift], [fast]);
@@ -856,7 +856,7 @@ describe('pivot技による攻撃後の交代', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 60, ATK: 150, DEF: 50, SPATK: 50, SPDEF: 50, SPEED: 100 },
-      moves: [new Move({ name: 'Tackle', type: 'normal', power: 150, accuracy: 100, pp: 5, category: 'physical' })],
+      moves: [createMove({ name: 'Tackle', type: 'normal', power: 150, accuracy: 100, pp: 5, category: 'physical' })],
     });
 
     // 複数回実行して、Aが先攻のパターンとBが先攻のパターンの両方が起こりうることを確認

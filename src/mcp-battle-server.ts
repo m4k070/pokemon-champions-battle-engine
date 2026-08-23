@@ -4,7 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { Pokemon } from './pokemon.js';
-import { Move } from './move.js';
+import { createMove, type MoveInput } from './move.js';
 import { BattleSession, BattleHistory } from './battle-runner.js';
 import { RandomBattleAgent } from './ai/battle-agent.js';
 import type { AgentDecision } from './ai/battle-agent.js';
@@ -120,6 +120,46 @@ interface StoredSession {
   history: BattleHistory;
 }
 
+// MCP の技入力は全カテゴリのフィールドがフラットに並ぶため、ここで category ごとの
+// 入力型へ振り分ける。変化技はダメージ技専用のフィールド（multiHit 等）を持たないので、
+// 混入していてもこの境界で落とす。
+function toMoveInput(spec: z.infer<typeof MoveInputSchema>): MoveInput {
+  const shared = {
+    name: spec.name,
+    type: spec.type,
+    accuracy: spec.accuracy,
+    pp: spec.pp,
+    maxPP: spec.maxPP,
+    priority: spec.priority,
+    effectChance: spec.effectChance,
+    fieldEffect: spec.fieldEffect,
+    selfStatChange: spec.selfStatChange,
+    targetStatChange: spec.targetStatChange,
+    inflictsSeed: spec.inflictsSeed,
+    weatherHeal: spec.weatherHeal,
+    weather: spec.weather,
+    pivot: spec.pivot,
+    restoresShieldForm: spec.restoresShieldForm,
+  };
+
+  if (spec.category === 'status') {
+    return { ...shared, category: 'status', status: spec.status };
+  }
+
+  return {
+    ...shared,
+    category: spec.category,
+    power: spec.power,
+    secondaryEffect: spec.secondaryEffect,
+    multiHit: spec.multiHit,
+    maxHits: spec.maxHits,
+    multiHitPowers: spec.multiHitPowers,
+    crashDamage: spec.crashDamage,
+    contact: spec.contact,
+    inflictsSpikes: spec.inflictsSpikes,
+  };
+}
+
 function buildPokemon(spec: z.infer<typeof PokemonInputSchema>): Pokemon {
   const pokemon = new Pokemon({
     name: spec.name,
@@ -132,7 +172,7 @@ function buildPokemon(spec: z.infer<typeof PokemonInputSchema>): Pokemon {
     status: spec.status ?? null,
     form: spec.form,
     formStats: spec.formStats,
-    moves: spec.moves.map((move) => new Move(move)),
+    moves: spec.moves.map((move) => createMove(toMoveInput(move))),
   });
   // currentHP は maxHP を超えないようクランプ
   if (spec.currentHP !== undefined) {

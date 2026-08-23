@@ -1,7 +1,8 @@
+import { createMove } from "../src/move.js";
 import { RandomBattleAgent, getLegalActions } from '../src/ai/battle-agent.js';
 import type { BattleContext } from '../src/ai/battle-agent.js';
 import { Pokemon } from '../src/pokemon.js';
-import { Move } from '../src/move.js';
+import type { Move } from '../src/move.js';
 
 function makePokemon(overrides: { moves?: Move[]; item?: string | null } = {}): Pokemon {
   return new Pokemon({
@@ -11,8 +12,8 @@ function makePokemon(overrides: { moves?: Move[]; item?: string | null } = {}): 
     item: overrides.item ?? null,
     baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
     moves: overrides.moves ?? [
-      new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10 }),
-      new Move({ name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 10 }),
+      createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10 }),
+      createMove({ name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 10 }),
     ],
   });
 }
@@ -53,8 +54,8 @@ describe('RandomBattleAgent', () => {
     const agent = new RandomBattleAgent();
     const self = makePokemon({
       moves: [
-        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 0 }),
-        new Move({ name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 5 }),
+        createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 0 }),
+        createMove({ name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 5 }),
       ],
     });
 
@@ -67,8 +68,8 @@ describe('RandomBattleAgent', () => {
     const agent = new RandomBattleAgent();
     const self = makePokemon({
       moves: [
-        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 0 }),
-        new Move({ name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 0 }),
+        createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 0 }),
+        createMove({ name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 0 }),
       ],
     });
     const bench = makePokemon();
@@ -81,7 +82,7 @@ describe('RandomBattleAgent', () => {
   test('forfeits when out of PP and no healthy teammate remains', async () => {
     const agent = new RandomBattleAgent();
     const self = makePokemon({
-      moves: [new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 0 })],
+      moves: [createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 0 })],
     });
 
     const decision = await agent.selectAction(makeContext({ self, selfTeam: [self] }));
@@ -94,8 +95,8 @@ describe('RandomBattleAgent', () => {
     const self = makePokemon({
       item: 'choice-scarf',
       moves: [
-        new Move({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10 }),
-        new Move({ name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 10 }),
+        createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10 }),
+        createMove({ name: 'outrage', type: 'dragon', power: 120, accuracy: 100, pp: 10 }),
       ],
     });
     self.lockMove(0);

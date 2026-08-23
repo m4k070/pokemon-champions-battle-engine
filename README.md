@@ -109,11 +109,11 @@ npm run dev
 ### BattleSession + BattleAgent（推奨）
 
 ```typescript
-import { Pokemon, Move, BattleSession, BattleHistory, RandomBattleAgent } from './src/index.js';
+import { Pokemon, createMove, BattleSession, BattleHistory, RandomBattleAgent } from './src/index.js';
 
 const teamA = [new Pokemon({ name: 'ガブリアス', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'choice-scarf',
   baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
-  moves: [new Move({ name: 'じしん', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' })] })];
+  moves: [createMove({ name: 'じしん', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' })] })];
 const teamB = [/* ... */];
 
 const session = await BattleSession.start(teamA, teamB);

@@ -1,14 +1,15 @@
 import { BattleEngine } from '../src/battle-engine.js';
 import { BattleSession } from '../src/battle-runner.js';
 import { Pokemon } from '../src/pokemon.js';
-import { Move } from '../src/move.js';
+import { createMove } from '../src/move.js';
+
 import { MegaEvolutionSystem } from '../src/rules/mega-evolution.js';
 
 // 雨パ構築（メガラグラージ + すいすい）の実戦検証。
 // 2026-08-20: 天候変化技（あまごい等）を実装したので、雨パのシナリオが組めるようになった。
 describe('雨パ構築（メガラグラージ+すいすい）', () => {
-  const rainDance = () => new Move({ name: 'Rain Dance', type: 'water', category: 'status', weather: 'rain', pp: 10 });
-  const sunnyDay = () => new Move({ name: 'Sunny Day', type: 'fire', category: 'status', weather: 'sun', pp: 10 });
+  const rainDance = () => createMove({ name: 'Rain Dance', type: 'water', category: 'status', weather: 'rain', pp: 10 });
+  const sunnyDay = () => createMove({ name: 'Sunny Day', type: 'fire', category: 'status', weather: 'sun', pp: 10 });
 
   const makeSwampert = () => new Pokemon({
     name: 'Swampert',
@@ -17,7 +18,7 @@ describe('雨パ構築（メガラグラージ+すいすい）', () => {
     ability: 'torrent',
     item: 'swampertite',
     baseStats: { HP: 100, ATK: 110, DEF: 90, SPATK: 85, SPDEF: 90, SPEED: 60 },
-    moves: [new Move({ name: 'Surf', type: 'water', power: 90, accuracy: 100, pp: 10, category: 'special' })],
+    moves: [createMove({ name: 'Surf', type: 'water', power: 90, accuracy: 100, pp: 10, category: 'special' })],
   });
 
   const makeDefender = () => new Pokemon({
@@ -26,7 +27,7 @@ describe('雨パ構築（メガラグラージ+すいすい）', () => {
     ability: 'none',
     item: null,
     baseStats: { HP: 200, ATK: 10, DEF: 100, SPATK: 10, SPDEF: 100, SPEED: 10 },
-    moves: [new Move({ name: 'Tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
+    moves: [createMove({ name: 'Tackle', type: 'normal', power: 40, accuracy: 100, pp: 5, category: 'physical' })],
   });
 
   test('あまごい: 天候が雨になる（5ターン）', () => {
@@ -103,7 +104,7 @@ describe('雨パ構築（メガラグラージ+すいすい）', () => {
       ability: 'drizzle', // あめふらし: 場に出た時点で雨が降る（あまごい技は不要）
       item: null,
       baseStats: { HP: 90, ATK: 75, DEF: 75, SPATK: 90, SPDEF: 100, SPEED: 70 },
-      moves: [new Move({ name: 'Surf', type: 'water', power: 90, accuracy: 100, pp: 10, category: 'special' })],
+      moves: [createMove({ name: 'Surf', type: 'water', power: 90, accuracy: 100, pp: 10, category: 'special' })],
     });
     const swampert = makeSwampert();
 
@@ -114,7 +115,7 @@ describe('雨パ構築（メガラグラージ+すいすい）', () => {
       ability: 'none',
       item: null,
       baseStats: { HP: 250, ATK: 80, DEF: 80, SPATK: 100, SPDEF: 80, SPEED: 90 },
-      moves: [new Move({ name: 'Flamethrower', type: 'fire', power: 90, accuracy: 100, pp: 10, category: 'special' })],
+      moves: [createMove({ name: 'Flamethrower', type: 'fire', power: 90, accuracy: 100, pp: 10, category: 'special' })],
     });
 
     const session = await BattleSession.start([rainDancer, swampert], [opponent]);

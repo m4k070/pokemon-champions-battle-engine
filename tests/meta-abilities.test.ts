@@ -1,6 +1,7 @@
 import { BattleEngine } from '../src/battle-engine.js';
 import { Pokemon } from '../src/pokemon.js';
-import { Move } from '../src/move.js';
+import { createMove } from '../src/move.js';
+import type { MoveInput } from '../src/move.js';
 import type { BaseStats, MoveData, Stats, TypeName } from '../src/types.js';
 
 const FIXED_STATS: Stats = { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
@@ -10,8 +11,8 @@ function makePokemon(name: string, ability: string, baseStats: BaseStats, moves:
   return new Pokemon({ name, types: ['normal'], ability, item: null, baseStats, stats: { ...FIXED_STATS }, moves });
 }
 
-const move = (over: Partial<MoveData> & { name: string; type: MoveData['type']; power: number }): MoveData =>
-  new Move({ pp: 10, maxPP: 10, accuracy: 100, category: 'physical', ...over }) as unknown as MoveData;
+// テスト用: PP・命中を既定値で埋めて技を作る（キャスト不要で MoveInput の型検査が効く）。
+const move = (over: MoveInput): MoveData => createMove({ pp: 10, maxPP: 10, accuracy: 100, ...over });
 
 describe('上位構築向け特性（meta-abilities）', () => {
   let engine: BattleEngine;
@@ -27,7 +28,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
     engine.setActivePokemon(1, unaware);
 
     attacker.modifyStatStage('ATK', 4); // 攻撃+4
-    const attack = engine.calculateAttack(attacker, { category: 'physical' });
+    const attack = engine.calculateAttack(attacker, move({ name: 'probe', type: 'normal', power: 1 }));
     expect(attack).toBe(100); // 無視されるので素の攻撃値
   });
 
@@ -51,7 +52,7 @@ describe('上位構築向け特性（meta-abilities）', () => {
     const defender = makePokemon('Defender', 'normal-ability', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
     engine.setActivePokemon(1, defender);
 
-    const attack = engine.calculateAttack(attacker, { category: 'physical' });
+    const attack = engine.calculateAttack(attacker, move({ name: 'probe', type: 'normal', power: 1 }));
     expect(attack).toBe(200);
   });
 

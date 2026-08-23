@@ -48,47 +48,76 @@ export interface TargetStatChange {
   chance: number; // 0-100（%）
 }
 
-export interface MoveData {
+// --- 技の共通フィールドと効果 ---
+
+// カテゴリによらず全ての技が持つ識別・基礎情報。
+interface MoveIdentity {
   name: string;
   type: TypeName;
-  power: number;
   accuracy: number;
   pp: number;
   maxPP: number;
-  category: MoveCategory;
-  status: StatusCondition | null;
   priority: number;
   effectChance: number | null;
+}
+
+// カテゴリによらず指定しうる効果（あさのひざしの回復・とんぼがえりの pivot 等）。
+// ダメージ技にも変化技にも付随しうるため、両カテゴリで共有する。
+export interface CommonMoveEffects {
   fieldEffect?: FieldEffect | null;
-  secondaryEffect?: SecondaryStatusEffect | null;
   selfStatChange?: SelfStatChange[] | null;
   targetStatChange?: TargetStatChange[] | null;
-  // やどりぎのタネ: 命中した相手に「毎ターンHPを吸われる」状態を付与する（くさタイプは無効）。
   inflictsSeed?: boolean;
-  // あさのひざし・こうごうせい・つきのひかり等、天候に応じて回復量が変化する自己回復技。
-  // 天候なし=50%、はれ=2/3、それ以外の天候=25%（本編仕様）。
   weatherHeal?: boolean;
-  // あまごい・にほんばれ等、天候を5ターン変化させる技。
   weather?: WeatherType | null;
-  // ロックブラスト等、通常配分（2発37.5%/3発37.5%/4発12.5%/5発12.5%）の多段技。
-  multiHit?: boolean;
-  // トリプルアクセル等、ヒット数に上限がある多段技。省略時はmultiHitの通常配分に従う。
-  maxHits?: number;
-  // トリプルアクセル等、ヒットごとに威力が変化する多段技。[20,30,40]なら1発目20、2発目30、3発目40。
-  // maxHitsと併用する。省略時はmultiHitの通常 powerless
-  multiHitPowers?: number[];
-  // とんぼがえり・ボルトチェンジ・クイックターン等、攻撃後に使用者が自動で交代する技。
   pivot?: boolean;
-  // 飛び膝蹴り等、技が外れた時に使用者がダメージを受ける技（最大HPの50%）。
-  crashDamage?: boolean;
-  // 接触技（さめはだ・ゴツゴツメット・さまようたましい等の接触判定に使う）。
-  // 物理技のほとんどは接触だが、いわゆる「非接触の物理技」（じしん・ストーンエッジ等）は false。
-  contact?: boolean;
-  // キングシールド等、使用するとバトルスイッチ持ち（ギルガルド）がシールドフォルムに戻る技。
   restoresShieldForm?: boolean;
-  // ひけんちえなみ等、使用時に「まきびし」を相手側に設置する追加効果を持つ技。
+}
+
+// ダメージ技だけが持つ効果。変化技はダメージを与えないため、
+// 多段ヒット・反動・接触判定といった概念そのものを持たない。
+export interface DamageOnlyEffects {
+  secondaryEffect?: SecondaryStatusEffect | null;
+  multiHit?: boolean;
+  maxHits?: number;
+  multiHitPowers?: number[];
+  crashDamage?: boolean;
+  contact?: boolean;
   inflictsSpikes?: boolean;
 }
+
+// --- discriminated union 型（判別子は category） ---
+
+// 物理技・特殊技に共通するダメージ技のフィールド
+interface DamageMoveDataBase extends MoveIdentity, CommonMoveEffects, DamageOnlyEffects {
+  power: number;
+}
+
+// 物理技（攻撃・防御の実数値を参照する）
+export interface PhysicalMoveData extends DamageMoveDataBase {
+  category: 'physical';
+}
+
+// 特殊技（特攻・特防の実数値を参照する）
+export interface SpecialMoveData extends DamageMoveDataBase {
+  category: 'special';
+}
+
+// 変化技。ダメージを与えないため power は 0 固定で、DamageOnlyEffects を持たない。
+export interface StatusMoveData extends MoveIdentity, CommonMoveEffects {
+  category: 'status';
+  power: 0;
+  // 相手に付与する状態異常（おにび・でんじは等）。
+  // ダメージ技の追加効果は DamageOnlyEffects.secondaryEffect 側が担当する。
+  status: StatusCondition | null;
+}
+
+// ダメージを与える技。威力計算・多段ヒット処理はこの型でのみ扱う。
+export type DamageMoveData = PhysicalMoveData | SpecialMoveData;
+
+// 全カテゴリの技（判別子: category）。
+// 型の絞り込みには move.ts の isDamageMove / isStatusMove を使う。
+export type MoveData = DamageMoveData | StatusMoveData;
 
 export type TypeChart = Record<TypeName, Partial<Record<TypeName, number>>>;
 
