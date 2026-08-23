@@ -10,6 +10,8 @@ import { RandomBattleAgent } from './ai/battle-agent.js';
 import type { AgentDecision } from './ai/battle-agent.js';
 import type { AgentAction, TypeName } from './types.js';
 import { MoveValidator } from './move-validator.js';
+import { ABILITY_NAMES } from './ability-names.js';
+import { ITEM_NAMES } from './item-names.js';
 
 // このMCPサーバーは「ルール判定係」に徹する。行動を決めるのはMCPクライアント
 // （このサーバーを呼び出すLLM/人間）であり、サーバー側でLLMを呼ぶことはしない。
@@ -87,8 +89,8 @@ const MoveInputSchema = z.object({
 const PokemonInputSchema = z.object({
   name: z.string(),
   types: z.array(TypeNameSchema).min(1).max(2),
-  ability: z.string(),
-  item: z.string().nullable(),
+  ability: z.enum(ABILITY_NAMES),
+  item: z.enum(ITEM_NAMES).nullable(),
   baseStats: BaseStatsSchema,
   // 能力ポイント（1ポイント=実数値1。1能力32・合計66が上限）。省略した能力は無振り。
   statPoints: StatPointsSchema.optional(),

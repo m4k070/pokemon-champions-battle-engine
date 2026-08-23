@@ -1,6 +1,7 @@
 import type { AbilityDefinition } from './types.js';
 import { isDamageMove, isPhysicalMove, isStatusMove } from '../../move.js';
 import type { MoveData } from '../../types.js';
+import type { AbilityName } from '../../ability-names.js';
 
 // ============================================================
 // 上位構築（pokesol.app M-4 トップ5）で使われる特性の実装。
@@ -150,7 +151,7 @@ export const PINCH_TYPE_MAP: Record<string, MoveData['type']> = {
   'blaze': 'fire',
 };
 
-const makePinchAbility = (name: string, type: MoveData['type']): AbilityDefinition => ({
+const makePinchAbility = (name: AbilityName, type: MoveData['type']): AbilityDefinition => ({
   name,
   modifyMovePower: ({ pokemon, move, value }) => {
     if (pokemon.currentHP <= Math.floor(pokemon.maxHP / 3) && move.type === type) {

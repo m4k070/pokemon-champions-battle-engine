@@ -1,8 +1,9 @@
 import type { WeatherType } from '../../types.js';
 import type { AbilityDefinition } from './types.js';
+import type { AbilityName } from '../../ability-names.js';
 
 interface WeatherAbilityConfig {
-  name: string;
+  name: AbilityName;
   label: string;
   weather: WeatherType;
   description: string;

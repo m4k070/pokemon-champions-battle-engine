@@ -3,6 +3,8 @@ import { Pokemon } from '../src/pokemon.js';
 import { createMove } from '../src/move.js';
 import type { Move } from '../src/move.js';
 import type { TypeName } from '../src/types.js';
+import type { AbilityName } from '../src/ability-names.js';
+import type { ItemName } from '../src/item-names.js';
 
 // 実数値計算はカテゴリだけを参照するため、カテゴリ以外は最小構成の技で足りる。
 const probeMove = (category: 'physical' | 'special'): Move =>
@@ -745,7 +747,7 @@ describe('変化技によるまひ付与のタイプ無効化', () => {
 });
 
 describe('変化技のタイプ相性', () => {
-  function makeUser(ability = 'none'): Pokemon {
+  function makeUser(ability: AbilityName = 'none'): Pokemon {
     return new Pokemon({
       name: 'User', types: ['normal'], ability, item: null,
       baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
@@ -956,7 +958,7 @@ describe('Badly Poisoned (Toxic)', () => {
 });
 
 describe('Self stat-change moves', () => {
-  function makeUser(ability = 'none'): Pokemon {
+  function makeUser(ability: AbilityName = 'none'): Pokemon {
     return new Pokemon({
       name: 'Serperior',
       types: ['grass'],
@@ -1365,7 +1367,7 @@ describe('Multi-hit moves (ロックブラスト等)', () => {
 });
 
 describe('こだわり系アイテムの威力補正', () => {
-  function makeAttacker(item: string | null): Pokemon {
+  function makeAttacker(item: ItemName | null): Pokemon {
     return new Pokemon({
       name: 'Attacker',
       types: ['normal'],
@@ -1630,9 +1632,9 @@ describe('Mental Herb (メンタルハーブ)', () => {
 
   // --- ハザード設置技テスト ---
   describe('Section: Hazards', () => {
-    function makeMon(name: string, types: string[], ability = 'normal', item: string | null = null) {
+    function makeMon(name: string, types: TypeName[], ability: AbilityName = 'none', item: ItemName | null = null) {
       return new Pokemon({
-        name, types: types as any, ability, item,
+        name, types, ability, item,
         baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
       });
     }

@@ -1,5 +1,7 @@
 import type { BaseStats, MoveData, StatusCondition, Stats, StatStageKey, StatStages, TypeName } from './types.js';
 import type { BattleEngine } from './battle-engine.js';
+import type { AbilityName } from './ability-names.js';
+import type { ItemName } from './item-names.js';
 import type { NatureInput, StatPointsInput } from './rules/stat-point-system.js';
 import { StatPointSystem } from './rules/stat-point-system.js';
 
@@ -17,8 +19,8 @@ function zeroStatStages(): StatStages {
 export interface PokémonConstructorData {
   name: string;
   types: TypeName[];
-  ability: string;
-  item: string | null;
+  ability: AbilityName;
+  item: ItemName | null;
   baseStats: BaseStats;
   stats?: Stats;
   // 能力ポイント（1ポイント=実数値1）。省略時は無振り。statsを直接渡した場合は使われない。
@@ -47,8 +49,8 @@ export interface PokémonConstructorData {
 export class Pokemon {
   name: string;
   types: TypeName[];
-  ability: string;
-  item: string | null;
+  ability: AbilityName;
+  item: ItemName | null;
   itemUsed: boolean;
   lockedMove: number | null;
   baseStats: BaseStats;
