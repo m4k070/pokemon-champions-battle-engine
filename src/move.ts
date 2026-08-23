@@ -1,4 +1,5 @@
 import type {
+  MoveCategory,
   TypeName,
   StatusCondition,
   MoveData,
@@ -186,6 +187,18 @@ export function isPhysicalMove(move: MoveData): move is PhysicalMoveData {
 
 export function isSpecialMove(move: MoveData): move is SpecialMoveData {
   return move.category === 'special';
+}
+
+// --- 技の分類 ---
+
+// 技の分類の単一の情報源。MoveCategory の実体はここで列挙する。
+export const MOVE_CATEGORIES = ['physical', 'special', 'status'] as const;
+
+const MOVE_CATEGORY_SET: ReadonlySet<string> = new Set(MOVE_CATEGORIES);
+
+// 外部データ（Poke API のレスポンス等）が既知の技分類かを検証する。
+export function isMoveCategory(value: string): value is MoveCategory {
+  return MOVE_CATEGORY_SET.has(value);
 }
 
 // --- 技の対象判定 ---

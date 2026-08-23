@@ -1,13 +1,33 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { PokemonAPI, PokemonDataCache } from './api/pokemon-api.js';
+import { PokeApiError, PokemonAPI, PokemonDataCache } from './api/pokemon-api.js';
+import type { PokeApiMoveData, PokeApiPokemonData } from './api/pokemon-api.js';
+import { isMoveCategory } from './move.js';
+import { isTypeName } from './type-names.js';
+import type { MoveCategory, TypeName } from './types.js';
 
-export interface MoveCacheEntry {
-  valid: boolean;
-  type?: string;
-  power?: number;
-  category?: string;
-  reason?: string;
+// 技名の検証結果。
+// 「有効と確認できた」と「検証そのものができなかった」を区別する点が重要で、
+// 1つの valid フラグにまとめると、未検証の技が有効な技として素通りしてしまう。
+export type MoveCacheEntry =
+  // Poke API で技として確認でき、技情報も取得できた。
+  | { status: 'valid'; type: TypeName; power: number; category: MoveCategory }
+  // Poke API に存在しない技だと判定された。
+  | { status: 'invalid'; reason: string }
+  // 検証を実行できなかった（日本語名のため Poke API と照合できない等）。
+  | { status: 'unverified'; reason: string };
+
+// 検証済みで有効と確認できた技か。
+export function isValidMove(
+  entry: MoveCacheEntry
+): entry is Extract<MoveCacheEntry, { status: 'valid' }> {
+  return entry.status === 'valid';
+}
+
+// 有効だと確認できていない技か（無効と判定された技と、検証できなかった技）。
+// 呼び出し側が警告を出すかどうかの判断に使う。
+export function isUnconfirmedMove(entry: MoveCacheEntry): boolean {
+  return entry.status !== 'valid';
 }
 
 export interface LearnsetCacheEntry {
@@ -15,8 +35,52 @@ export interface LearnsetCacheEntry {
   moves: string[];
 }
 
+// MoveValidator が Poke API に求める操作。PokemonAPI 全体ではなくこの境界に依存する。
+export interface MoveDataFetcher {
+  fetchMoveData(moveName: string): Promise<PokeApiMoveData>;
+  fetchPokemonData(pokemonId: string | number): Promise<PokeApiPokemonData>;
+}
+
 export type MoveCache = Record<string, MoveCacheEntry>;
 export type LearnsetCache = Record<string, LearnsetCacheEntry>;
+
+// キャッシュファイルは外部データ（過去の形式や手書きの内容もありうる）なので、
+// 読み込み時に形式を検証する。判別できないエントリは捨てて検証し直す。
+function parseMoveCacheEntry(raw: unknown): MoveCacheEntry | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const entry = raw as Record<string, unknown>;
+
+  if (entry.status === 'valid') {
+    const { type, power, category } = entry;
+    if (typeof type !== 'string' || typeof power !== 'number' || typeof category !== 'string') {
+      return null;
+    }
+    if (!isTypeName(type) || !isMoveCategory(category)) return null;
+    return { status: 'valid', type, power, category };
+  }
+
+  if (entry.status === 'invalid' || entry.status === 'unverified') {
+    const reason = typeof entry.reason === 'string' ? entry.reason : '';
+    return { status: entry.status, reason };
+  }
+
+  return null;
+}
+
+function parseMoveCache(raw: unknown): MoveCache {
+  if (typeof raw !== 'object' || raw === null) return {};
+
+  const cache: MoveCache = {};
+  for (const [moveName, rawEntry] of Object.entries(raw)) {
+    const entry = parseMoveCacheEntry(rawEntry);
+    if (entry !== null) cache[moveName] = entry;
+  }
+  return cache;
+}
+
+// Poke API の技名は英語の kebab-case（例: 'u-turn'）。
+// 日本語名などこの形でない技名は、対訳表がないため照合できない。
+const POKE_API_MOVE_NAME = /^[a-z][a-z0-9-]*$/;
 
 const DEFAULT_CACHE_PATH = path.join(process.cwd(), 'data', 'move-cache.json');
 const DEFAULT_LEARNSET_PATH = path.join(process.cwd(), 'data', 'learnset-cache.json');
@@ -26,12 +90,16 @@ export class MoveValidator {
   private learnsetCache: LearnsetCache = {};
   private cachePath: string;
   private learnsetPath: string;
-  private pokemonApi: PokemonAPI;
+  private pokemonApi: MoveDataFetcher;
 
-  constructor(cachePath: string = DEFAULT_CACHE_PATH, learnsetPath: string = DEFAULT_LEARNSET_PATH) {
+  constructor(
+    cachePath: string = DEFAULT_CACHE_PATH,
+    learnsetPath: string = DEFAULT_LEARNSET_PATH,
+    pokemonApi: MoveDataFetcher = new PokemonAPI(new PokemonDataCache())
+  ) {
     this.cachePath = cachePath;
     this.learnsetPath = learnsetPath;
-    this.pokemonApi = new PokemonAPI(new PokemonDataCache());
+    this.pokemonApi = pokemonApi;
     this.loadCache();
     this.loadLearnsetCache();
   }
@@ -40,7 +108,7 @@ export class MoveValidator {
     try {
       if (fs.existsSync(this.cachePath)) {
         const data = fs.readFileSync(this.cachePath, 'utf-8');
-        this.cache = JSON.parse(data);
+        this.cache = parseMoveCache(JSON.parse(data));
       }
     } catch {
       this.cache = {};
@@ -87,34 +155,57 @@ export class MoveValidator {
     return this.cache[moveName] ?? null;
   }
 
-  // PokeAPI で技を検証し、キャッシュに保存
+  // 技を検証してキャッシュに保存する。既に検証済みならその結果を返す。
   async validateAndCache(moveName: string): Promise<MoveCacheEntry> {
-    // 既にキャッシュにあれば返す
-    if (this.cache[moveName]) {
-      return this.cache[moveName];
+    const cached = this.cache[moveName];
+    if (cached !== undefined) {
+      return cached;
     }
 
-    // PokeAPI で検証
-    try {
-      // 日本語名で検索するため、一旦全技リストから探す
-      // PokeAPI の技名は英語なので、日本語名の検証は直接的にはできない
-      // 代わりに、既知の技名リストと照合する
-      const entry: MoveCacheEntry = {
-        valid: true, // PokeAPI で確認できない場合は信頼して通す
-        reason: 'PokeAPI validation skipped (Japanese name)',
+    const entry = await this.verifyMove(moveName);
+    this.cache[moveName] = entry;
+    this.saveCache();
+    return entry;
+  }
+
+  // Poke API に技を問い合わせて検証する。
+  // 「存在しない技」と「検証できなかった」を区別するのがこのメソッドの役割で、
+  // 通信エラーや想定外のレスポンスを invalid と扱うと、実在する技を無効と誤判定してしまう。
+  private async verifyMove(moveName: string): Promise<MoveCacheEntry> {
+    if (!POKE_API_MOVE_NAME.test(moveName)) {
+      return {
+        status: 'unverified',
+        reason: `Poke API は英語の技名しか引けないため照合できない: ${moveName}`,
       };
-      this.cache[moveName] = entry;
-      this.saveCache();
-      return entry;
-    } catch (error) {
-      const entry: MoveCacheEntry = {
-        valid: false,
-        reason: error instanceof Error ? error.message : 'Unknown error',
-      };
-      this.cache[moveName] = entry;
-      this.saveCache();
-      return entry;
     }
+
+    let data;
+    try {
+      data = await this.pokemonApi.fetchMoveData(moveName);
+    } catch (error) {
+      // 404 だけが「その技は存在しない」を意味する。通信障害等は検証できなかった扱い。
+      if (error instanceof PokeApiError && error.isNotFound) {
+        return { status: 'invalid', reason: `Poke API に存在しない技: ${moveName}` };
+      }
+      const reason = error instanceof Error ? error.message : String(error);
+      return { status: 'unverified', reason: `Poke API に問い合わせできなかった: ${reason}` };
+    }
+
+    // Poke API のタイプ・分類は任意の文字列なので、このエンジンの語彙に合うか検証する。
+    if (!isTypeName(data.type) || !isMoveCategory(data.category)) {
+      return {
+        status: 'unverified',
+        reason: `Poke API が未知のタイプ・分類を返した: type=${data.type} category=${data.category}`,
+      };
+    }
+
+    return {
+      status: 'valid',
+      type: data.type,
+      // 変化技は power が null で返るため、このエンジンの表現（威力0）に合わせる。
+      power: data.power ?? 0,
+      category: data.category,
+    };
   }
 
   // 複数技を一括検証
@@ -168,13 +259,14 @@ export class MoveValidator {
     return { valid, invalid };
   }
 
-  // キャッシュ統計
-  getStats(): { total: number; valid: number; invalid: number } {
+  // キャッシュ統計。未検証の技は valid にも invalid にも数えない。
+  getStats(): { total: number; valid: number; invalid: number; unverified: number } {
     const entries = Object.values(this.cache);
     return {
       total: entries.length,
-      valid: entries.filter((e) => e.valid).length,
-      invalid: entries.filter((e) => !e.valid).length,
+      valid: entries.filter((e) => e.status === 'valid').length,
+      invalid: entries.filter((e) => e.status === 'invalid').length,
+      unverified: entries.filter((e) => e.status === 'unverified').length,
     };
   }
 

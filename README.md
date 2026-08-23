@@ -166,6 +166,7 @@ src/
 ├── ability-names.ts          # 特性名の列挙（AbilityName の単一の情報源）
 ├── item-names.ts             # 持ち物名の列挙（ItemName の単一の情報源）
 ├── team.ts                   # チームモデル
+├── type-names.ts             # タイプ名の列挙（TypeName の単一の情報源）
 ├── type-chart.ts             # タイプ相性表
 ├── event-emitter.ts          # Event System
 ├── sample-battle.ts          # サンプルバトル（BattleSession + BattleAgent）
