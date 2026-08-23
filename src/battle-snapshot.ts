@@ -44,12 +44,21 @@ export interface FieldSnapshot {
 
 // ターンの技フェーズの進行状態。pivot技で「交代先の入力待ち」に入ったとき、
 // 中断地点から再開できるようにするために保持する。
-export interface PendingTurn {
+interface PendingTurnBase {
   actionA: AgentAction;
   actionB: AgentAction;
-  remainingSides: (0 | 1)[]; // まだ技を出していない側（すばやさ順）
-  awaitingPivotSide: 0 | 1 | null; // pivot技の交代先の入力を待っている側
+  // まだ技を出していない側（すばやさ順）。
+  remainingSides: (0 | 1)[];
 }
+
+// 技フェーズは「解決を進められる」状態と「入力待ちで進めてはいけない」状態のどちらかにある。
+// 待っている側は入力待ちのときにだけ存在するため、phase ごとに持たせて
+// 「待っていないのに待機側がいる」といった組み合わせを型として作れなくする。
+export type PendingTurn =
+  // 残りの技を順に解決できる。
+  | (PendingTurnBase & { phase: 'resolving-moves' })
+  // pivot技を使った側の交代先入力を待っている。入力が来るまで技を進めない。
+  | (PendingTurnBase & { phase: 'awaiting-pivot-switch'; pivotSide: 0 | 1 });
 
 // BattleSessionが持つターン進行状態。盤面（BattleEngine/Pokemon）とは別に保存しないと、
 // ターン途中でsnapshot/restore/forkしたときに進行状態が失われる。
