@@ -27,7 +27,7 @@ describe('BattleEngine', () => {
         baseStats: { HP: 78, ATK: 84, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 },
       });
 
-      attacker.status = 'burn';
+      attacker.applyStatus('burn');
       const attack = engine.calculateAttack(attacker, probeMove('physical'));
       expect(attack).toBeLessThan(120);
     });
@@ -916,7 +916,7 @@ describe('Badly Poisoned (Toxic)', () => {
       ability: 'natural-cure',
       item: null,
       baseStats: { HP: 255, ATK: 10, DEF: 10, SPATK: 75, SPDEF: 135, SPEED: 55 },
-      status: 'badly-poisoned',
+      statusState: { kind: 'badly-poisoned', elapsedTurns: 0 },
     });
   }
 
@@ -925,12 +925,12 @@ describe('Badly Poisoned (Toxic)', () => {
     const pokemon = makeToxicVictim();
 
     engine.applyStatusEffects([pokemon]);
-    expect(pokemon.toxicCounter).toBe(1);
+    expect(pokemon.statusState).toEqual({ kind: 'badly-poisoned', elapsedTurns: 1 });
     expect(pokemon.currentHP).toBe(pokemon.maxHP - Math.floor(pokemon.maxHP / 16));
 
     const hpAfterTurn1 = pokemon.currentHP;
     engine.applyStatusEffects([pokemon]);
-    expect(pokemon.toxicCounter).toBe(2);
+    expect(pokemon.statusState).toEqual({ kind: 'badly-poisoned', elapsedTurns: 2 });
     expect(pokemon.currentHP).toBe(hpAfterTurn1 - Math.floor((pokemon.maxHP * 2) / 16));
   });
 
@@ -939,21 +939,21 @@ describe('Badly Poisoned (Toxic)', () => {
     // 15ターン目に到達済みの状態から1ターン進めても16にならないことだけを見る
     // （実戦では割合ダメージが積み重なるため、素のまま20ターン生き延びさせることはできない）。
     const pokemon = makeToxicVictim();
-    pokemon.toxicCounter = 15;
+    pokemon.statusState = { kind: 'badly-poisoned', elapsedTurns: 15 };
 
     engine.applyStatusEffects([pokemon]);
 
-    expect(pokemon.toxicCounter).toBe(15);
+    expect(pokemon.statusState).toEqual({ kind: 'badly-poisoned', elapsedTurns: 15 });
   });
 
   test('removeStatus() clears the toxic counter along with the status', () => {
     const pokemon = makeToxicVictim();
-    pokemon.toxicCounter = 5;
+    pokemon.statusState = { kind: 'badly-poisoned', elapsedTurns: 5 };
 
     pokemon.removeStatus();
 
     expect(pokemon.status).toBeNull();
-    expect(pokemon.toxicCounter).toBe(0);
+    expect(pokemon.statusState).toEqual({ kind: 'none' });
   });
 });
 

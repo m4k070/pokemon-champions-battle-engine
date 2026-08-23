@@ -33,8 +33,7 @@ describe('snapshotPokemon / restorePokemon', () => {
   test('round-trips HP, status, and move PP exactly', () => {
     const original = makeGarchomp();
     original.currentHP = 40;
-    original.status = 'burn';
-    original.statusTurnsLeft = 0;
+    original.applyStatus('burn');
     original.moves[0].pp = 3;
     original.lockMove(0);
 

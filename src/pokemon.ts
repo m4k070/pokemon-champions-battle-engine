@@ -2,6 +2,8 @@ import type { BaseStats, MoveData, StatusCondition, Stats, StatStageKey, StatSta
 import type { BattleEngine } from './battle-engine.js';
 import type { AbilityName } from './ability-names.js';
 import type { ItemName } from './item-names.js';
+import { createStatusState, statusConditionOf, NO_STATUS } from './status-state.js';
+import type { StatusState } from './status-state.js';
 import type { NatureInput, StatPointsInput } from './rules/stat-point-system.js';
 import { StatPointSystem } from './rules/stat-point-system.js';
 
@@ -30,14 +32,13 @@ export interface PokémonConstructorData {
   moves?: MoveData[];
   level?: number;
   currentHP?: number;
-  status?: StatusCondition | null;
-  statusTurnsLeft?: number;
+  // 状態異常。ねむりの残りターン・猛毒の経過ターンも含めてこの1値で表す。
+  statusState?: StatusState;
   baseName?: string;
   isMega?: boolean;
   itemUsed?: boolean;
   lockedMove?: number | null;
   statStages?: StatStages;
-  toxicCounter?: number;
   isSeeded?: boolean;
   // ちょうはつ: trueの間、攻撃技を使えない（2〜4ターン）。交代で解除。
   tauntTurnsLeft?: number;
@@ -60,13 +61,11 @@ export class Pokemon {
   moves: MoveData[];
   currentHP: number;
   maxHP: number;
-  status: StatusCondition | null;
-  statusTurnsLeft: number;
+  // 状態異常の唯一の情報源。種類ごとに必要な値（ねむりの残りターン等）だけを持つ。
+  statusState: StatusState;
   baseName: string;
   isMega: boolean;
   statStages: StatStages;
-  // 猛毒(どくどく)の経過ターン数。ダメージがターンごとにfloor(maxHP*n/16)と増加していくためのカウンタ。
-  toxicCounter: number;
   // やどりぎのタネ: trueの間、毎ターン相手からHPを吸われる（交代で治る揮発性の状態）。
   isSeeded: boolean;
   // ちょうはつ: trueの間、攻撃技を使えない（2〜4ターン）。交代で解除。
@@ -87,12 +86,10 @@ export class Pokemon {
     this.lockedMove = data.lockedMove ?? null;
     this.baseStats = data.baseStats;
     this.moves = data.moves ?? [];
-    this.status = data.status ?? null;
-    this.statusTurnsLeft = data.statusTurnsLeft ?? 0;
+    this.statusState = data.statusState ?? NO_STATUS;
     this.baseName = data.baseName ?? data.name;
     this.isMega = data.isMega ?? false;
     this.statStages = data.statStages ? { ...data.statStages } : zeroStatStages();
-    this.toxicCounter = data.toxicCounter ?? 0;
     this.isSeeded = data.isSeeded ?? false;
     this.tauntTurnsLeft = data.tauntTurnsLeft ?? 0;
     this.form = data.form ?? 'normal';
@@ -150,6 +147,11 @@ export class Pokemon {
     return true;
   }
 
+  // 状態異常の種類のみを返す派生プロパティ（statusStateが唯一の情報源）。
+  get status(): StatusCondition | null {
+    return statusConditionOf(this.statusState);
+  }
+
   // currentHPから導出する（保存フィールドにすると直接代入時に同期が崩れるため）。
   get isFainted(): boolean {
     return this.currentHP <= 0;
@@ -178,28 +180,44 @@ export class Pokemon {
     this.currentHP = Math.min(this.maxHP, this.currentHP + amount);
   }
 
+  // 既に別の状態異常なら重複してかからない（本編仕様）。
   applyStatus(status: StatusCondition): boolean {
-    if (this.status) return false;
-    this.status = status;
-    if (status === 'sleep') {
-      this.statusTurnsLeft = Math.floor(Math.random() * 3) + 1;
-    }
-    if (status === 'badly-poisoned') {
-      this.toxicCounter = 0;
-    }
+    if (this.statusState.kind !== 'none') return false;
+    this.statusState = createStatusState(status);
     return true;
   }
 
   removeStatus(): void {
-    this.status = null;
-    this.statusTurnsLeft = 0;
-    this.toxicCounter = 0;
+    this.statusState = NO_STATUS;
   }
 
   // 交代で場を離れると猛毒の経過ターン数はリセットされる（本編仕様）。
-  // ※猛毒状態自体は交代しても治らないため、statusはそのままにする。
+  // ※猛毒状態自体は交代しても治らないため、状態異常そのものは維持する。
   resetToxicCounter(): void {
-    this.toxicCounter = 0;
+    if (this.statusState.kind !== 'badly-poisoned') return;
+    this.statusState = { kind: 'badly-poisoned', elapsedTurns: 0 };
+  }
+
+  // 猛毒の経過ターンを1進める（上限まで）。進めた後の経過ターン数を返す。
+  // 猛毒でなければ何もせず0を返す。
+  advanceToxicCounter(maxElapsedTurns: number): number {
+    if (this.statusState.kind !== 'badly-poisoned') return 0;
+    const elapsedTurns = Math.min(this.statusState.elapsedTurns + 1, maxElapsedTurns);
+    this.statusState = { kind: 'badly-poisoned', elapsedTurns };
+    return elapsedTurns;
+  }
+
+  // ねむりの残りターンを1減らす。0になった時点で目を覚ます。
+  // 減らした後の残りターン数を返す（ねむりでなければ0）。
+  consumeSleepTurn(): number {
+    if (this.statusState.kind !== 'sleep') return 0;
+    const turnsLeft = this.statusState.turnsLeft - 1;
+    if (turnsLeft <= 0) {
+      this.removeStatus();
+      return 0;
+    }
+    this.statusState = { kind: 'sleep', turnsLeft };
+    return turnsLeft;
   }
 
   // やどりぎのタネは（能力ランクと違い）交代すると状態自体が解除される揮発性の状態。
