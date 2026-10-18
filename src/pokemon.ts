@@ -3,6 +3,8 @@ import type { BattleEngine } from './battle-engine.js';
 import type { AbilityName } from './ability-names.js';
 import type { ItemName } from './item-names.js';
 import { createStatusState, statusConditionOf, NO_STATUS } from './status-state.js';
+import { SYSTEM_RANDOM } from './rng.js';
+import type { RandomSource } from './rng.js';
 import type { StatusState } from './status-state.js';
 import type { NatureInput, StatPointsInput } from './rules/stat-point-system.js';
 import { StatPointSystem } from './rules/stat-point-system.js';
@@ -183,9 +185,9 @@ export class Pokemon {
   }
 
   // 既に別の状態異常なら重複してかからない（本編仕様）。
-  applyStatus(status: StatusCondition): boolean {
+  applyStatus(status: StatusCondition, rng: RandomSource = SYSTEM_RANDOM): boolean {
     if (this.statusState.kind !== 'none') return false;
-    this.statusState = createStatusState(status);
+    this.statusState = createStatusState(status, rng);
     return true;
   }
 

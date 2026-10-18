@@ -60,7 +60,10 @@ export type { SwitchOption } from './team.js';
 export { BattleField } from './battle-field.js';
 export type { SideHazards, SideFlags } from './battle-field.js';
 export { BattleEngine } from './battle-engine.js';
+export type { BattleEngineOptions } from './battle-engine.js';
 export type { UseMoveResult } from './use-move-result.js';
+export { SeededRandom, SystemRandom, SYSTEM_RANDOM, seededRandom } from './rng.js';
+export type { RandomSource } from './rng.js';
 
 export { StatPointSystem, Level50System, MegaEvolutionSystem, MEGA_STONE_SEEDS } from './rules/index.js';
 export type {

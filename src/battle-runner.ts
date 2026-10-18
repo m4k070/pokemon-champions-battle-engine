@@ -1,4 +1,5 @@
 import { BattleEngine } from './battle-engine.js';
+import type { RandomSource } from './rng.js';
 import { MegaEvolutionSystem } from './rules/mega-evolution.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
 import type { Pokemon } from './pokemon.js';
@@ -67,6 +68,8 @@ export interface StartSessionOptions {
   leadB?: Pokemon;
   engine?: BattleEngine;
   megaEvolutionSystem?: MegaEvolutionSystem;
+  // 乱数の供給源。engine を渡さないときに engine 側へ引き継ぐ（seed 固定の入口）。
+  rng?: RandomSource;
 }
 
 // 1ターンずつ進められるバトルの実行単位。snapshot()/restore()/fork()により
@@ -104,7 +107,8 @@ export class BattleSession {
   }
 
   static async start(teamA: Pokemon[], teamB: Pokemon[], options: StartSessionOptions = {}): Promise<BattleSession> {
-    const engine = options.engine ?? new BattleEngine();
+    const engine = options.engine
+      ?? new BattleEngine(options.rng === undefined ? {} : { rng: options.rng });
     const megaEvolutionSystem = options.megaEvolutionSystem ?? new MegaEvolutionSystem();
     const leadA = options.leadA ?? teamA[0];
     const leadB = options.leadB ?? teamB[0];
@@ -395,7 +399,7 @@ export class BattleSession {
     // orderBySpeed と同じく、先にシャッフルしてから安定ソートする
     const shuffled = [...attackers];
     for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(this.engine.rng.next() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     const sortedAttackers = shuffled

@@ -1,5 +1,7 @@
 import type { Pokemon } from '../pokemon.js';
 import type { AgentAction, WeatherType } from '../types.js';
+import { SYSTEM_RANDOM } from '../rng.js';
+import type { RandomSource } from '../rng.js';
 
 export interface StealthRockView {
   self: boolean;
@@ -64,6 +66,9 @@ export function getLegalActions(context: BattleContext): LegalActions {
 // PP切れ・こだわり系拘束を踏まえて合法手からランダムに選ぶ既定のエージェント。
 // 高速・決定論的な検証用途（大量のアーキタイプ対戦など）にはこちらを使う。
 export class RandomBattleAgent implements BattleAgent {
+  // 行動選択の乱数も外から差し替える（seed 固定で対戦全体を再現するため）。
+  constructor(private readonly rng: RandomSource = SYSTEM_RANDOM) {}
+
   async selectLead(team: Pokemon[]): Promise<Pokemon> {
     return team[0];
   }
@@ -78,7 +83,7 @@ export class RandomBattleAgent implements BattleAgent {
       return { action: { type: 'switch', pokemonIndex: switches[0].index } };
     }
 
-    const { index } = moves[Math.floor(Math.random() * moves.length)];
+    const { index } = moves[Math.floor(this.rng.next() * moves.length)];
     // メガシンカできるならまず進化しておく、というシンプルな既定方針
     // （高速・決定論的な検証用途のためタイミングの駆け引きまでは考慮しない）。
     return { action: { type: 'move', moveIndex: index, target: 0, megaEvolve: canMegaEvolve || undefined } };

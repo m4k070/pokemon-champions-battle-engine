@@ -1,4 +1,5 @@
 import { BattleEngine } from './battle-engine.js';
+import { SeededRandom } from './rng.js';
 import { Pokemon } from './pokemon.js';
 import type { BattleField, SideFlags, SideHazards } from './battle-field.js';
 import type { AgentAction, BaseStats, MoveData, Stats, StatStages, StatusCondition, TypeName, WeatherType } from './types.js';
@@ -73,6 +74,9 @@ export interface BattleSnapshot {
   weatherTurnsLeft: number;
   trickRoom: boolean;
   trickRoomTurnsLeft: number;
+  // 乱数の内部状態。null は再現不能な供給源（システム乱数）を表す。
+  // この項目が無い古いスナップショットは、システム乱数として復元する。
+  rng?: number | null;
   log: string[];
   field: FieldSnapshot;
   teamA: PokemonSnapshot[];
@@ -167,6 +171,7 @@ export function snapshotBattle(
     weatherTurnsLeft: engine.weatherTurnsLeft,
     trickRoom: engine.trickRoom,
     trickRoomTurnsLeft: engine.trickRoomTurnsLeft,
+    rng: engine.rng.getState(),
     log: [...engine.log],
     field: snapshotField(engine.field),
     teamA: teamA.map(snapshotPokemon),
@@ -185,7 +190,11 @@ export interface RestoredBattle {
 }
 
 export function restoreBattle(snapshot: BattleSnapshot): RestoredBattle {
-  const engine = new BattleEngine();
+  // 乱数はスナップショットの状態から再開する（fork/undo の前後で乱数列をつなぐ）。
+  // 状態を持たない供給源なら従来どおりシステム乱数を使う。
+  const engine = new BattleEngine(
+    snapshot.rng === undefined || snapshot.rng === null ? {} : { rng: new SeededRandom(snapshot.rng) }
+  );
   engine.turn = snapshot.turn;
   engine.weather = snapshot.weather;
   engine.weatherTurnsLeft = snapshot.weatherTurnsLeft;

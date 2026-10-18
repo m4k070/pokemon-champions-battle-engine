@@ -188,11 +188,11 @@ export const INNER_FOCUS: AbilityDefinition = {
 // やけど状態の相手・ほのおタイプの相手には発動しない。
 export const SPICY_SPRAY: AbilityDefinition = {
   name: 'spicy-spray',
-  onDamaged: ({ defender, attacker, move }) => {
+  onDamaged: ({ defender, attacker, move, engine }) => {
     if (isStatusMove(move)) return;
     if (attacker.status) return;
     if (attacker.types.includes('fire')) return;
-    attacker.applyStatus('burn');
+    attacker.applyStatus('burn', engine.rng);
   },
 };
 

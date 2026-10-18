@@ -1,4 +1,6 @@
 import type { StatusCondition } from './types.js';
+import { SYSTEM_RANDOM } from './rng.js';
+import type { RandomSource } from './rng.js';
 
 // ねむりの残りターン・猛毒の経過ターンは、その状態のときにだけ存在する値なので、
 // 状態の種類ごとに持たせる。これにより「やけどなのに残りターンがある」といった
@@ -21,9 +23,9 @@ const SLEEP_MAX_TURNS = 3;
 
 // 状態異常を受けた直後の状態を作る。
 // ねむりの継続ターンは乱数で決まり、猛毒の経過ターンは0から数え始める。
-export function createStatusState(status: StatusCondition): StatusState {
+export function createStatusState(status: StatusCondition, rng: RandomSource = SYSTEM_RANDOM): StatusState {
   if (status === 'sleep') {
-    const turnsLeft = SLEEP_MIN_TURNS + Math.floor(Math.random() * (SLEEP_MAX_TURNS - SLEEP_MIN_TURNS + 1));
+    const turnsLeft = SLEEP_MIN_TURNS + Math.floor(rng.next() * (SLEEP_MAX_TURNS - SLEEP_MIN_TURNS + 1));
     return { kind: 'sleep', turnsLeft };
   }
   if (status === 'badly-poisoned') {
