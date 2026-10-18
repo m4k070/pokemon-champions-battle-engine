@@ -2,7 +2,7 @@ import { BattleEngine } from './battle-engine.js';
 import { SeededRandom } from './rng.js';
 import { Pokemon } from './pokemon.js';
 import type { BattleField, SideFlags, SideHazards } from './battle-field.js';
-import type { AgentAction, BaseStats, MoveData, Stats, StatStages, StatusCondition, TypeName, WeatherType } from './types.js';
+import type { AgentAction, BaseStats, FormDefinition, FormName, MoveData, Stats, StatStages, StatusCondition, TypeName, WeatherType } from './types.js';
 import type { NatureInput, StatPointsInput } from './rules/stat-point-system.js';
 import { cloneStatusState } from './status-state.js';
 import type { StatusState } from './status-state.js';
@@ -31,6 +31,12 @@ export interface PokemonSnapshot {
   isMega: boolean;
   statStages: StatStages;
   isSeeded: boolean;
+  // ちょうはつ・フォルムは揮発状態だが、複製した対戦を正しく再開するために保存する
+  // （fork/undo と、見せ合いからの分岐で必要になる）。
+  tauntTurnsLeft: number;
+  form: FormName;
+  formStats: Record<string, FormDefinition> | null;
+  level: number;
 }
 
 export interface FieldSnapshot {
@@ -88,6 +94,17 @@ export interface BattleSnapshot {
   session?: SessionSnapshot;
 }
 
+// フォルム定義はネストした種族値を持つため、参照を共有しないよう作り直す。
+// 古いスナップショット（この項目が無い）は null として扱う。
+function cloneFormStats(
+  formStats: Record<string, FormDefinition> | null | undefined
+): Record<string, FormDefinition> | null {
+  if (formStats === null || formStats === undefined) return null;
+  return Object.fromEntries(
+    Object.entries(formStats).map(([name, definition]) => [name, { baseStats: { ...definition.baseStats } }])
+  );
+}
+
 export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
   return {
     name: pokemon.name,
@@ -109,6 +126,10 @@ export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
     isMega: pokemon.isMega,
     statStages: { ...pokemon.statStages },
     isSeeded: pokemon.isSeeded,
+    tauntTurnsLeft: pokemon.tauntTurnsLeft,
+    form: pokemon.form,
+    formStats: cloneFormStats(pokemon.formStats),
+    level: pokemon.level,
   };
 }
 
@@ -133,6 +154,11 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
     isMega: snapshot.isMega,
     statStages: { ...snapshot.statStages },
     isSeeded: snapshot.isSeeded,
+    tauntTurnsLeft: snapshot.tauntTurnsLeft,
+    form: snapshot.form,
+    // コンストラクタ側の約束は undefined = フォルム定義なし（内部で null に正規化される）。
+    formStats: cloneFormStats(snapshot.formStats) ?? undefined,
+    level: snapshot.level,
   });
 }
 

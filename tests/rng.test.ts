@@ -20,7 +20,7 @@ function makeProbe(name: string, accuracy = 55, pp = 30): Pokemon {
   });
 }
 
-const attack = (): AgentDecision => ({ action: { type: 'move', moveIndex: 0 } });
+const attack = (): AgentDecision => ({ action: { type: 'move', moveIndex: 0, target: 0 } });
 
 // 同じ seed で「2体が毎ターン攻撃する」スクリプト対戦を回し、ログを返す。
 async function scriptedLog(seed: number, turns = 5): Promise<string> {
