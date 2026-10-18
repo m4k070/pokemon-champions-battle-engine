@@ -6,6 +6,8 @@ import type { Pokemon } from './pokemon.js';
 import type { MoveData, StatusCondition, StatStageKey, TypeName, WeatherType, TypeChart } from './types.js';
 import { isDamageMove, isPhysicalMove, isSpecialMove, isStatusMove, cloneDamageMove, targetsOpponent } from './move.js';
 import type { UseMoveResult, NoEffectReason } from './use-move-result.js';
+import { SYSTEM_RANDOM } from './rng.js';
+import type { RandomSource } from './rng.js';
 
 export type { UseMoveResult, MoveFailureReason, NoEffectReason } from './use-move-result.js';
 
@@ -62,8 +64,14 @@ const STATUS_IMMUNE_TYPES: Partial<Record<StatusCondition, TypeName[]>> = {
   poison: ['steel'],
 };
 
+export interface BattleEngineOptions {
+  // 乱数の供給源。省略時はシステム乱数（再現不可。従来の挙動）。
+  rng?: RandomSource;
+}
+
 export class BattleEngine {
   events: EventEmitter;
+  rng: RandomSource;
   weather: WeatherType | null;
   weatherTurnsLeft: number;
   trickRoom: boolean;
@@ -80,7 +88,8 @@ export class BattleEngine {
   // ターンをまたいで参照できるようendTurn()で記録・end-turnイベント処理後にリセットする。
   private attackersDealtDamageThisTurn: Set<Pokemon> = new Set();
 
-  constructor() {
+  constructor(options: BattleEngineOptions = {}) {
+    this.rng = options.rng ?? SYSTEM_RANDOM;
     this.events = new EventEmitter();
     this.weather = null;
     this.weatherTurnsLeft = 0;
@@ -181,7 +190,7 @@ export class BattleEngine {
 
         // どくどくだま: ターン終了時に猛毒状態になる（1回限り）。
         if (p.item === 'toxic-orb' && !p.itemUsed && !p.status) {
-          p.applyStatus('badly-poisoned');
+          p.applyStatus('badly-poisoned', this.rng);
           p.itemUsed = true;
           this.log.push(`${p.name}はどくどくだまの毒に侵された`);
         }
@@ -363,7 +372,7 @@ export class BattleEngine {
       return { outcome: 'failed', reason: 'asleep' };
     }
     if (attacker.status === 'freeze') {
-      if (Math.random() < 0.2) {
+      if (this.rng.next() < 0.2) {
         attacker.removeStatus();
         this.log.push(`${attacker.name}はこおりがとけた！`);
       } else {
@@ -372,7 +381,7 @@ export class BattleEngine {
       }
     }
     if (attacker.status === 'paralysis') {
-      if (Math.random() < 0.25) {
+      if (this.rng.next() < 0.25) {
         this.log.push(`${attacker.name}はまひして動けない`);
         return { outcome: 'failed', reason: 'paralyzed' };
       }
@@ -450,7 +459,7 @@ export class BattleEngine {
       // ノーガード(no-guard): 攻撃側・防御側どちらかが持てば命中率100%になる。
       const attackerNoGuard = getAbilityDefinition(attacker.ability)?.name === 'no-guard';
       const defenderNoGuard = getAbilityDefinition(defender.ability)?.name === 'no-guard';
-      if (!attackerNoGuard && !defenderNoGuard && Math.random() * 100 > move.accuracy) {
+      if (!attackerNoGuard && !defenderNoGuard && this.rng.next() * 100 > move.accuracy) {
         this.log.push('技は外れた');
         // 飛び膝蹴り等のクラッシュダメージ（最大HPの50%）
         if (isDamageMove(move) && move.crashDamage) {
@@ -714,8 +723,8 @@ export class BattleEngine {
     if (defender.isFainted) {
       this.log.push(`${defender.name}は戦闘不能になった`);
     } else {
-      if (move.secondaryEffect && Math.random() * 100 < move.secondaryEffect.chance) {
-        const applied = defender.applyStatus(move.secondaryEffect.status);
+      if (move.secondaryEffect && this.rng.next() * 100 < move.secondaryEffect.chance) {
+        const applied = defender.applyStatus(move.secondaryEffect.status, this.rng);
         if (applied) {
           this.log.push(`${defender.name}は${move.secondaryEffect.status}状態になった`);
         }
@@ -752,7 +761,7 @@ export class BattleEngine {
 
   // 通常配分（2発37.5%/3発37.5%/4発12.5%/5発12.5%）でヒット数を決める。
   private rollMultiHitCount(): number {
-    const roll = Math.random();
+    const roll = this.rng.next();
     let cumulative = 0;
     for (const { hits, weight } of MULTI_HIT_TABLE) {
       cumulative += weight;
@@ -763,7 +772,7 @@ export class BattleEngine {
 
   private applyTargetStatChange(attacker: Pokemon, pokemon: Pokemon, changes: NonNullable<MoveData['targetStatChange']>): void {
     for (const change of changes) {
-      if (Math.random() * 100 >= change.chance) continue;
+      if (this.rng.next() * 100 >= change.chance) continue;
       // ミラーアーマー: 相手から受ける能力低下をその相手に反射する。
       if (change.delta < 0 && pokemon.ability === 'mirror-armor') {
         const applied = attacker.modifyStatStage(change.stat, change.delta);
@@ -799,7 +808,7 @@ export class BattleEngine {
       return { outcome: 'no-effect', reason: 'status-immune', pivot };
     }
 
-    const applied = defender.applyStatus(status);
+    const applied = defender.applyStatus(status, this.rng);
     if (!applied) {
       this.log.push('効果がない');
       return { outcome: 'no-effect', reason: 'status-immune', pivot };
@@ -1037,10 +1046,10 @@ export class BattleEngine {
       } else if (!pokemon.isFainted && pokemon.status === null) {
         // 状態異常でなければ毒付与（1層= poison, 2層= badly-poisoned）
         if (this.field.toxicSpikes[key] >= 2) {
-          pokemon.applyStatus('badly-poisoned');
+          pokemon.applyStatus('badly-poisoned', this.rng);
           this.log.push(`${pokemon.name}はどくびしの猛毒を受けた`);
         } else {
-          pokemon.applyStatus('poison');
+          pokemon.applyStatus('poison', this.rng);
           this.log.push(`${pokemon.name}はどくびしの毒を受けた`);
         }
       }
@@ -1090,7 +1099,7 @@ export class BattleEngine {
   private shuffle<T>(items: T[]): T[] {
     const result = [...items];
     for (let i = result.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(this.rng.next() * (i + 1));
       [result[i], result[j]] = [result[j], result[i]];
     }
     return result;
