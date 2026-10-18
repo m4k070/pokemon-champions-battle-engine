@@ -91,6 +91,8 @@ export { snapshotBattle, restoreBattle, snapshotPokemon, restorePokemon } from '
 export type { BattleSnapshot, PokemonSnapshot, FieldSnapshot, SessionSnapshot, PendingTurn, RestoredBattle } from './battle-snapshot.js';
 
 export { BattleSession, BattleHistory, runBattle } from './battle-runner.js';
+export { TeamPreview, DEFAULT_PARTY_SIZE } from './team-preview.js';
+export type { SelectionAction, SelectionDecision, TeamPreviewOptions, PreviewView, PreviewPokemonView } from './team-preview.js';
 export type { StartSessionOptions, RunBattleOptions, BattleResult, TurnReasoning } from './battle-runner.js';
 
 export { MoveValidator, isValidMove, isUnconfirmedMove } from './move-validator.js';
