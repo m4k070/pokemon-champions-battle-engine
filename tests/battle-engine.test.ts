@@ -7,6 +7,7 @@ import type { AbilityName } from '../src/ability-names.js';
 import type { ItemName } from '../src/item-names.js';
 import { isMoveSuccessful, shouldPivotAfterMove } from '../src/use-move-result.js';
 import { asDamageResult } from './helpers/use-move-result.js';
+import { fixedRandom } from './helpers/scripted-random.js';
 
 // 実数値計算はカテゴリだけを参照するため、カテゴリ以外は最小構成の技で足りる。
 const probeMove = (category: 'physical' | 'special'): Move =>
@@ -1066,7 +1067,8 @@ describe('Reflect', () => {
   }
 
   test('halves physical damage for the defending side while active', () => {
-    const engine = new BattleEngine();
+    // 乱数は固定する（壁の有無で別の乱数を引くと、倍率の比較が乱数の差に埋もれるため）。
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
     const attacker = makeAttacker();
 
     const noReflectDefender = makeDefender();
@@ -1080,7 +1082,17 @@ describe('Reflect', () => {
     const withReflect = engine.useMove(attacker, reflectDefender, attacker.moves[0]);
 
     expect(asDamageResult(withReflect).damage).toBeLessThan(asDamageResult(withoutReflect).damage);
-    expect(asDamageResult(withReflect).damage).toBe(Math.floor(asDamageResult(withoutReflect).damage / 2));
+
+    // 倍率そのものは乱数適用前の段階で確かめる（乱数は最後に1回だけ掛かる）。
+    const attack = engine.calculateAttack(attacker, attacker.moves[0]);
+    const defense = engine.calculateDefense(reflectDefender, attacker.moves[0]);
+    const baseDamage = engine.calculateBaseDamage(attack, defense, attacker.moves[0]);
+    engine.field.reflect.playerB = 0;
+    const undamped = engine.applyModifiers(baseDamage, attacker, reflectDefender, attacker.moves[0]).finalDamage;
+    engine.field.reflect.playerB = 5;
+    const damped = engine.applyModifiers(baseDamage, attacker, reflectDefender, attacker.moves[0]).finalDamage;
+
+    expect(damped).toBe(Math.floor(undamped / 2));
   });
 
   test('decrements each turn and expires after 5 turns', () => {

@@ -46,6 +46,18 @@ const WEATHER_HEAL_PERCENT: Record<'none' | WeatherType, number> = {
   hail: 0.25,
 };
 
+// ダメージの揺れ幅（本編・チャンピオンズ共通の16段階）。
+// 0.85, 0.86, ... 0.99, 1.00 のいずれかを等確率で引く。
+// 出典: champions.pokewiki.net「ダメージ計算式」（乱数は16パターン・各1/16）。
+const DAMAGE_ROLL_MIN_PERCENT = 85;
+const DAMAGE_ROLL_STEPS = 16;
+
+// 急所。第7世代以降は1/24で発生し、ダメージが1.5倍になる。
+// 壁（リフレクター等）と、攻撃側のマイナスランク・防御側のプラスランクを無視する。
+// 出典: champions.pokewiki.net「ダメージ計算式」（急所 1/24・1.5倍・不利ランクと壁を無視）。
+const CRIT_CHANCE_DENOMINATOR = 24;
+const CRIT_MULTIPLIER = 1.5;
+
 // 通常配分の多段技（スキルリンク等は非対応）のヒット数分布。
 const MULTI_HIT_TABLE: { hits: number; weight: number }[] = [
   { hits: 2, weight: 0.375 },
@@ -67,6 +79,11 @@ const STATUS_IMMUNE_TYPES: Partial<Record<StatusCondition, TypeName[]>> = {
 export interface BattleEngineOptions {
   // 乱数の供給源。省略時はシステム乱数（再現不可。従来の挙動）。
   rng?: RandomSource;
+}
+
+// 実数値・ダメージ補正の計算条件。急所かどうかで「不利なランクを無視する」等が変わる。
+export interface AttackCalculationOptions {
+  critical?: boolean;
 }
 
 export class BattleEngine {
@@ -231,14 +248,16 @@ export class BattleEngine {
     });
   }
 
-  calculateAttack(attacker: Pokemon, move: MoveData): number {
+  calculateAttack(attacker: Pokemon, move: MoveData, options: AttackCalculationOptions = {}): number {
     const statKey: StatStageKey = isPhysicalMove(move) ? 'ATK' : 'SPATK';
+    // 急所は攻撃側のマイナスランクを無視する（0段階として扱う）。
+    const ignoresDrop = options.critical === true && attacker.statStages[statKey] < 0;
     // 防御側がてんねん(ignoresOpponentStatChanges)なら、攻撃側の能力ランクを無視する。
     const defender = this.getOpponent(attacker);
     const ignoreStages = defender
       ? (getAbilityDefinition(defender.ability)?.ignoresOpponentStatChanges?.() ?? false)
       : false;
-    const stageMultiplier = ignoreStages ? 1 : attacker.getStatStageMultiplier(statKey);
+    const stageMultiplier = ignoreStages || ignoresDrop ? 1 : attacker.getStatStageMultiplier(statKey);
     let attack = Math.floor(attacker.stats[statKey] * stageMultiplier);
 
     if (attacker.status === 'burn' && isPhysicalMove(move)) {
@@ -255,14 +274,16 @@ export class BattleEngine {
     return attack;
   }
 
-  calculateDefense(defender: Pokemon, move: MoveData): number {
+  calculateDefense(defender: Pokemon, move: MoveData, options: AttackCalculationOptions = {}): number {
     const statKey: StatStageKey = isPhysicalMove(move) ? 'DEF' : 'SPDEF';
+    // 急所は防御側のプラスランクを無視する（0段階として扱う）。
+    const ignoresBoost = options.critical === true && defender.statStages[statKey] > 0;
     // 攻撃側がてんねん(ignoresOpponentStatChanges)なら、防御側の能力ランクを無視する。
     const attacker = this.getOpponent(defender);
     const ignoreStages = attacker
       ? (getAbilityDefinition(attacker.ability)?.ignoresOpponentStatChanges?.() ?? false)
       : false;
-    const stageMultiplier = ignoreStages ? 1 : defender.getStatStageMultiplier(statKey);
+    const stageMultiplier = ignoreStages || ignoresBoost ? 1 : defender.getStatStageMultiplier(statKey);
     let defense = Math.floor(defender.stats[statKey] * stageMultiplier);
 
     const ability = getAbilityDefinition(defender.ability);
@@ -325,18 +346,52 @@ export class BattleEngine {
     });
   }
 
-  applyModifiers(baseDamage: number, attacker: Pokemon, defender: Pokemon, move: MoveData): { finalDamage: number; effectiveness: number } {
+  // ダメージ補正の合成。タイプ相性 → 急所 → 壁（リフレクター）の順に適用する。
+  // 急所は壁を貫通するため、壁による軽減は急所のときに適用しない。
+  // 乱数（0.85〜1.00）はここでは掛けない（rollDamage が担当）。
+  applyModifiers(
+    baseDamage: number,
+    attacker: Pokemon,
+    defender: Pokemon,
+    move: MoveData,
+    options: AttackCalculationOptions = {}
+  ): { finalDamage: number; effectiveness: number } {
     const effectiveness = this.resolveTypeEffectiveness(attacker, defender, move);
+    const critical = options.critical === true;
     let finalDamage = Math.floor(baseDamage * effectiveness);
 
+    if (critical) {
+      finalDamage = Math.floor(finalDamage * CRIT_MULTIPLIER);
+    }
+
     const defenderSide = this.getSide(defender);
-    if (isPhysicalMove(move) && defenderSide !== null && this.field.reflect[this.sideKey(defenderSide)] > 0) {
+    if (!critical && isPhysicalMove(move) && defenderSide !== null && this.field.reflect[this.sideKey(defenderSide)] > 0) {
       finalDamage = Math.floor(finalDamage / 2);
     }
 
-    this.events.emit('apply-modifiers', { attacker, defender, move, finalDamage, effectiveness });
+    this.events.emit('apply-modifiers', { attacker, defender, move, finalDamage, effectiveness, critical });
 
     return { finalDamage, effectiveness };
+  }
+
+  // 急所に当たったかを引く。急所無効の特性（シェルアーマー）を持つ相手には発生しない。
+  rollCriticalHit(defender: Pokemon): boolean {
+    const ability = getAbilityDefinition(defender.ability);
+    if (ability?.preventsCriticalHits?.() === true) return false;
+    return this.rng.next() < 1 / CRIT_CHANCE_DENOMINATOR;
+  }
+
+  // ダメージの揺れ（0.85〜1.00の16段階）を引く。
+  rollDamageFactor(): number {
+    const step = Math.floor(this.rng.next() * DAMAGE_ROLL_STEPS);
+    return (DAMAGE_ROLL_MIN_PERCENT + step) / 100;
+  }
+
+  // 補正後のダメージに揺れを掛ける。タイプ相性が0倍でなければ最低1ダメージ残す（本編仕様）。
+  rollDamage(damage: number, effectiveness: number): number {
+    if (damage <= 0) return 0;
+    const rolled = Math.floor(damage * this.rollDamageFactor());
+    return rolled > 0 || effectiveness <= 0 ? rolled : 1;
   }
 
   applyDamage(defender: Pokemon, damage: number, attacker?: Pokemon, move?: MoveData): void {
@@ -682,15 +737,22 @@ export class BattleEngine {
       }
       const hitMove = cloneDamageMove(moveWithStab, { power: hitPower });
 
-      const attack = this.calculateAttack(attacker, hitMove);
-      const defense = this.calculateDefense(defender, hitMove);
+      // 急所判定はヒットごとに行う（本編仕様）。乱数の消費順もここで固定される。
+      const critical = this.rollCriticalHit(defender);
+      const attack = this.calculateAttack(attacker, hitMove, { critical });
+      const defense = this.calculateDefense(defender, hitMove, { critical });
       const baseDamage = this.calculateBaseDamage(attack, defense, hitMove);
-      const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, hitMove);
-      this.applyDamage(defender, finalDamage, attacker, hitMove);
-      totalDamage += finalDamage;
+      const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, hitMove, { critical });
+      // 乱数（0.85〜1.00）はヒットごとに独立して引く。
+      const rolledDamage = this.rollDamage(finalDamage, effectiveness);
+      if (critical) {
+        this.log.push('急所に当たった！');
+      }
+      this.applyDamage(defender, rolledDamage, attacker, hitMove);
+      totalDamage += rolledDamage;
       lastEffectiveness = effectiveness;
 
-      if (finalDamage > 0) {
+      if (rolledDamage > 0) {
         this.attackersDealtDamageThisTurn.add(attacker);
       }
     }

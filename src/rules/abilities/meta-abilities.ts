@@ -102,9 +102,10 @@ export const NO_GUARD: AbilityDefinition = {
   name: 'no-guard',
 };
 
-// シェルアーマー: 急所に当たらない（エンジンに急所判定が無いため現状は定義のみ）。
+// シェルアーマー: 急所に当たらない（急所判定をスキップする）。
 export const SHELL_ARMOR: AbilityDefinition = {
   name: 'shell-armor',
+  preventsCriticalHits: () => true,
 };
 
 // ふみん: ねむりにならない。

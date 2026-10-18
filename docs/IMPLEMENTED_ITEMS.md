@@ -34,6 +34,16 @@
 `MegaEvolutionSystem.fromPokeApi(api)`でPokeAPIから取得する。
 メガシンカは技の選択に添えて宣言する（`MoveAction.megaEvolve`）。
 
+## ダメージ計算（乱数・急所）
+
+| 項目 | 状態 | 実装箇所 |
+|------|------|---------|
+| 乱数（0.85〜1.00の16段階・ヒットごと） | 実装済み（2026-10-18 T0） | `BattleEngine.rollDamageFactor()` / `rollDamage()`（乱数列は注入済みの`rng`経由。seed固定で再現可） |
+| 急所（1/24・1.5倍・壁と不利ランクを無視・最低1ダメージ） | 実装済み（2026-10-18 T0） | `BattleEngine.rollCriticalHit()` / `applyModifiers()` / `calculateAttack()` / `calculateDefense()`。テスト: `tests/damage-variance.test.ts` |
+| 急所無効（シェルアーマー） | 実装済み | `AbilityDefinition.preventsCriticalHits` |
+| 急所ランク（きょううん・するどいツメ・高急所技） | 未実装 | 出典: champions.pokewiki.net「ダメージ計算式」（ランク0=1/24、+1=1/8、+2=1/2、+3=1/1） |
+| カブトアーマー | 未実装 | 特性名がレジストリ未登録のため |
+
 ## 未実装
 
 | 道具 | ID | 効果 | 備考 |
