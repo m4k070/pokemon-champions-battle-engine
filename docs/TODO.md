@@ -1,5 +1,7 @@
 # ToDo: Pokemon Champions Battle Engine
 
+> **[2026-10-18 移譲] エンジン整備は moon 担当。作業指示は [WORK_ORDER_2026-10-18.md](./WORK_ORDER_2026-10-18.md) を参照。**
+
 ## 暗号化（要検討）
 - [ ] MCP 応答の暗号化: セッションID + HMAC で署名
 - [ ] プレイヤーの行動への署名要求
