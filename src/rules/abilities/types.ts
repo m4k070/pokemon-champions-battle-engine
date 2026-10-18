@@ -81,4 +81,6 @@ export interface AbilityDefinition {
     effectiveness: number;
     engine: import('../../battle-engine.js').BattleEngine;
   }): number;
+  // 急所に当たらない特性（シェルアーマー等）。trueなら急所判定そのものを行わない。
+  preventsCriticalHits?(): boolean;
 }

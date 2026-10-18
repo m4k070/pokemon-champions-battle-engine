@@ -6,6 +6,7 @@ import type { BaseStats, MoveData, Stats, TypeName } from '../src/types.js';
 import type { AbilityName } from '../src/ability-names.js';
 import { isMoveSuccessful } from '../src/use-move-result.js';
 import { asDamageResult } from './helpers/use-move-result.js';
+import { fixedRandom } from './helpers/scripted-random.js';
 
 const FIXED_STATS: Stats = { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
 
@@ -272,6 +273,8 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('適応力: タイプ一致技の威力が2倍になる（通常STAB 1.5倍より高い）', () => {
+    // 乱数は固定する（2回の攻撃で別の乱数を引くと、威力比の比較が乱数の差に埋もれるため）。
+    engine.rng = fixedRandom(0.5);
     const makeLucario = (ability: AbilityName) => new Pokemon({
       name: 'Lucario',
       types: ['fighting', 'steel'],
