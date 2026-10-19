@@ -461,6 +461,13 @@ export class BattleEngine {
       }
     }
 
+    // まもる: そのターンの間、相手から受ける技を無効化する（本編仕様）。
+    // 自分を対象にする技（つるぎのまい等）は防げないため targetsOpponent で限定する。
+    if (defender.protecting && targetsOpponent(move)) {
+      this.log.push(`${defender.name}は身を守っている`);
+      return { outcome: 'failed', reason: 'protected' };
+    }
+
     // マジックミラー（magic-bounce）: 変化技を跳ね返す（対象を入れ替えて再適用）。
     // 両者マジックミラーなら跳ね返し合いにならない（1回だけ跳ね返す）。
     if (isStatusMove(move) && defender.ability === 'magic-bounce' && attacker.ability !== 'magic-bounce') {
@@ -469,6 +476,11 @@ export class BattleEngine {
     }
 
     move.pp -= 1;
+
+    // まもる以外の技を出したら連続使用のカウントは切れる（本編仕様）。
+    if (!move.protects) {
+      attacker.protectStreak = 0;
+    }
 
     this.log.push(`${attacker.name}の${move.name}`);
     const attackerSide = this.getSide(attacker);
@@ -694,6 +706,37 @@ export class BattleEngine {
         }
       }
       this.log.push('すべての能力変化がリセットされた');
+      return effectApplied();
+    }
+
+    // まもる: そのターン相手の技を防ぐ。連続で使うと成功率が半減していく（本編仕様）。
+    if (move.protects) {
+      const successChance = 1 / Math.pow(2, attacker.protectStreak);
+      if (this.rng.next() >= successChance) {
+        attacker.resetProtect();
+        this.log.push('しかし うまくきまらなかった');
+        return { outcome: 'failed', reason: 'protect-failed' };
+      }
+      attacker.protecting = true;
+      attacker.protectStreak += 1;
+      this.log.push(`${attacker.name}は身を守っている`);
+      return effectApplied();
+    }
+
+    // ねむる: HPを全回復して2ターンのねむり状態になる（本編仕様）。
+    // 既に状態異常があるとき、HPが満タンのときは失敗する。
+    if (move.rests) {
+      if (attacker.statusState.kind !== 'none') {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('status-immune');
+      }
+      if (attacker.currentHP >= attacker.maxHP) {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('full-hp');
+      }
+      attacker.heal(attacker.maxHP);
+      attacker.applySleep(2); // 本編のねむるは2ターン
+      this.log.push(`${attacker.name}は眠ってしまった`);
       return effectApplied();
     }
 
@@ -942,6 +985,22 @@ export class BattleEngine {
       }
     }
 
+    // 反動技: 与えたダメージの一定割合、または最大HPの一定割合を自分も受ける（本編仕様）。
+    if (isDamageMove(move) && totalDamage > 0) {
+      const recoilOfDamage = move.recoilPercent ? Math.floor(totalDamage * move.recoilPercent) : 0;
+      const recoilOfMaxHp = move.recoilMaxHpPercent
+        ? Math.floor(attacker.maxHP * move.recoilMaxHpPercent)
+        : 0;
+      const recoil = recoilOfDamage + recoilOfMaxHp;
+      if (recoil > 0) {
+        attacker.takeDamage(recoil, this);
+        this.log.push(`${attacker.name}は反動で${recoil}のダメージを受けた`);
+        if (attacker.isFainted) {
+          this.log.push(`${attacker.name}は戦闘不能になった`);
+        }
+      }
+    }
+
     if (defender.isFainted) {
       this.log.push(`${defender.name}は戦闘不能になった`);
     } else {
@@ -1091,6 +1150,13 @@ export class BattleEngine {
           this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側のリフレクターが消えた`);
         }
       }
+    }
+
+    // まもる: 防護はそのターン限りなので、ターン開始時に解除する（本編仕様）。
+    // 連続使用のカウント（protectStreak）は次のまもるで参照するため残す。
+    for (const pokemon of [this.activePokemon0, this.activePokemon1]) {
+      if (!pokemon) continue;
+      pokemon.protecting = false;
     }
 
     // ちょうはつ: ターンごとに残りターンを減らし、0になったら解除。

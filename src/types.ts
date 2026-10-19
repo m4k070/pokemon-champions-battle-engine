@@ -85,6 +85,10 @@ export interface CommonMoveEffects {
   resetsStatStages?: boolean;
   // みがわり: 自分のHPを1/4払って身代わりを出す（本編仕様）。
   createsSubstitute?: boolean;
+  // まもる: そのターンの間、相手から受ける技を無効化する（本編仕様）。
+  protects?: boolean;
+  // ねむる: HPを全回復し、2ターンのねむり状態になる（本編仕様）。
+  rests?: boolean;
 }
 
 // ダメージ技だけが持つ効果。変化技はダメージを与えないため、
@@ -101,6 +105,10 @@ export interface DamageOnlyEffects {
   usesDefenseForAttack?: boolean;
   // ドレイン技（きゅうけつ・ギガドレイン等）: 与えたダメージの指定割合だけ回復する（0.5 = 半分）。
   drainPercent?: number | null;
+  // 反動技（ウェーブタックル・フレアドライブ等）: 与えたダメージの指定割合を自分も受ける。
+  recoilPercent?: number | null;
+  // 反動技（てっていこうせん等）: 最大HPの指定割合を自分も受ける（与えたダメージに依存しない）。
+  recoilMaxHpPercent?: number | null;
 }
 
 // --- discriminated union 型（判別子は category） ---

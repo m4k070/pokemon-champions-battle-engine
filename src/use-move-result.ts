@@ -10,7 +10,9 @@ export type MoveFailureReason =
   | 'encored'            // アンコールで直前の技以外を出せない
   | 'blocked-by-terrain' // フィールド（サイコフィールド）に先制技を阻まれた
   | 'blocked-by-ability' // 相手の特性に無効化された（ぼうだん・ひらいしん等）
-  | 'missed';            // 命中判定に失敗した
+  | 'missed'             // 命中判定に失敗した
+  | 'protected'          // 相手がまもる等で防いだ
+  | 'protect-failed';    // まもるの連続使用で失敗した
 
 // 技は出たが効果を生まなかった理由。
 export type NoEffectReason =
