@@ -597,6 +597,53 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(statusAttacker.status).toBe('poison'); // 変わらない
   });
 
+
+  test('ばけのかわ: 最初の攻撃を無効化し、2回目は通る（交代で復活）', () => {
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const mimikyu = makePokemon('Mimikyu', 'disguise', { HP: 200, ATK: 90, DEF: 80, SPATK: 50, SPDEF: 105, SPEED: 96 });
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, mimikyu);
+
+    // 1発目はばけのかわが身代わりになる（HPは減らない）
+    engine.useMove(attacker, mimikyu, move({ name: 'Tackle', type: 'normal', power: 80 }));
+    expect(mimikyu.currentHP).toBe(mimikyu.maxHP);
+    expect(engine.getLog()).toContain('ばけのかわ');
+
+    // 2発目は通る
+    engine.useMove(attacker, mimikyu, move({ name: 'Tackle', type: 'normal', power: 80 }));
+    expect(mimikyu.currentHP).toBeLessThan(mimikyu.maxHP);
+
+    // 交代で場を離れると復活する
+    mimikyu.resetDisguise();
+    expect(mimikyu.disguiseBroken).toBe(false);
+  });
+
+  test('おうごんのからだ: 相手の変化技を無効化する（ダメージ技と自分の積み技は通る）', () => {
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const gholdengo = makePokemon('Gholdengo', 'good-as-gold', { HP: 200, ATK: 60, DEF: 95, SPATK: 133, SPDEF: 91, SPEED: 84 });
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, gholdengo);
+
+    // 相手の変化技は弾かれる
+    const status = engine.useMove(attacker, gholdengo, move({ name: 'でんじは', type: 'electric', category: 'status', status: 'paralysis' }));
+    expect(status.outcome).toBe('failed');
+    if (status.outcome !== 'failed') throw new Error('unreachable');
+    expect(status.reason).toBe('blocked-by-ability');
+    expect(gholdengo.status).toBeNull();
+
+    // ダメージ技は通る
+    const damage = engine.useMove(attacker, gholdengo, move({ name: 'Tackle', type: 'normal', power: 80 }));
+    expect(damage.outcome).toBe('damaged');
+
+    // 自分を対象にした積み技は妨げられない（相手も同じ特性でも）
+    const opponent = makePokemon('Opponent', 'good-as-gold', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    engine.setActivePokemon(1, opponent);
+    const buff = engine.useMove(gholdengo, opponent, move({ name: 'つるぎのまい', type: 'normal', category: 'status', selfStatChange: [{ stat: 'ATK', delta: 2 }] }));
+    expect(buff.outcome).toBe('effect-applied');
+    expect(gholdengo.statStages.ATK).toBe(2);
+  });
   test('エレキメイカー: 入場時にエレキフィールドを展開し、でん技の威力が1.3倍になる', () => {
     const { ELECTRIC_SURGE } = require('../src/rules/abilities/meta-abilities.js') as typeof import('../src/rules/abilities/meta-abilities.js');
     const attacker = makePokemon('Raichu', 'electric-surge', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });

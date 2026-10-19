@@ -85,7 +85,11 @@
 | 特性 | 効果 | 実装箇所 |
 |------|------|---------|
 | サイコメイカー | 入場時にサイコフィールドを展開（5ターン。グランドコート持ちなら8ターン） | `rules/abilities/meta-abilities.ts` の `PSYCHIC_SURGE` |
-| クリアボディ | 名前のみ登録（能力低下を防ぐ効果は未実装） | `ability-names.ts` |
+| ばけのかわ | 最初に受ける攻撃を無効化（ダメージ0）。交代で復活 | `DISGUISE`（`onDamaged`）+ `Pokemon.disguiseBroken` |
+| おうごんのからだ | 相手からの変化技を無効化（ダメージ技は通る） | `GOOD_AS_GOLD`（`blocksMove`） |
+| クリアボディ ほか28種 | 名前のみ登録（効果は未実装） | `ability-names.ts` |
+
+**gamewith 最強パーティランキング（2026-10-19 取得）の12構築に登場するポケモン32種の特性58件をすべて登録済み**（`tests/ability-coverage.test.ts` で固定）。
 
 ## 未実装
 
