@@ -91,6 +91,8 @@ export interface CommonMoveEffects {
   rests?: boolean;
   // ねがいごと: 次のターンの終了時に、その側の場に出ているポケモンを最大HPの半分回復する。
   wishes?: boolean;
+  // ほえる・ドラゴンテール: 相手を控えと強制交代させる（本編仕様）。
+  forcesSwitch?: boolean;
 }
 
 // ダメージ技だけが持つ効果。変化技はダメージを与えないため、

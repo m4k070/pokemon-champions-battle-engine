@@ -727,6 +727,15 @@ export class BattleEngine {
       return effectApplied();
     }
 
+    // ほえる: 相手を控えと強制交代させる（本編仕様）。
+    // チームを持っているのは BattleRunner なので、ここでは印を立てるだけ。
+    // ダメージ技（ドラゴンテール）はダメージ解決の後に同じ印を立てるため、ここでは変化技に限定する。
+    if (isStatusMove(move) && move.forcesSwitch) {
+      defender.forcedOut = true;
+      this.log.push(`${defender.name}は場を追い出された`);
+      return effectApplied();
+    }
+
     // ねがいごと: 次のターンの終了時に、その側の場に出ているポケモンを最大HPの半分回復する（本編仕様）。
     if (move.wishes) {
       const side = this.getSide(attacker);
@@ -1104,6 +1113,12 @@ export class BattleEngine {
     if (knocksOffItem && !defender.isFainted) {
       this.log.push(`${defender.name}の${defender.item}を落とした`);
       defender.item = null;
+    }
+
+    // ドラゴンテール等: ダメージを与えたうえで相手を強制交代させる（本編仕様）。
+    if (isDamageMove(move) && move.forcesSwitch && !defender.isFainted) {
+      defender.forcedOut = true;
+      this.log.push(`${defender.name}は場を追い出された`);
     }
 
     if (defender.isFainted) {
