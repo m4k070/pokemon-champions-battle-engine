@@ -618,6 +618,37 @@ export class BattleEngine {
       return effectApplied();
     }
 
+    // なまける等: 自分のHPを最大HPの一定割合だけ回復する。HPが満タンなら失敗する（本編仕様）。
+    if (move.selfHealPercent !== null && move.selfHealPercent !== undefined) {
+      if (attacker.currentHP >= attacker.maxHP) {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('full-hp');
+      }
+      const heal = Math.floor(attacker.maxHP * move.selfHealPercent);
+      attacker.heal(heal);
+      this.log.push(`${attacker.name}は${move.name}で${heal}回復した`);
+      return effectApplied();
+    }
+
+    // あくび: 相手をねむけにし、次のターンの終了時にねむりにする（交代で解除）。
+    // 出典: yakkun.com（チャンピオンズ）「相手を『ねむけ』状態にして、次のターン終了時に
+    // 相手を『ねむり』状態にする。ただし、そのポケモンが交代されると効果は消える。必ず命中」。
+    // タイプによる無効は無いため、変化技共通のタイプ相性判定（targetsOpponent）には載せない。
+    if (move.inflictsDrowsy) {
+      if (defender.isDrowsy) {
+        this.log.push(`${defender.name}はすでにねむけている`);
+        return noEffect('no-applicable-effect');
+      }
+      // すでに状態異常なら眠れないため、ねむけも付かない（本編仕様）。
+      if (defender.status !== null) {
+        this.log.push('効果がなかった');
+        return noEffect('status-immune');
+      }
+      defender.applyDrowsy(this.turn + 1);
+      this.log.push(`${defender.name}はねむけを誘われた`);
+      return effectApplied();
+    }
+
     // キングシールド等: バトルスイッチ持ち（ギルガルド）がシールドフォルムに戻る。
     if (move.restoresShieldForm) {
       const ability = getAbilityDefinition(attacker.ability);
@@ -960,6 +991,9 @@ export class BattleEngine {
     }
 
     this.applyStatusEffects(statusWeatherTeam);
+    // ねむけ→ねむりは状態異常の処理のあとに回す。同じターンに眠って即座に
+    // 睡眠ターンを消費してしまうのを避けるため。
+    this.applyDrowsySleep(statusWeatherTeam);
     this.applyLeechSeed(teamA, teamB);
     this.applyWeatherDamage(statusWeatherTeam);
     this.events.emit('end-turn', { team: [...teamA, ...teamB], engine: this });
@@ -997,6 +1031,25 @@ export class BattleEngine {
       pokemon.takeDamage(damage, this);
       const weatherName = this.weather === 'sand' ? '砂嵐' : 'あられ';
       this.log.push(`${pokemon.name}は${weatherName}のダメージで${damage}のダメージを受けた`);
+    }
+  }
+
+  // あくび（ねむけ）: ねむけのポケモンは、あくびを使われた次のターンの終了時にねむりになる。
+  // 交代で場を離れるとねむけは解除される（battle-runner の switchTo が resetDrowsy を呼ぶ）。
+  // 「残りターン数」ではなくターン番号で期限を持つのは、あくびを使ったターンの終了では
+  // 眠らず、その次のターンの終了で眠るため（比較だけで判定でき、数え漏れが起きない）。
+  applyDrowsySleep(team: Pokemon[]): void {
+    for (const pokemon of team) {
+      if (pokemon.isFainted || !pokemon.isDrowsy) continue;
+      const dueTurn = pokemon.drowsyUntilTurn;
+      if (dueTurn === null || this.turn < dueTurn) continue;
+
+      // 既に別の状態異常なら眠れない（ねむけは消える）。本編仕様。
+      const applied = pokemon.applyStatus('sleep', this.rng);
+      pokemon.resetDrowsy();
+      this.log.push(applied
+        ? `${pokemon.name}はねむけの効果で眠ってしまった`
+        : `${pokemon.name}はねむけだったが眠れなかった`);
     }
   }
 

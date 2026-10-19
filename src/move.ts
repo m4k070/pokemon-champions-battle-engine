@@ -84,6 +84,8 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   contact: boolean;
   restoresShieldForm: boolean;
   inflictsSpikes: boolean;
+  inflictsDrowsy: boolean;
+  selfHealPercent: number | null;
 
   constructor(data: DamageMoveInput) {
     this.name = data.name;
@@ -109,6 +111,8 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.contact = data.contact ?? false;
     this.restoresShieldForm = data.restoresShieldForm ?? false;
     this.inflictsSpikes = data.inflictsSpikes ?? false;
+    this.inflictsDrowsy = data.inflictsDrowsy ?? false;
+    this.selfHealPercent = data.selfHealPercent ?? null;
   }
 }
 
@@ -142,6 +146,8 @@ export class StatusMove implements StatusMoveData {
   weather: WeatherType | null;
   pivot: boolean;
   restoresShieldForm: boolean;
+  inflictsDrowsy: boolean;
+  selfHealPercent: number | null;
 
   constructor(data: StatusMoveInput) {
     this.name = data.name;
@@ -160,6 +166,8 @@ export class StatusMove implements StatusMoveData {
     this.weather = data.weather ?? null;
     this.pivot = data.pivot ?? false;
     this.restoresShieldForm = data.restoresShieldForm ?? false;
+    this.inflictsDrowsy = data.inflictsDrowsy ?? false;
+    this.selfHealPercent = data.selfHealPercent ?? null;
   }
 }
 

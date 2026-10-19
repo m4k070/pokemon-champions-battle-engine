@@ -72,6 +72,10 @@ export interface CommonMoveEffects {
   weather?: WeatherType | null;
   pivot?: boolean;
   restoresShieldForm?: boolean;
+  // あくび: 相手を「ねむけ」にして、次のターン終了時にねむりにする（交代で解除）。
+  inflictsDrowsy?: boolean;
+  // なまける等: 自分のHPを最大HPの指定割合だけ回復する（0.5 = 半分）。
+  selfHealPercent?: number | null;
 }
 
 // ダメージ技だけが持つ効果。変化技はダメージを与えないため、

@@ -44,6 +44,15 @@
 | 急所ランク（きょううん・するどいツメ・高急所技） | 未実装 | 出典: champions.pokewiki.net「ダメージ計算式」（ランク0=1/24、+1=1/8、+2=1/2、+3=1/1） |
 | カブトアーマー | 未実装 | 特性名がレジストリ未登録のため |
 
+## 技の効果（あくび・なまける）
+
+| 技 | 効果 | 実装箇所 |
+|------|------|---------|
+| あくび | 相手を「ねむけ」にし、次のターンの終了時に「ねむり」にする。交代で解除。必ず命中 | `useMove`（`inflictsDrowsy`）→ `applyDrowsySleep`（`endTurn` から呼ぶ）→ `BattleRunner.switchTo` の `resetDrowsy`。テスト: `tests/status-state.test.ts` |
+| なまける | 自分のHPを最大HPの1/2回復。HPが満タンなら効果なし（`no-effect` / `full-hp`） | `useMove`（`selfHealPercent`）。テスト: `tests/status-state.test.ts` |
+
+出典: yakkun.com（ポケモンチャンピオンズ図鑑）の技説明。
+
 ## 未実装
 
 | 道具 | ID | 効果 | 備考 |
