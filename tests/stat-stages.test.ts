@@ -96,3 +96,107 @@ describe('こわいかお（相手のすばやさを2段階下げる）', () => 
     expect(target.statStages.SPEED).toBe(0);
   });
 });
+
+describe('てっぺき（自分のぼうぎょを2段階上げる）', () => {
+  test('自分のぼうぎょランクが2段階上がる', () => {
+    // Arrange
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const user = makePokemon({ name: 'User' });
+    const target = makePokemon({ name: 'Target' });
+    engine.setActivePokemon(0, user);
+    engine.setActivePokemon(1, target);
+    const ironDefense = createMove({
+      name: 'てっぺき', type: 'steel', category: 'status',
+      selfStatChange: [{ stat: 'DEF', delta: 2 }],
+    });
+
+    // Act
+    const result = engine.useMove(user, target, ironDefense);
+
+    // Assert
+    expect(result.outcome).toBe('effect-applied');
+    expect(user.statStages.DEF).toBe(2);
+    expect(target.statStages.DEF).toBe(0);
+  });
+});
+
+describe('ボディプレス（こうげきの代わりにぼうぎょで計算する）', () => {
+  const bodyPress = () => createMove({
+    name: 'ボディプレス', type: 'fighting', power: 80, accuracy: 100, category: 'physical',
+    usesDefenseForAttack: true,
+  });
+  const ironDefense = () => createMove({
+    name: 'てっぺき', type: 'steel', category: 'status', selfStatChange: [{ stat: 'DEF', delta: 2 }],
+  });
+  const makeAttacker = (atk: number, def: number) => new Pokemon({
+    name: 'Attacker', types: ['fighting'], ability: 'none', item: null,
+    baseStats: { HP: 160, ATK: atk, DEF: def, SPATK: 100, SPDEF: 100, SPEED: 100 },
+  });
+  const makeDefender = () => new Pokemon({
+    name: 'Defender', types: ['normal'], ability: 'none', item: null,
+    baseStats: { HP: 200, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+  });
+
+  test('てっぺきの後はダメージが増える（ぼうぎょの能力ランクを参照している）', () => {
+    // Arrange
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const user = makeAttacker(100, 100);
+    engine.setActivePokemon(0, user);
+    engine.setActivePokemon(1, makeDefender());
+    const before = asDamageResult(engine.useMove(user, makeDefender(), bodyPress())).damage;
+
+    // Act
+    engine.useMove(user, makeDefender(), ironDefense());
+    const after = asDamageResult(engine.useMove(user, makeDefender(), bodyPress())).damage;
+
+    // Assert
+    expect(user.statStages.DEF).toBe(2);
+    expect(after).toBeGreaterThan(before);
+  });
+
+  test('ぼうぎょが高くこうげきが低いほうがダメージが大きい（こうげきを参照していない）', () => {
+    // Arrange
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const highDefense = makeAttacker(50, 200);
+    const highAttack = makeAttacker(200, 50);
+
+    // Act
+    const defDamage = asDamageResult(engine.useMove(highDefense, makeDefender(), bodyPress())).damage;
+    const atkDamage = asDamageResult(engine.useMove(highAttack, makeDefender(), bodyPress())).damage;
+
+    // Assert
+    expect(defDamage).toBeGreaterThan(atkDamage);
+  });
+
+  test('やけどでもダメージが半減しない（やけどはこうげきを半減させる効果のため）', () => {
+    // Arrange
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const healthy = makeAttacker(100, 100);
+    const burned = makeAttacker(100, 100);
+    burned.applyStatus('burn');
+
+    // Act
+    const healthyDamage = asDamageResult(engine.useMove(healthy, makeDefender(), bodyPress())).damage;
+    const burnedDamage = asDamageResult(engine.useMove(burned, makeDefender(), bodyPress())).damage;
+
+    // Assert
+    expect(burned.status).toBe('burn');
+    expect(burnedDamage).toBe(healthyDamage);
+  });
+
+  test('通常の物理技はやけどで半減する（比較対照）', () => {
+    // Arrange
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const healthy = makeAttacker(100, 100);
+    const burned = makeAttacker(100, 100);
+    burned.applyStatus('burn');
+    const tackle = () => createMove({ name: 'tackle', type: 'normal', power: 80, accuracy: 100, category: 'physical' });
+
+    // Act
+    const healthyDamage = asDamageResult(engine.useMove(healthy, makeDefender(), tackle())).damage;
+    const burnedDamage = asDamageResult(engine.useMove(burned, makeDefender(), tackle())).damage;
+
+    // Assert
+    expect(burnedDamage).toBeLessThan(healthyDamage);
+  });
+});
