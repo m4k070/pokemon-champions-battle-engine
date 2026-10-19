@@ -51,6 +51,8 @@
 | あくび | 相手を「ねむけ」にし、次のターンの終了時に「ねむり」にする。交代で解除。必ず命中 | `useMove`（`inflictsDrowsy`）→ `applyDrowsySleep`（`endTurn` から呼ぶ）→ `BattleRunner.switchTo` の `resetDrowsy`。テスト: `tests/status-state.test.ts` |
 | なまける | 自分のHPを最大HPの1/2回復。HPが満タンなら効果なし（`no-effect` / `full-hp`） | `useMove`（`selfHealPercent`）。テスト: `tests/status-state.test.ts` |
 | こわいかお | 相手のすばやさランクを2段階下げる（下限 -6） | `applyTargetStatChange`（`targetStatChange`）。テスト: `tests/stat-stages.test.ts` |
+| てっぺき | 自分のぼうぎょランクを2段階上げる | `applySelfStatChange`（`selfStatChange`）。テスト: `tests/stat-stages.test.ts` |
+| ボディプレス | ダメージ計算に「こうげき」ではなく「ぼうぎょ」とその能力ランクを使う。やけどでも半減しない | `calculateAttack`（`usesDefenseForAttack`）。テスト: `tests/stat-stages.test.ts` |
 
 出典: yakkun.com（ポケモンチャンピオンズ図鑑）の技説明。
 
