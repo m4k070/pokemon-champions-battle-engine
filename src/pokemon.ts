@@ -48,6 +48,10 @@ export interface PokémonConstructorData {
   drowsyUntilTurn?: number | null;
   // みがわり: 身代わりの残りHP（0 なら場に出ていない）。
   substituteHP?: number;
+  // 体重（kg）。くさむすび・けたぐり・ヘビーボンバーの威力計算に使う。
+  weightKg?: number;
+  // ふいうちの判定用: そのターン攻撃技を選んでいるか（BattleRunner が毎ターン設定する）。
+  intendsToAttackThisTurn?: boolean;
   // まもる: このターン相手の技を防いでいるか。
   protecting?: boolean;
   // まもる: 連続で使った回数（成功するたびに増え、成功率が半減していく）。
@@ -93,6 +97,10 @@ export class Pokemon {
   drowsyUntilTurn: number | null;
   // みがわり: 身代わりの残りHP。
   substituteHP: number;
+  // 体重（kg）。未設定なら0として扱う（くさむすびは威力20になる）。
+  weightKg: number;
+  // ふいうちの判定用: そのターン攻撃技を選んでいるか。
+  intendsToAttackThisTurn: boolean;
   // まもる: このターン相手の技を防いでいるか。
   protecting: boolean;
   // まもる: 連続で使った回数。
@@ -129,6 +137,8 @@ export class Pokemon {
     this.tauntTurnsLeft = data.tauntTurnsLeft ?? 0;
     this.drowsyUntilTurn = data.drowsyUntilTurn ?? null;
     this.substituteHP = data.substituteHP ?? 0;
+    this.weightKg = data.weightKg ?? 0;
+    this.intendsToAttackThisTurn = data.intendsToAttackThisTurn ?? false;
     this.protecting = data.protecting ?? false;
     this.protectStreak = data.protectStreak ?? 0;
     this.disguiseBroken = data.disguiseBroken ?? false;

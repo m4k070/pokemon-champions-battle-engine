@@ -96,6 +96,13 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   drainPercent: number | null;
   recoilPercent: number | null;
   recoilMaxHpPercent: number | null;
+  usesTargetAttack: boolean;
+  weightBasedPower: boolean;
+  knockOff: boolean;
+  failsIfNoItem: boolean;
+  doublesIfTargetDamaged: boolean;
+  alwaysCrit: boolean;
+  failsUnlessTargetAttacks: boolean;
 
   constructor(data: DamageMoveInput) {
     this.name = data.name;
@@ -133,6 +140,13 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.drainPercent = data.drainPercent ?? null;
     this.recoilPercent = data.recoilPercent ?? null;
     this.recoilMaxHpPercent = data.recoilMaxHpPercent ?? null;
+    this.usesTargetAttack = data.usesTargetAttack ?? false;
+    this.weightBasedPower = data.weightBasedPower ?? false;
+    this.knockOff = data.knockOff ?? false;
+    this.failsIfNoItem = data.failsIfNoItem ?? false;
+    this.doublesIfTargetDamaged = data.doublesIfTargetDamaged ?? false;
+    this.alwaysCrit = data.alwaysCrit ?? false;
+    this.failsUnlessTargetAttacks = data.failsUnlessTargetAttacks ?? false;
   }
 }
 

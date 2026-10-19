@@ -48,6 +48,7 @@ export const MEGA_STONE_SEEDS: Partial<Record<ItemName, MegaStoneSeed>> = {
   'lopunnite': { pokemon: 'lopunny', megaApiName: 'lopunny-mega', megaName: 'mega-lopunny' },
 };
 
+// メガストーンか（はたきおとすで落とせない持ち物の判定に使う）。
 // Poke APIから取得できない場合のデフォルト値（2026-07時点でPoke API実データと突合済み）。
 const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
   'charizardite-x': {
@@ -410,4 +411,14 @@ export class MegaEvolutionSystem {
 
     return true;
   }
+}
+
+// メガストーンか（はたきおとすで落とせない持ち物の判定に使う）。
+export const MEGA_STONE_ITEMS: ReadonlySet<string> = new Set([
+  ...Object.keys(DEFAULT_MEGA_STONES),
+  ...Object.keys(MEGA_STONE_SEEDS),
+]);
+
+export function isMegaStone(item: string): boolean {
+  return MEGA_STONE_ITEMS.has(item);
 }

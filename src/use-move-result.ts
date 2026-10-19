@@ -12,7 +12,9 @@ export type MoveFailureReason =
   | 'blocked-by-ability' // 相手の特性に無効化された（ぼうだん・ひらいしん等）
   | 'missed'             // 命中判定に失敗した
   | 'protected'          // 相手がまもる等で防いだ
-  | 'protect-failed';    // まもるの連続使用で失敗した
+  | 'protect-failed'     // まもるの連続使用で失敗した
+  | 'target-not-attacking' // ふいうち: 相手が攻撃技を選んでいなかった
+  | 'no-item';           // ポルターガイスト: 相手が持ち物を持っていなかった
 
 // 技は出たが効果を生まなかった理由。
 export type NoEffectReason =

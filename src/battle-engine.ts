@@ -7,6 +7,7 @@ import type { MoveData, StatusCondition, StatStageKey, TypeName, WeatherType, Ty
 import { isDamageMove, isPhysicalMove, isSpecialMove, isStatusMove, cloneDamageMove, targetsOpponent } from './move.js';
 import type { UseMoveResult, NoEffectReason } from './use-move-result.js';
 import { SYSTEM_RANDOM } from './rng.js';
+import { isMegaStone } from './rules/mega-evolution.js';
 import type { RandomSource } from './rng.js';
 
 export type { UseMoveResult, MoveFailureReason, NoEffectReason } from './use-move-result.js';
@@ -87,6 +88,9 @@ export interface BattleEngineOptions {
 // 実数値・ダメージ補正の計算条件。急所かどうかで「不利なランクを無視する」等が変わる。
 export interface AttackCalculationOptions {
   critical?: boolean;
+  // ダメージ計算の相手。イカサマ（相手のこうげきを使う）で参照する。
+  // 省略時は getOpponent(attacker) にフォールバックする。
+  defender?: Pokemon;
 }
 
 export class BattleEngine {
@@ -107,6 +111,8 @@ export class BattleEngine {
   // いのちのたまの反動は「そのターンにダメージを与えた攻撃者」だけに発動するため、
   // ターンをまたいで参照できるようendTurn()で記録・end-turnイベント処理後にリセットする。
   private attackersDealtDamageThisTurn: Set<Pokemon> = new Set();
+  // そのターンにダメージを受けたポケモン（ダメおしの威力2倍判定に使う）。
+  private defendersDamagedThisTurn: Set<Pokemon> = new Set();
 
   constructor(options: BattleEngineOptions = {}) {
     this.rng = options.rng ?? SYSTEM_RANDOM;
@@ -254,7 +260,19 @@ export class BattleEngine {
   calculateAttack(attacker: Pokemon, move: MoveData, options: AttackCalculationOptions = {}): number {
     // ボディプレスは「こうげき」ではなく「ぼうぎょ」とその能力ランクを参照する（本編仕様）。
     const usesDefense = isDamageMove(move) && move.usesDefenseForAttack === true;
+    // イカサマは相手の「こうげき」とその能力ランクを使う（本編仕様）。
+    // 使用者のこうげきを参照しないため、やけど・攻撃を強化する特性は適用しない。
+    const usesTargetAttack = isDamageMove(move) && move.usesTargetAttack === true;
     const statKey: StatStageKey = usesDefense ? 'DEF' : isPhysicalMove(move) ? 'ATK' : 'SPATK';
+    if (usesTargetAttack) {
+      const target = options.defender ?? this.getOpponent(attacker);
+      if (target) {
+        const targetMultiplier = target.getStatStageMultiplier(statKey);
+        const targetAttack = Math.floor(target.stats[statKey] * targetMultiplier);
+        this.events.emit('calculate-attack', { attacker, move, attack: targetAttack });
+        return targetAttack;
+      }
+    }
     // 急所は攻撃側のマイナスランクを無視する（0段階として扱う）。
     const ignoresDrop = options.critical === true && attacker.statStages[statKey] < 0;
     // 防御側がてんねん(ignoresOpponentStatChanges)なら、攻撃側の能力ランクを無視する。
@@ -379,6 +397,21 @@ export class BattleEngine {
     this.events.emit('apply-modifiers', { attacker, defender, move, finalDamage, effectiveness, critical });
 
     return { finalDamage, effectiveness };
+  }
+
+  // くさむすび・けたぐり: 相手の体重で威力が変わる（本編仕様）。
+  powerFromWeight(weightKg: number): number {
+    if (weightKg < 10) return 20;
+    if (weightKg < 25) return 40;
+    if (weightKg < 50) return 60;
+    if (weightKg < 100) return 80;
+    if (weightKg < 200) return 100;
+    return 120;
+  }
+
+  // はたきおとすで落とせる持ち物か（メガストーンは落とせない）。
+  hasRemovableItem(pokemon: Pokemon): boolean {
+    return pokemon.item !== null && !isMegaStone(pokemon.item);
   }
 
   // 急所に当たったかを引く。急所無効の特性（シェルアーマー）を持つ相手には発生しない。
@@ -524,6 +557,19 @@ export class BattleEngine {
         && targetsOpponent(move) && this.isGrounded(defender)) {
       this.log.push(`${defender.name}はサイコフィールドに守られている！`);
       return { outcome: 'failed', reason: 'blocked-by-terrain' };
+    }
+
+    // ふいうち: 相手がそのターン攻撃技を選んでいなければ失敗する（本編仕様）。
+    // 「選んでいるか」は BattleRunner が毎ターン設定する（intendsToAttackThisTurn）。
+    if (isDamageMove(move) && move.failsUnlessTargetAttacks && defender.intendsToAttackThisTurn !== true) {
+      this.log.push(`${attacker.name}の${move.name}は決まらなかった`);
+      return { outcome: 'failed', reason: 'target-not-attacking' };
+    }
+
+    // ポルターガイスト: 相手が持ち物を持っていなければ失敗する（本編仕様）。
+    if (isDamageMove(move) && move.failsIfNoItem && defender.item === null) {
+      this.log.push(`${attacker.name}の${move.name}は決まらなかった`);
+      return { outcome: 'failed', reason: 'no-item' };
     }
 
     // ぼうだん等の技無効化特性は命中判定より前に解決する（本編仕様）。
@@ -897,6 +943,22 @@ export class BattleEngine {
       power = powerAbility.modifyMovePower({ pokemon: attacker, move, value: power, engine: this });
     }
 
+    // くさむすび・けたぐり: 相手の体重で威力が決まる（本編仕様）。
+    if (isDamageMove(move) && move.weightBasedPower) {
+      power = this.powerFromWeight(defender.weightKg);
+    }
+
+    // はたきおとす: 相手が落とせる持ち物を持っていれば威力1.5倍（本編仕様）。
+    const knocksOffItem = isDamageMove(move) && move.knockOff && this.hasRemovableItem(defender);
+    if (knocksOffItem) {
+      power = Math.floor(power * 1.5);
+    }
+
+    // ダメおし: そのターン既に相手がダメージを受けていれば威力2倍（本編仕様）。
+    if (isDamageMove(move) && move.doublesIfTargetDamaged && this.defendersDamagedThisTurn.has(defender)) {
+      power *= 2;
+    }
+
     const moveWithStab = cloneDamageMove(move, { power, type: effectiveType });
 
     // おやこあい: 攻撃技が2回ヒットする（2回目は威力1/4）。命中判定は1回（本編仕様）。
@@ -923,8 +985,11 @@ export class BattleEngine {
       const hitMove = cloneDamageMove(moveWithStab, { power: hitPower });
 
       // 急所判定はヒットごとに行う（本編仕様）。乱数の消費順もここで固定される。
-      const critical = this.rollCriticalHit(defender);
-      const attack = this.calculateAttack(attacker, hitMove, { critical });
+      // 必ず急所の技（トリックフラワー等）は乱数を引かない。
+      const critical = isDamageMove(move) && move.alwaysCrit
+        ? getAbilityDefinition(defender.ability)?.preventsCriticalHits?.() !== true
+        : this.rollCriticalHit(defender);
+      const attack = this.calculateAttack(attacker, hitMove, { critical, defender });
       const defense = this.calculateDefense(defender, hitMove, { critical });
       const baseDamage = this.calculateBaseDamage(attack, defense, hitMove);
       const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, hitMove, { critical });
@@ -943,6 +1008,7 @@ export class BattleEngine {
 
       if (rolledDamage > 0) {
         this.attackersDealtDamageThisTurn.add(attacker);
+        this.defendersDamagedThisTurn.add(defender);
       }
     }
 
@@ -999,6 +1065,12 @@ export class BattleEngine {
           this.log.push(`${attacker.name}は戦闘不能になった`);
         }
       }
+    }
+
+    // はたきおとす: 命中したら相手の持ち物を落とす（本編仕様。メガストーンは落とせない）。
+    if (knocksOffItem && !defender.isFainted) {
+      this.log.push(`${defender.name}の${defender.item}を落とした`);
+      defender.item = null;
     }
 
     if (defender.isFainted) {
@@ -1203,6 +1275,7 @@ export class BattleEngine {
     this.applyWeatherDamage(statusWeatherTeam);
     this.events.emit('end-turn', { team: [...teamA, ...teamB], engine: this });
     this.attackersDealtDamageThisTurn.clear();
+    this.defendersDamagedThisTurn.clear();
   }
 
   // やどりぎのタネ: 吸われている側から吸っている相手（本来のオーナーではなく、
