@@ -440,7 +440,9 @@ export class BattleEngine {
     return rolled > 0 || effectiveness <= 0 ? rolled : 1;
   }
 
-  applyDamage(defender: Pokemon, damage: number, attacker?: Pokemon, move?: MoveData): void {
+  // 実ダメージ（特性・持ち物の補正後）を返す。ばけのかわのように特性がダメージを差し替えるため、
+  // 呼び出し側は補正前の値ではなく戻り値をログ・反動・ドレインの計算に使う。
+  applyDamage(defender: Pokemon, damage: number, attacker?: Pokemon, move?: MoveData): number {
     let effectiveDamage = damage;
 
     // 特性の被弾時フック（がんじょう・じきゅうりょく・あついしぼう・さめはだ等）。
@@ -460,7 +462,7 @@ export class BattleEngine {
         defender.substituteHP = 0;
         this.log.push(`${defender.name}のみがわりは こわれた`);
       }
-      return;
+      return absorbed;
     }
 
     // シュカのみ: 地面技のダメージを半減する（1回限り）。
@@ -470,7 +472,11 @@ export class BattleEngine {
       this.log.push(`${defender.name}はシュカのみで地面技のダメージを半減した`);
     }
 
+    // 注意: 戻り値はHP差分ではなく補正後の計算値。きあいのタスキ等が takeDamage 内の
+    // apply-damage イベントでダメージをさらに削る場合、その分は戻り値に反映されない
+    // （ログ・反動の従来挙動を変えないため）。
     defender.takeDamage(effectiveDamage, this);
+    return effectiveDamage;
   }
 
   useMove(attacker: Pokemon, defender: Pokemon, move: MoveData): UseMoveResult {
@@ -1041,14 +1047,18 @@ export class BattleEngine {
         this.log.push('急所に当たった！');
       }
       const hadSubstitute = defender.substituteHP > 0;
-      this.applyDamage(defender, rolledDamage, attacker, hitMove);
+      // タイプ無効（実ダメージ0）のときは applyDamage を呼ばない。呼ぶとばけのかわ・
+      // さめはだ・じきゅうりょく等の被弾フックが誤って発動する（本編では無効化される）。
+      const dealtDamage = rolledDamage > 0 ? this.applyDamage(defender, rolledDamage, attacker, hitMove) : 0;
       if (hadSubstitute) {
         substituteAbsorbed = true;
       }
-      totalDamage += rolledDamage;
+      // ログ・反動・ドレインは特性適用後の実ダメージで積む
+      // （ばけのかわは攻撃を無効化して1/8だけ通すため、rolledDamage とは一致しない）。
+      totalDamage += dealtDamage;
       lastEffectiveness = effectiveness;
 
-      if (rolledDamage > 0) {
+      if (dealtDamage > 0) {
         this.attackersDealtDamageThisTurn.add(attacker);
         this.defendersDamagedThisTurn.add(defender);
       }

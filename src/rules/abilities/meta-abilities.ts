@@ -215,15 +215,21 @@ export const ELECTRIC_SURGE: AbilityDefinition = {
   },
 };
 
-// ばけのかわ: 最初に受ける攻撃を無効化する（ダメージ0）。交代で場を離れると復活する。
-// 本編では化けの皮が剥がれるとフォルムが変わるが、ここでは無効化とログだけを扱う。
+// ばけのかわ: 受けた技のダメージを1回だけ無効化し、代わりに最大HPの1/8を受ける（第8世代以降）。
+// 本編のフォルムチェンジは種族値が変わらないため、ここでは無効化とログだけを扱う。
+// 1/8でHPが0になればそのままひんしになる（本編仕様。Bulbapedia "Disguise" を 2026-10-19 に確認）。
+// 一度割れるとバトル中は元に戻らない（交代しても復活しない）。
+// タイプ無効の技では発動しない（battle-engine 側が実ダメージ > 0 のときだけ onDamaged を呼ぶ）。
+// TODO: こんらんの自傷ダメージも無効化する（こんらん自体が未実装）。
+//       実装時は自傷経路からもこのフックを通すこと。
 export const DISGUISE: AbilityDefinition = {
   name: 'disguise',
   onDamaged: ({ defender, damage, engine }) => {
     if (defender.disguiseBroken) return damage;
     defender.disguiseBroken = true;
     engine.log.push(`${defender.name}のばけのかわが身代わりになった！`);
-    return 0;
+    // 切り捨て、最低1。端数は本編どおり切り捨てる。
+    return Math.max(1, Math.floor(defender.maxHP / 8));
   },
 };
 

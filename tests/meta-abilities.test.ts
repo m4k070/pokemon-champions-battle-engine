@@ -1,4 +1,5 @@
 import { BattleEngine } from '../src/battle-engine.js';
+import { BattleSession } from '../src/battle-runner.js';
 import { Pokemon } from '../src/pokemon.js';
 import { createMove } from '../src/move.js';
 import type { MoveInput } from '../src/move.js';
@@ -598,25 +599,143 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
 
-  test('ばけのかわ: 最初の攻撃を無効化し、2回目は通る（交代で復活）', () => {
+  // ばけのかわ（Champions仕様）: 出典 yakkun.com/ch/zukan/n778、Bulbapedia "Disguise"（2026-10-19 確認）。
+  // maxHP 200 にして 1/8 = 25 がそのまま検算できるようにする。タイプは本編どおり ゴースト/フェアリー。
+  const makeMimikyu = (): Pokemon => new Pokemon({
+    name: 'Mimikyu',
+    types: ['ghost', 'fairy'],
+    ability: 'disguise',
+    item: null,
+    baseStats: { HP: 55, ATK: 90, DEF: 80, SPATK: 50, SPDEF: 105, SPEED: 96 },
+    stats: { ...FIXED_STATS, HP: 200, ATK: 90, DEF: 80, SPATK: 50, SPDEF: 105, SPEED: 96 },
+    moves: [move({ name: 'Tackle', type: 'normal', power: 10 })],
+  });
+
+  test('ばけのかわ: 1発目のダメージを無効化し、代わりに最大HPの1/8を受ける', () => {
     const engine = new BattleEngine({ rng: fixedRandom(0.5) });
     const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
-    const mimikyu = makePokemon('Mimikyu', 'disguise', { HP: 200, ATK: 90, DEF: 80, SPATK: 50, SPDEF: 105, SPEED: 96 });
+    const mimikyu = makeMimikyu();
     engine.setActivePokemon(0, attacker);
     engine.setActivePokemon(1, mimikyu);
 
-    // 1発目はばけのかわが身代わりになる（HPは減らない）
-    engine.useMove(attacker, mimikyu, move({ name: 'Tackle', type: 'normal', power: 80 }));
-    expect(mimikyu.currentHP).toBe(mimikyu.maxHP);
-    expect(engine.getLog()).toContain('ばけのかわ');
+    // ゴースト/フェアリーに等倍の水技（ノーマルは無効、ドラゴンは0倍になるため使わない）
+    const result = engine.useMove(attacker, mimikyu, move({ name: 'Water Gun', type: 'water', power: 100 }));
 
-    // 2発目は通る
-    engine.useMove(attacker, mimikyu, move({ name: 'Tackle', type: 'normal', power: 80 }));
-    expect(mimikyu.currentHP).toBeLessThan(mimikyu.maxHP);
+    expect(mimikyu.currentHP).toBe(175); // 200 - floor(200/8)
+    expect(mimikyu.disguiseBroken).toBe(true);
+    expect(engine.getLog()).toContain('Mimikyuのばけのかわが身代わりになった！');
+    // ログ・戻り値は補正前のダメージではなく、特性適用後の実ダメージを出す
+    expect(asDamageResult(result).damage).toBe(25);
+    expect(engine.getLog()).toContain('Mimikyuに25のダメージ');
+  });
 
-    // 交代で場を離れると復活する
-    mimikyu.resetDisguise();
+  test('ばけのかわ: 割れたあとは2発目がそのまま通る', () => {
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const mimikyu = makeMimikyu();
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, mimikyu);
+
+    engine.useMove(attacker, mimikyu, move({ name: 'Water Gun', type: 'water', power: 100 }));
+    expect(mimikyu.currentHP).toBe(175);
+
+    engine.useMove(attacker, mimikyu, move({ name: 'Water Gun', type: 'water', power: 100 }));
+    expect(mimikyu.currentHP).toBeLessThan(175);
+    expect(mimikyu.disguiseBroken).toBe(true);
+  });
+
+  test('ばけのかわ: タイプ無効の技では発動しない', () => {
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const mimikyu = makeMimikyu();
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, mimikyu);
+
+    // ドラゴンはフェアリーに0倍。皮は割れず、HPも減らない
+    const result = engine.useMove(attacker, mimikyu, move({ name: 'Dragon Claw', type: 'dragon', power: 80 }));
+
+    expect(result.outcome).toBe('no-effect');
+    expect(mimikyu.currentHP).toBe(200);
     expect(mimikyu.disguiseBroken).toBe(false);
+    expect(engine.getLog()).not.toContain('ばけのかわ');
+  });
+
+  test('ばけのかわ: 交代で場を離れて戻っても割れたまま（バトル中は復活しない）', async () => {
+    const attacker = makePokemon(
+      'Attacker', 'none',
+      { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      [move({ name: 'Water Gun', type: 'water', power: 50 })],
+    );
+    const mimikyu = makeMimikyu();
+    const bench = makePokemon(
+      'Bench', 'none',
+      { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 50 },
+      [move({ name: 'Tackle', type: 'normal', power: 10 })],
+    );
+    const session = await BattleSession.start([attacker], [mimikyu, bench], { rng: fixedRandom(0.5) });
+
+    // 1ターン目: 皮が割れ、HPは1/8だけ減る
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+    );
+    session.endTurn();
+    expect(mimikyu.disguiseBroken).toBe(true);
+    expect(mimikyu.currentHP).toBe(175);
+
+    // 2ターン目: 交代で場を離れる
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+      { action: { type: 'switch', pokemonIndex: 1 } },
+    );
+    session.endTurn();
+    expect(session.activeB).toBe(bench);
+    expect(mimikyu.disguiseBroken).toBe(true); // 場を離れても元に戻らない
+
+    // 3ターン目: 再び場に戻す。皮は無いのでダメージがそのまま通る
+    session.beginTurn();
+    session.applyTurn(
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+      { action: { type: 'switch', pokemonIndex: 0 } },
+    );
+    session.endTurn();
+    expect(session.activeB).toBe(mimikyu);
+    expect(mimikyu.currentHP).toBeLessThan(175);
+  });
+
+  test('ばけのかわ: ステルスロック・変化技・追加効果は防がない', () => {
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+
+    // 変化技（でんじは）はそのまま通る
+    const statusEngine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const statusTarget = makeMimikyu();
+    statusEngine.setActivePokemon(0, attacker);
+    statusEngine.setActivePokemon(1, statusTarget);
+    statusEngine.useMove(attacker, statusTarget, move({ name: 'でんじは', type: 'electric', category: 'status', status: 'paralysis' }));
+    expect(statusTarget.status).toBe('paralysis');
+    expect(statusTarget.disguiseBroken).toBe(false);
+
+    // ダメージ技の追加効果（状態異常）は、ダメージを無効化されても発動する
+    const secondaryEngine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const secondaryTarget = makeMimikyu();
+    secondaryEngine.setActivePokemon(0, attacker);
+    secondaryEngine.setActivePokemon(1, secondaryTarget);
+    secondaryEngine.useMove(attacker, secondaryTarget, move({
+      name: 'Water Gun', type: 'water', power: 80,
+      secondaryEffect: { status: 'burn', chance: 100 },
+    }));
+    expect(secondaryTarget.status).toBe('burn');
+
+    // ステルスロック（設置ダメージ）は皮を割らずにそのまま入る
+    const hazardEngine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const hazardTarget = makeMimikyu();
+    hazardEngine.setActivePokemon(1, hazardTarget);
+    hazardEngine.field.stealthRock.playerB = true;
+    hazardEngine.switchIn(hazardTarget, [hazardTarget], 1);
+    expect(hazardTarget.currentHP).toBe(175); // 200 - floor(200/8)
+    expect(hazardTarget.disguiseBroken).toBe(false);
   });
 
   test('おうごんのからだ: 相手の変化技を無効化する（ダメージ技と自分の積み技は通る）', () => {
