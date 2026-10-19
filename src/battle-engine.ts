@@ -412,6 +412,18 @@ export class BattleEngine {
       if (typeof adjusted === 'number') effectiveDamage = adjusted;
     }
 
+    // みがわり: 場に身代わりがあるときは、ダメージを身代わりが受ける（本編仕様）。
+    // 身代わりが受けたぶんは本体のHPには及ばない。身代わりのHPが0になると壊れる。
+    if (defender.substituteHP > 0) {
+      const absorbed = Math.min(defender.substituteHP, effectiveDamage);
+      defender.substituteHP -= absorbed;
+      if (defender.substituteHP <= 0) {
+        defender.substituteHP = 0;
+        this.log.push(`${defender.name}のみがわりは こわれた`);
+      }
+      return;
+    }
+
     // シュカのみ: 地面技のダメージを半減する（1回限り）。
     if (defender.item === 'shuca-berry' && !defender.itemUsed && move?.type === 'ground') {
       effectiveDamage = Math.floor(effectiveDamage / 2);
@@ -656,6 +668,35 @@ export class BattleEngine {
       return effectApplied();
     }
 
+    // みがわり: 自分のHPを最大HPの1/4払って身代わりを出す（本編仕様）。
+    // 残りHPが代償以下なら失敗する。
+    if (move.createsSubstitute) {
+      if (attacker.substituteHP > 0) {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('no-applicable-effect');
+      }
+      const cost = Math.floor(attacker.maxHP / 4);
+      if (attacker.currentHP <= cost) {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('not-enough-hp');
+      }
+      attacker.currentHP -= cost;
+      attacker.substituteHP = cost;
+      this.log.push(`${attacker.name}は身代わりを出した`);
+      return effectApplied();
+    }
+
+    // くろいきり: 場に出ている全員の能力変化をリセットする（本編仕様）。
+    if (move.resetsStatStages) {
+      for (const pokemon of [attacker, defender]) {
+        for (const key of Object.keys(pokemon.statStages) as (keyof typeof pokemon.statStages)[]) {
+          pokemon.statStages[key] = 0;
+        }
+      }
+      this.log.push('すべての能力変化がリセットされた');
+      return effectApplied();
+    }
+
     // なまける等: 自分のHPを最大HPの一定割合だけ回復する。HPが満タンなら失敗する（本編仕様）。
     if (move.selfHealPercent !== null && move.selfHealPercent !== undefined) {
       if (attacker.currentHP >= attacker.maxHP) {
@@ -824,6 +865,7 @@ export class BattleEngine {
       ? (move.maxHits ? Math.min(this.rollMultiHitCount(), move.maxHits) : this.rollMultiHitCount())
       : isParentalBond ? 2 : 1;
     let totalDamage = 0;
+    let substituteAbsorbed = false;
     let lastEffectiveness = 1;
 
     for (let hit = 0; hit < hitCount && !defender.isFainted; hit++) {
@@ -848,7 +890,11 @@ export class BattleEngine {
       if (critical) {
         this.log.push('急所に当たった！');
       }
+      const hadSubstitute = defender.substituteHP > 0;
       this.applyDamage(defender, rolledDamage, attacker, hitMove);
+      if (hadSubstitute) {
+        substituteAbsorbed = true;
+      }
       totalDamage += rolledDamage;
       lastEffectiveness = effectiveness;
 
@@ -876,11 +922,25 @@ export class BattleEngine {
       return { outcome: 'no-effect', reason: 'type-immune', pivot: false };
     }
 
-    this.log.push(`${defender.name}に${totalDamage}のダメージ`);
+    this.log.push(
+      substituteAbsorbed
+        ? `${defender.name}の身代わりに${totalDamage}のダメージ`
+        : `${defender.name}に${totalDamage}のダメージ`,
+    );
 
     // 特性の「ダメージ技を命中させた後」フック（バトルスイッチ等）。
     const attackerAbility = getAbilityDefinition(attacker.ability);
     attackerAbility?.onMoveUsed?.({ attacker, defender, move, engine: this });
+
+    // ドレイン技（きゅうけつ・ギガドレイン等）: 与えたダメージの一定割合を回復する。
+    // 身代わりに吸われたぶんも「与えたダメージ」として回復に回る（本編仕様）。
+    if (move.drainPercent !== null && move.drainPercent !== undefined && totalDamage > 0) {
+      const drain = Math.floor(totalDamage * move.drainPercent);
+      if (drain > 0) {
+        attacker.heal(drain);
+        this.log.push(`${attacker.name}は${move.name}で${drain}回復した`);
+      }
+    }
 
     if (defender.isFainted) {
       this.log.push(`${defender.name}は戦闘不能になった`);

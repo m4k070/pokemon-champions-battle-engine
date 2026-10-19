@@ -46,6 +46,8 @@ export interface PokémonConstructorData {
   tauntTurnsLeft?: number;
   // あくび（ねむけ）: このターン終了時にねむりになる。交代で解除。
   drowsyUntilTurn?: number | null;
+  // みがわり: 身代わりの残りHP（0 なら場に出ていない）。
+  substituteHP?: number;
   // ばけのかわ: 既に身代わりになったか（交代で場を離れると復活する）。
   disguiseBroken?: boolean;
   // アンコール: 直前に使った技の名前（アンコールの固定対象を決めるのに使う）。
@@ -85,6 +87,8 @@ export class Pokemon {
   // 「残りターン数」ではなくターン番号で持つのは、あくびを使ったターンの終了では
   // 眠らず、その次のターンの終了で眠るため（比較だけで判定でき、数え漏れが起きない）。
   drowsyUntilTurn: number | null;
+  // みがわり: 身代わりの残りHP。
+  substituteHP: number;
   // ばけのかわ: 既に身代わりになったか。
   disguiseBroken: boolean;
   // アンコール: 直前に使った技の名前。未使用なら null。
@@ -116,6 +120,7 @@ export class Pokemon {
     this.isSeeded = data.isSeeded ?? false;
     this.tauntTurnsLeft = data.tauntTurnsLeft ?? 0;
     this.drowsyUntilTurn = data.drowsyUntilTurn ?? null;
+    this.substituteHP = data.substituteHP ?? 0;
     this.disguiseBroken = data.disguiseBroken ?? false;
     this.lastMoveName = data.lastMoveName ?? null;
     this.encoredMoveIndex = data.encoredMoveIndex ?? null;
@@ -266,6 +271,11 @@ export class Pokemon {
 
   resetDrowsy(): void {
     this.drowsyUntilTurn = null;
+  }
+
+  // みがわり: 交代で場を離れると消える（本編仕様）。
+  resetSubstitute(): void {
+    this.substituteHP = 0;
   }
 
   // ばけのかわ: 交代で場を離れると身代わりが復活する（本編仕様）。

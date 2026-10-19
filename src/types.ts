@@ -81,6 +81,10 @@ export interface CommonMoveEffects {
   inflictsEncore?: boolean;
   // ワイドフォース: サイコフィールド下で接地していれば威力1.5倍（本編仕様）。
   boostedByPsychicTerrain?: boolean;
+  // くろいきり: 場に出ている全員の能力変化をリセットする（本編仕様）。
+  resetsStatStages?: boolean;
+  // みがわり: 自分のHPを1/4払って身代わりを出す（本編仕様）。
+  createsSubstitute?: boolean;
 }
 
 // ダメージ技だけが持つ効果。変化技はダメージを与えないため、
@@ -95,6 +99,8 @@ export interface DamageOnlyEffects {
   inflictsSpikes?: boolean;
   // ボディプレス: ダメージ計算に「こうげき」ではなく「ぼうぎょ」を使う（本編仕様）。
   usesDefenseForAttack?: boolean;
+  // ドレイン技（きゅうけつ・ギガドレイン等）: 与えたダメージの指定割合だけ回復する（0.5 = 半分）。
+  drainPercent?: number | null;
 }
 
 // --- discriminated union 型（判別子は category） ---

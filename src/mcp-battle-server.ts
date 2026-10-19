@@ -73,6 +73,15 @@ const MoveInputSchema = z.object({
   restoresShieldForm: z.boolean().optional(),
   inflictsSpikes: z.boolean().optional(),
   weather: z.enum(['sand', 'rain', 'sun', 'hail']).nullable().optional(),
+  // T1〜T7 と現環境構築の対応で増えた効果（MCP 経由でも指定できるようにする）。
+  inflictsDrowsy: z.boolean().optional(),
+  selfHealPercent: z.number().min(0).max(1).nullable().optional(),
+  usesDefenseForAttack: z.boolean().optional(),
+  inflictsEncore: z.boolean().optional(),
+  boostedByPsychicTerrain: z.boolean().optional(),
+  drainPercent: z.number().min(0).max(1).nullable().optional(),
+  resetsStatStages: z.boolean().optional(),
+  createsSubstitute: z.boolean().optional(),
 }).refine(
   (data) => {
     if (data.multiHitPowers && data.maxHits && data.multiHitPowers.length !== data.maxHits) {
