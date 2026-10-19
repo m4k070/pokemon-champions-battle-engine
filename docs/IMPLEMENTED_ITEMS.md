@@ -58,6 +58,14 @@
 | サイコフィールド | 5ターン（グランドコートで8ターン）フィールドを展開。接地している側のエスパー技を1.3倍、接地している相手への先制技を無効化 | `useMove`（`fieldEffect: 'psychic-terrain'`）+ `isGrounded` + 威力補正 + 先制技の無効化。テスト: `tests/terrain.test.ts` |
 | ワイドフォース | サイコフィールド下で接地していれば威力1.5倍（フィールドの1.3倍も重なる） | `calculateAttack` 手前の威力補正（`boostedByPsychicTerrain`）。テスト: `tests/terrain.test.ts` |
 
+### メガシンカ（Champions 独自）
+
+| メガ | ストーン | タイプ / 特性 / 種族値 | テスト |
+|------|---------|----------------------|--------|
+| メガガブリアスZ | `garchompite-z` | ドラゴン単 / ふゆう / 108-130-85-141-85-151 | `tests/mega-evolution.test.ts` |
+
+**注意**: 本編のメガガブリアス（`garchompite` → `mega-garchomp`・dragon/ground・すなのちから・S-10）とは別物。両方のテストで取り違えを防いでいる。
+
 出典: yakkun.com（ポケモンチャンピオンズ図鑑）の技説明。
 
 ## 未実装

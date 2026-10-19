@@ -108,6 +108,16 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     abilityChange: 'no-guard',
     statBoosts: { ATK: 10, DEF: 0, SPATK: 70, SPDEF: 0, SPEED: 20 },
   },
+  // メガガブリアスZ: 本編のメガガブリアス（garchompite）とは別物。混同しないこと。
+  // ドラゴン単・ふゆう・108-130-85-141-85-151（A0/D-10/SA+61/SD0/S+49 = +100）。
+  // 出典: やっくんチャンピオンズ図鑑（2026-08-19 確認）／試作PT_カバルドン二軸デュアルメガ
+  'garchompite-z': {
+    pokemon: 'garchomp',
+    megaName: 'mega-garchomp-z',
+    typeChange: ['dragon'],
+    abilityChange: 'levitate',
+    statBoosts: { ATK: 0, DEF: -10, SPATK: 61, SPDEF: 0, SPEED: 49 },
+  },
   // ---- 標準メガ（Poke API実データに基づく）----
   'venusaurite': {
     pokemon: 'venusaur',

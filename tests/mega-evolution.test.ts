@@ -316,6 +316,46 @@ describe('MegaEvolutionSystem', () => {
     expect(garchomp.baseStats.SPEED).toBe(102 - 10);
   });
 
+  test('メガガブリアスZ: ドラゴン単・ふゆう・素早さ151（本編メガガブリアスとは別物）', () => {
+    const system = new MegaEvolutionSystem();
+    const garchomp = new Pokemon({
+      name: 'garchomp',
+      baseName: 'garchomp',
+      types: ['dragon', 'ground'],
+      ability: 'rough-skin',
+      item: 'garchompite-z',
+      baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+    });
+
+    expect(system.canMegaEvolve(garchomp)).toBe(true);
+    system.megaEvolve(garchomp);
+
+    expect(garchomp.name).toBe('mega-garchomp-z');
+    expect(garchomp.types).toEqual(['dragon']); // ドラゴン単（本編は dragon/ground）
+    expect(garchomp.ability).toBe('levitate');  // ふゆう
+    expect(garchomp.baseStats).toEqual({
+      HP: 108, ATK: 130, DEF: 85, SPATK: 141, SPDEF: 85, SPEED: 151,
+    });
+  });
+
+  test('本編のガブリアスナイトは従来どおり dragon/ground・すなのちから', () => {
+    const system = new MegaEvolutionSystem();
+    const garchomp = new Pokemon({
+      name: 'garchomp',
+      baseName: 'garchomp',
+      types: ['dragon', 'ground'],
+      ability: 'rough-skin',
+      item: 'garchompite',
+      baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+    });
+
+    system.megaEvolve(garchomp);
+
+    expect(garchomp.name).toBe('mega-garchomp');
+    expect(garchomp.types).toEqual(['dragon', 'ground']);
+    expect(garchomp.ability).toBe('sand-force');
+  });
+
   test('性格補正持ちは上昇後の種族値から再計算される（補正後に加算しない）', () => {
     const system = new MegaEvolutionSystem();
     const charizard = new Pokemon({
