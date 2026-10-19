@@ -307,6 +307,7 @@ export class BattleSession {
     outgoing.resetSeeded(); // やどりぎのタネも場を離れると解除される
     outgoing.resetLockedMove(); // こだわり系の技固定も場を離れると解除される
     outgoing.resetTaunt(); // ちょうはつも場を離れると解除される
+    outgoing.resetDrowsy(); // あくびのねむけも場を離れると解除される
 
     // 場を離れるときの特性フック（さいせいりょく等）。
     const ability = getAbilityDefinition(outgoing.ability);

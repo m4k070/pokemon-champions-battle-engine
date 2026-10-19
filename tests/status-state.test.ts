@@ -1,6 +1,9 @@
 import { Pokemon } from '../src/pokemon.js';
 import { BattleEngine } from '../src/battle-engine.js';
 import { cloneStatusState, createStatusState, statusConditionOf, NO_STATUS } from '../src/status-state.js';
+import { createMove } from '../src/move.js';
+import { isMoveSuccessful } from '../src/use-move-result.js';
+import { fixedRandom, scriptedRandom } from './helpers/scripted-random.js';
 
 function makePokemon(): Pokemon {
   return new Pokemon({
@@ -150,5 +153,131 @@ describe('ターン終了時の状態異常処理', () => {
     // Assert
     expect(burned.currentHP).toBe(burned.maxHP - Math.floor(burned.maxHP / 16));
     expect(poisoned.currentHP).toBe(poisoned.maxHP - Math.floor(poisoned.maxHP / 8));
+  });
+});
+
+describe('あくび（ねむけ）', () => {
+  test('あくびを使われた相手はねむけになり、次のターンの終了時に眠る', () => {
+    // Arrange
+    const engine = new BattleEngine({ rng: scriptedRandom([0.5]) });
+    const attacker = makePokemon();
+    const defender = makePokemon();
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, defender);
+    const yawn = createMove({ name: 'あくび', type: 'normal', category: 'status', inflictsDrowsy: true });
+
+    // Act: あくびを使ったターンの終了では眠らない
+    engine.startTurn();
+    const result = engine.useMove(attacker, defender, yawn);
+    engine.endTurn([attacker], [defender]);
+
+    // Assert
+    expect(isMoveSuccessful(result)).toBe(true);
+    expect(defender.isDrowsy).toBe(true);
+    expect(defender.status).toBeNull();
+
+    // Act: 次のターンの終了で眠る
+    engine.startTurn();
+    engine.endTurn([attacker], [defender]);
+
+    // Assert
+    expect(defender.status).toBe('sleep');
+    expect(defender.isDrowsy).toBe(false);
+    expect(engine.getLog()).toContain('ねむけの効果で眠ってしまった');
+  });
+
+  test('すでに状態異常の相手はねむけにならない', () => {
+    // Arrange
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const attacker = makePokemon();
+    const defender = makePokemon();
+    defender.applyStatus('burn');
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, defender);
+    const yawn = createMove({ name: 'あくび', type: 'normal', category: 'status', inflictsDrowsy: true });
+
+    // Act
+    engine.startTurn();
+    const result = engine.useMove(attacker, defender, yawn);
+
+    // Assert: 技は出たが効果が無い（'no-effect'）扱いになる
+    expect(result.outcome).toBe('no-effect');
+    if (result.outcome !== 'no-effect') throw new Error('unreachable');
+    expect(result.reason).toBe('status-immune');
+    expect(defender.isDrowsy).toBe(false);
+    expect(defender.status).toBe('burn');
+  });
+
+  test('ねむけは交代で解除される（resetDrowsy）', () => {
+    // Arrange
+    const pokemon = makePokemon();
+    pokemon.applyDrowsy(3);
+
+    // Act
+    pokemon.resetDrowsy();
+
+    // Assert
+    expect(pokemon.isDrowsy).toBe(false);
+    expect(pokemon.drowsyUntilTurn).toBeNull();
+  });
+});
+
+describe('なまける（自分のHPを最大の1/2回復）', () => {
+  test('最大HPの1/2を回復する', () => {
+    // Arrange
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const user = makePokemon();
+    const target = makePokemon();
+    engine.setActivePokemon(0, user);
+    engine.setActivePokemon(1, target);
+    const slackOff = createMove({ name: 'なまける', type: 'normal', category: 'status', selfHealPercent: 0.5 });
+    // HPを10まで減らす（回復量が上限に当たらないようにする）
+    user.takeDamage(user.maxHP - 10);
+    const before = user.currentHP;
+
+    // Act
+    const result = engine.useMove(user, target, slackOff);
+
+    // Assert
+    expect(isMoveSuccessful(result)).toBe(true);
+    expect(before).toBe(10);
+    expect(user.currentHP).toBe(before + Math.floor(user.maxHP / 2));
+    expect(engine.getLog()).toContain('回復した');
+  });
+
+  test('HPが満タンなら回復せず、効果なし（full-hp）として扱う', () => {
+    // Arrange
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const user = makePokemon();
+    const target = makePokemon();
+    engine.setActivePokemon(0, user);
+    engine.setActivePokemon(1, target);
+    const slackOff = createMove({ name: 'なまける', type: 'normal', category: 'status', selfHealPercent: 0.5 });
+
+    // Act
+    const result = engine.useMove(user, target, slackOff);
+
+    // Assert
+    expect(result.outcome).toBe('no-effect');
+    if (result.outcome !== 'no-effect') throw new Error('unreachable');
+    expect(result.reason).toBe('full-hp');
+    expect(user.currentHP).toBe(user.maxHP);
+  });
+
+  test('回復しても最大HPを超えない', () => {
+    // Arrange
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const user = makePokemon();
+    const target = makePokemon();
+    engine.setActivePokemon(0, user);
+    engine.setActivePokemon(1, target);
+    const slackOff = createMove({ name: 'なまける', type: 'normal', category: 'status', selfHealPercent: 0.5 });
+    user.takeDamage(1);
+
+    // Act
+    engine.useMove(user, target, slackOff);
+
+    // Assert
+    expect(user.currentHP).toBe(user.maxHP);
   });
 });

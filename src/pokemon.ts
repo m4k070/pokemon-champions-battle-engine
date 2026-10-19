@@ -44,6 +44,8 @@ export interface PokémonConstructorData {
   isSeeded?: boolean;
   // ちょうはつ: trueの間、攻撃技を使えない（2〜4ターン）。交代で解除。
   tauntTurnsLeft?: number;
+  // あくび（ねむけ）: このターン終了時にねむりになる。交代で解除。
+  drowsyUntilTurn?: number | null;
   // フォルムチェンジ（バトルスイッチ等）。現在のフォルム名と、フォルム別種族値。
   form?: FormName;
   formStats?: Record<string, FormDefinition>;
@@ -72,6 +74,10 @@ export class Pokemon {
   isSeeded: boolean;
   // ちょうはつ: trueの間、攻撃技を使えない（2〜4ターン）。交代で解除。
   tauntTurnsLeft: number;
+  // あくび（ねむけ）: このターン番号の終了時にねむりになる。null ならねむけではない。
+  // 「残りターン数」ではなくターン番号で持つのは、あくびを使ったターンの終了では
+  // 眠らず、その次のターンの終了で眠るため（比較だけで判定でき、数え漏れが起きない）。
+  drowsyUntilTurn: number | null;
   // フォルムチェンジ（バトルスイッチ等）。現在のフォルム名。formStats 未指定なら 'normal'。
   form: FormName;
   // フォルム別定義。例: ギルガルド { shield: { baseStats: {...} }, blade: { baseStats: {...} } }。未指定なら変更不可。
@@ -94,6 +100,7 @@ export class Pokemon {
     this.statStages = data.statStages ? { ...data.statStages } : zeroStatStages();
     this.isSeeded = data.isSeeded ?? false;
     this.tauntTurnsLeft = data.tauntTurnsLeft ?? 0;
+    this.drowsyUntilTurn = data.drowsyUntilTurn ?? null;
     this.form = data.form ?? 'normal';
     this.formStats = data.formStats ?? null;
     this.level = data.level ?? 50;
@@ -227,6 +234,19 @@ export class Pokemon {
   // やどりぎのタネは（能力ランクと違い）交代すると状態自体が解除される揮発性の状態。
   resetSeeded(): void {
     this.isSeeded = false;
+  }
+
+  // あくび（ねむけ）: 指定ターンの終了時にねむりになる。交代で解除。
+  get isDrowsy(): boolean {
+    return this.drowsyUntilTurn !== null;
+  }
+
+  applyDrowsy(untilTurn: number): void {
+    this.drowsyUntilTurn = untilTurn;
+  }
+
+  resetDrowsy(): void {
+    this.drowsyUntilTurn = null;
   }
 
   // ちょうはつ: 攻撃技を使えない状態（2〜4ターン）。交代で解除。
