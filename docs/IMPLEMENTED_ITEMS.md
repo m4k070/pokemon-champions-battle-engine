@@ -85,7 +85,7 @@
 | 特性 | 効果 | 実装箇所 |
 |------|------|---------|
 | サイコメイカー | 入場時にサイコフィールドを展開（5ターン。グランドコート持ちなら8ターン） | `rules/abilities/meta-abilities.ts` の `PSYCHIC_SURGE` |
-| ばけのかわ | 最初に受ける攻撃を無効化（ダメージ0）。交代で復活 | `DISGUISE`（`onDamaged`）+ `Pokemon.disguiseBroken` |
+| ばけのかわ | Champions仕様（第8世代以降準拠）。1回だけ技のダメージを無効化して最大HPの1/8を受け、フォルムチェンジする。交代で復活しない（バトル中1回きり）。タイプ無効の技では発動せず、ステロ・変化技・追加効果は防がない | `DISGUISE`（`onDamaged`）+ `Pokemon.disguiseBroken` + `BattleEngine.applyDamage`（実ダメージを返す） |
 | おうごんのからだ | 相手からの変化技を無効化（ダメージ技は通る） | `GOOD_AS_GOLD`（`blocksMove`） |
 | クリアボディ ほか28種 | 名前のみ登録（効果は未実装） | `ability-names.ts` |
 

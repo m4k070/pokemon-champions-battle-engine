@@ -310,7 +310,7 @@ export class BattleSession {
     outgoing.resetTaunt(); // ちょうはつも場を離れると解除される
     outgoing.resetDrowsy(); // あくびのねむけも場を離れると解除される
     outgoing.resetEncore(); // アンコールも場を離れると解除される
-    outgoing.resetDisguise(); // ばけのかわも場を離れると復活する
+    // ばけのかわは場を離れても戻らない（バトル中1回きり。第8世代以降）。リセットしない。
     outgoing.resetSubstitute(); // みがわりは場を離れると消える
 
     // 場を離れるときの特性フック（さいせいりょく等）。

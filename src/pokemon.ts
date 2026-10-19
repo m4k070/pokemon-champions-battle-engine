@@ -58,7 +58,7 @@ export interface PokémonConstructorData {
   protecting?: boolean;
   // まもる: 連続で使った回数（成功するたびに増え、成功率が半減していく）。
   protectStreak?: number;
-  // ばけのかわ: 既に身代わりになったか（交代で場を離れると復活する）。
+  // ばけのかわ: 既に身代わりになったか（バトル中は戻らない。交代しても復活しない）。
   disguiseBroken?: boolean;
   // アンコール: 直前に使った技の名前（アンコールの固定対象を決めるのに使う）。
   lastMoveName?: string | null;
@@ -318,11 +318,6 @@ export class Pokemon {
   // みがわり: 交代で場を離れると消える（本編仕様）。
   resetSubstitute(): void {
     this.substituteHP = 0;
-  }
-
-  // ばけのかわ: 交代で場を離れると身代わりが復活する（本編仕様）。
-  resetDisguise(): void {
-    this.disguiseBroken = false;
   }
 
   // アンコール: 直前に使った技を記録する（技を実行したときに BattleEngine が呼ぶ）。
