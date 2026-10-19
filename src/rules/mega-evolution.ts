@@ -118,6 +118,33 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     abilityChange: 'levitate',
     statBoosts: { ATK: 0, DEF: -10, SPATK: 61, SPDEF: 0, SPEED: 49 },
   },
+  // メガグソクムシャ: むし/はがね・かたいツメ・75-150-175-70-120-40（A+25/D+35/SA+10/SD+30/S0 = +100）。
+  // 出典: やっくんチャンピオンズ図鑑 n768m（2026-10-19 確認）
+  'golisopodite': {
+    pokemon: 'golisopod',
+    megaName: 'mega-golisopod',
+    typeChange: ['bug', 'steel'],
+    abilityChange: 'tough-claws',
+    statBoosts: { ATK: 25, DEF: 35, SPATK: 10, SPDEF: 30, SPEED: 0 },
+  },
+  // メガルカリオZ: かくとう/はがね・はどうのぼうご・70-100-70-164-70-151（A-10/SA+49/S+61 = +100）。
+  // 出典: やっくんチャンピオンズ図鑑 n448z（2026-10-19 確認）
+  'lucarionite-z': {
+    pokemon: 'lucario',
+    megaName: 'mega-lucario-z',
+    typeChange: ['fighting', 'steel'],
+    abilityChange: 'aura-guard',
+    statBoosts: { ATK: -10, DEF: 0, SPATK: 49, SPDEF: 0, SPEED: 61 },
+  },
+  // メガピクシー: フェアリー/ひこう・マジックミラー・95-80-93-135-110-70（A+10/D+20/SA+40/SD+20/S+10 = +100）。
+  // 出典: やっくんチャンピオンズ図鑑 n36m（2026-10-19 確認）
+  'clefablite': {
+    pokemon: 'clefable',
+    megaName: 'mega-clefable',
+    typeChange: ['fairy', 'flying'],
+    abilityChange: 'magic-bounce',
+    statBoosts: { ATK: 10, DEF: 20, SPATK: 40, SPDEF: 20, SPEED: 10 },
+  },
   // ---- 標準メガ（Poke API実データに基づく）----
   'venusaurite': {
     pokemon: 'venusaur',

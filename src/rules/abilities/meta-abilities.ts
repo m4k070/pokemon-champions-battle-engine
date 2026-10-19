@@ -234,6 +234,13 @@ export const GOOD_AS_GOLD: AbilityDefinition = {
   blocksMove: (move) => isStatusMove(move) && targetsOpponent(move),
 };
 
+// はどうのぼうご: 接触技で受けるダメージを半減する（メガルカリオZの特性）。
+// チャンピオンズ固有の特性で公式の英語名は未確認のため、エンジン名を aura-guard とする。
+export const AURA_GUARD: AbilityDefinition = {
+  name: 'aura-guard',
+  onDamaged: ({ move, damage }) => (isDamageMove(move) && move.contact ? Math.floor(damage / 2) : damage),
+};
+
 // サイコメイカー: 入場時にサイコフィールドを展開する（5ターン。グランドコート持ちなら8ターン）。
 // フィールドの効果（エスパー技1.3倍・先制技の無効化）は battle-engine 側が field.terrain を見て行う。
 export const PSYCHIC_SURGE: AbilityDefinition = {
@@ -407,6 +414,7 @@ export const META_ABILITIES: AbilityDefinition[] = [
   PSYCHIC_SURGE,
   DISGUISE,
   GOOD_AS_GOLD,
+  AURA_GUARD,
   SWIFT_SWIM,
   PARENTAL_BOND,
   MULTISCALE,

@@ -27,6 +27,7 @@ export const ABILITY_NAMES = [
   'emergency-exit',
   'frisk',
   'good-as-gold',
+  'aura-guard',
   'harvest',
   'justified',
   'keen-eye',

@@ -644,6 +644,28 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(buff.outcome).toBe('effect-applied');
     expect(gholdengo.statStages.ATK).toBe(2);
   });
+
+  test('はどうのぼうご: 接触技のダメージを半減する（非接触技はそのまま）', () => {
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 150, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    const stats = { HP: 200, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
+    const guarded = makePokemon('MegaLucarioZ', 'aura-guard', stats);
+    const plain = makePokemon('Plain', 'none', stats);
+    engine.setActivePokemon(0, attacker);
+    engine.setActivePokemon(1, guarded);
+    const hpBeforeGuarded = guarded.currentHP;
+    engine.useMove(attacker, guarded, move({ name: 'Tackle', type: 'normal', power: 100, contact: true }));
+    const guardedDamage = hpBeforeGuarded - guarded.currentHP;
+
+    engine.setActivePokemon(1, plain);
+    const hpBeforePlain = plain.currentHP;
+    engine.useMove(attacker, plain, move({ name: 'Tackle', type: 'normal', power: 100, contact: true }));
+    const plainDamage = hpBeforePlain - plain.currentHP;
+
+    expect(guardedDamage).toBeGreaterThan(0);
+    expect(guardedDamage).toBeGreaterThanOrEqual(Math.floor(plainDamage / 2));
+    expect(guardedDamage).toBeLessThanOrEqual(Math.ceil(plainDamage / 2));
+  });
   test('エレキメイカー: 入場時にエレキフィールドを展開し、でん技の威力が1.3倍になる', () => {
     const { ELECTRIC_SURGE } = require('../src/rules/abilities/meta-abilities.js') as typeof import('../src/rules/abilities/meta-abilities.js');
     const attacker = makePokemon('Raichu', 'electric-surge', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
