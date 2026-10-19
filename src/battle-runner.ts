@@ -458,6 +458,13 @@ export class BattleSession {
       // こだわり系は「技を出した時点」で固定される（外した場合も固定される）。
       attacker.lockMove(action.moveIndex);
 
+      // ほえる・ドラゴンテール: 相手を控えと強制交代させる（本編仕様）。
+      // 控えが全員瀕死なら何も起きない。
+      if (defender.forcedOut) {
+        defender.resetForcedOut();
+        this.applyForcedOutSwitch(side === 0 ? 1 : 0);
+      }
+
       if (this.isFinished()) break;
 
       // pivot技は交代先を「技の解決を見てから」選べるのが強みなので、ここで中断して入力を待つ。
@@ -481,6 +488,16 @@ export class BattleSession {
     const team = side === 0 ? this.teamA : this.teamB;
     const active = side === 0 ? this.activeA : this.activeB;
     return team.some((pokemon) => !pokemon.isFainted && pokemon !== active);
+  }
+
+  // ほえる・ドラゴンテールによる強制交代。控えから無作為に1体を選んで繰り出す（本編仕様）。
+  private applyForcedOutSwitch(side: 0 | 1): void {
+    const team = side === 0 ? this.teamA : this.teamB;
+    const active = side === 0 ? this.activeA : this.activeB;
+    const bench = team.filter((pokemon) => pokemon !== active && !pokemon.isFainted);
+    if (bench.length === 0) return;
+    const picked = bench[Math.floor(this.engine.rng.next() * bench.length)]!;
+    this.switchTo(side, picked, team);
   }
 
   // pivot技を使った側の交代先を適用し、ターンの残りを再開する。

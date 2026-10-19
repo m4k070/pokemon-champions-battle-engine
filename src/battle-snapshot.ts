@@ -34,6 +34,15 @@ export interface PokemonSnapshot {
   // ちょうはつ・フォルムは揮発状態だが、複製した対戦を正しく再開するために保存する
   // （fork/undo と、見せ合いからの分岐で必要になる）。
   tauntTurnsLeft: number;
+  // 揮発状態。fork/undo と見せ合いからの分岐で失われないように保存する。
+  substituteHP: number;
+  disguiseBroken: boolean;
+  protecting: boolean;
+  protectStreak: number;
+  intendsToAttackThisTurn: boolean;
+  forcedOut: boolean;
+  // 体重はデータ由来だが、復元時にくさむすび等の威力が変わらないよう保存する。
+  weightKg: number;
   form: FormName;
   formStats: Record<string, FormDefinition> | null;
   level: number;
@@ -128,6 +137,13 @@ export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
     statStages: { ...pokemon.statStages },
     isSeeded: pokemon.isSeeded,
     tauntTurnsLeft: pokemon.tauntTurnsLeft,
+    substituteHP: pokemon.substituteHP,
+    disguiseBroken: pokemon.disguiseBroken,
+    protecting: pokemon.protecting,
+    protectStreak: pokemon.protectStreak,
+    intendsToAttackThisTurn: pokemon.intendsToAttackThisTurn,
+    forcedOut: pokemon.forcedOut,
+    weightKg: pokemon.weightKg,
     form: pokemon.form,
     formStats: cloneFormStats(pokemon.formStats),
     level: pokemon.level,
@@ -156,6 +172,13 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
     statStages: { ...snapshot.statStages },
     isSeeded: snapshot.isSeeded,
     tauntTurnsLeft: snapshot.tauntTurnsLeft,
+    substituteHP: snapshot.substituteHP,
+    disguiseBroken: snapshot.disguiseBroken,
+    protecting: snapshot.protecting,
+    protectStreak: snapshot.protectStreak,
+    intendsToAttackThisTurn: snapshot.intendsToAttackThisTurn,
+    forcedOut: snapshot.forcedOut,
+    weightKg: snapshot.weightKg,
     form: snapshot.form,
     // コンストラクタ側の約束は undefined = フォルム定義なし（内部で null に正規化される）。
     formStats: cloneFormStats(snapshot.formStats) ?? undefined,

@@ -52,6 +52,8 @@ export interface PokémonConstructorData {
   weightKg?: number;
   // ふいうちの判定用: そのターン攻撃技を選んでいるか（BattleRunner が毎ターン設定する）。
   intendsToAttackThisTurn?: boolean;
+  // ほえる・ドラゴンテール: 控えと強制交代させられたか（BattleRunner が交代を実行する）。
+  forcedOut?: boolean;
   // まもる: このターン相手の技を防いでいるか。
   protecting?: boolean;
   // まもる: 連続で使った回数（成功するたびに増え、成功率が半減していく）。
@@ -101,6 +103,8 @@ export class Pokemon {
   weightKg: number;
   // ふいうちの判定用: そのターン攻撃技を選んでいるか。
   intendsToAttackThisTurn: boolean;
+  // ほえる・ドラゴンテール: 控えと強制交代させられたか。
+  forcedOut: boolean;
   // まもる: このターン相手の技を防いでいるか。
   protecting: boolean;
   // まもる: 連続で使った回数。
@@ -139,6 +143,7 @@ export class Pokemon {
     this.substituteHP = data.substituteHP ?? 0;
     this.weightKg = data.weightKg ?? 0;
     this.intendsToAttackThisTurn = data.intendsToAttackThisTurn ?? false;
+    this.forcedOut = data.forcedOut ?? false;
     this.protecting = data.protecting ?? false;
     this.protectStreak = data.protectStreak ?? 0;
     this.disguiseBroken = data.disguiseBroken ?? false;
@@ -297,6 +302,11 @@ export class Pokemon {
 
   resetDrowsy(): void {
     this.drowsyUntilTurn = null;
+  }
+
+  // ほえる・ドラゴンテール: 強制交代の印を消す（交代を実行した側が呼ぶ）。
+  resetForcedOut(): void {
+    this.forcedOut = false;
   }
 
   // まもる: 防護状態と連続使用のカウントを解除する。

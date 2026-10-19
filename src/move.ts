@@ -94,6 +94,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   protects: boolean;
   rests: boolean;
   wishes: boolean;
+  forcesSwitch: boolean;
   drainPercent: number | null;
   recoilPercent: number | null;
   recoilMaxHpPercent: number | null;
@@ -139,6 +140,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.protects = data.protects ?? false;
     this.rests = data.rests ?? false;
     this.wishes = data.wishes ?? false;
+    this.forcesSwitch = data.forcesSwitch ?? false;
     this.drainPercent = data.drainPercent ?? null;
     this.recoilPercent = data.recoilPercent ?? null;
     this.recoilMaxHpPercent = data.recoilMaxHpPercent ?? null;
@@ -191,6 +193,7 @@ export class StatusMove implements StatusMoveData {
   protects: boolean;
   rests: boolean;
   wishes: boolean;
+  forcesSwitch: boolean;
 
   constructor(data: StatusMoveInput) {
     this.name = data.name;
@@ -218,6 +221,7 @@ export class StatusMove implements StatusMoveData {
     this.protects = data.protects ?? false;
     this.rests = data.rests ?? false;
     this.wishes = data.wishes ?? false;
+    this.forcesSwitch = data.forcesSwitch ?? false;
   }
 }
 
