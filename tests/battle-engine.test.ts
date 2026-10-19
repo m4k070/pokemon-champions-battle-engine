@@ -1403,6 +1403,8 @@ describe('こだわり系アイテムの威力補正', () => {
 
   test('こだわりハチマキは物理技の威力を1.5倍にする', () => {
     const engine = new BattleEngine();
+    // ダメージの揺れ（T0）で1.5倍の差が乱数に埋もれるため、乱数を固定する。
+    engine.rng = fixedRandom(0.5);
     const makeMove = () => createMove({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, category: 'physical' });
 
     const plain = engine.useMove(makeAttacker(null), makeDefender(), makeMove());
@@ -1413,6 +1415,8 @@ describe('こだわり系アイテムの威力補正', () => {
 
   test('こだわりメガネは特殊技の威力を1.5倍にするが物理技には効かない', () => {
     const engine = new BattleEngine();
+    // ダメージの揺れ（T0）で「同じ威力なら同じダメージ」の比較が崩れるため、乱数を固定する。
+    engine.rng = fixedRandom(0.5);
     const makePhysical = () => createMove({ name: 'body-slam', type: 'normal', power: 85, accuracy: 100, category: 'physical' });
     const makeSpecial = () => createMove({ name: 'hyper-voice', type: 'normal', power: 90, accuracy: 100, category: 'special' });
 
