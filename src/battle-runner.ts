@@ -309,6 +309,7 @@ export class BattleSession {
     outgoing.resetTaunt(); // ちょうはつも場を離れると解除される
     outgoing.resetDrowsy(); // あくびのねむけも場を離れると解除される
     outgoing.resetEncore(); // アンコールも場を離れると解除される
+    outgoing.resetDisguise(); // ばけのかわも場を離れると復活する
 
     // 場を離れるときの特性フック（さいせいりょく等）。
     const ability = getAbilityDefinition(outgoing.ability);

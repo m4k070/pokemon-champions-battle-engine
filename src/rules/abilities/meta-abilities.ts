@@ -1,5 +1,5 @@
 import type { AbilityDefinition } from './types.js';
-import { isDamageMove, isPhysicalMove, isStatusMove } from '../../move.js';
+import { isDamageMove, isPhysicalMove, isStatusMove, targetsOpponent } from '../../move.js';
 import type { MoveData } from '../../types.js';
 import type { AbilityName } from '../../ability-names.js';
 
@@ -215,6 +215,25 @@ export const ELECTRIC_SURGE: AbilityDefinition = {
   },
 };
 
+// ばけのかわ: 最初に受ける攻撃を無効化する（ダメージ0）。交代で場を離れると復活する。
+// 本編では化けの皮が剥がれるとフォルムが変わるが、ここでは無効化とログだけを扱う。
+export const DISGUISE: AbilityDefinition = {
+  name: 'disguise',
+  onDamaged: ({ defender, damage, engine }) => {
+    if (defender.disguiseBroken) return damage;
+    defender.disguiseBroken = true;
+    engine.log.push(`${defender.name}のばけのかわが身代わりになった！`);
+    return 0;
+  },
+};
+
+// おうごんのからだ: 相手からの変化技を無効化する（ダメージ技は通る）。
+// TODO: 出典確認（ステルスロック等フィールドを対象にする変化技を無効化するかは未確認）
+export const GOOD_AS_GOLD: AbilityDefinition = {
+  name: 'good-as-gold',
+  blocksMove: (move) => isStatusMove(move) && targetsOpponent(move),
+};
+
 // サイコメイカー: 入場時にサイコフィールドを展開する（5ターン。グランドコート持ちなら8ターン）。
 // フィールドの効果（エスパー技1.3倍・先制技の無効化）は battle-engine 側が field.terrain を見て行う。
 export const PSYCHIC_SURGE: AbilityDefinition = {
@@ -386,6 +405,8 @@ export const META_ABILITIES: AbilityDefinition[] = [
   SPICY_SPRAY,
   ELECTRIC_SURGE,
   PSYCHIC_SURGE,
+  DISGUISE,
+  GOOD_AS_GOLD,
   SWIFT_SWIM,
   PARENTAL_BOND,
   MULTISCALE,
