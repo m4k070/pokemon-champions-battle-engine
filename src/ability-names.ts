@@ -87,6 +87,8 @@ export const ABILITY_NAMES = [
   'beast-boost',
   'blaze',
   'chlorophyll',
+  'fairy-aura',
+  'flower-veil',
   'infiltrator',
   'mega-launcher',
   'natural-cure',
@@ -97,8 +99,12 @@ export const ABILITY_NAMES = [
   'sand-rush',
   'serene-grace',
   'static',
+  'thermal-exchange',
+  // とびだすなかみ: Champions 独自（メガウツボット）。英語名が未公開のためローマ字のまま登録する。
+  'tobidasu-nakami',
   'torrent',
   'transistor',
+  'volt-absorb',
   'wonder-guard',
 ] as const;
 

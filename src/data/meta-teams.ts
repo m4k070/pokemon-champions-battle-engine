@@ -1,8 +1,8 @@
-import type { BaseStats, MoveData, TypeName } from '../types.js';
+import type { BaseStats, FormDefinition, FormName, MoveData, TypeName } from '../types.js';
 import type { NatureInput, StatPointsInput } from '../rules/stat-point-system.js';
 import type { AbilityName } from '../ability-names.js';
 import type { ItemName } from '../item-names.js';
-import { createMove } from '../move.js';
+import { createMove, cloneMove } from '../move.js';
 import { Pokemon } from '../pokemon.js';
 
 // 現環境PTカタログ。上位構築をエンジンに投入して「1試合を最後まで走らせる」ためのデータ。
@@ -23,6 +23,9 @@ export interface MetaTeamMember {
   nature: NatureInput;
   statPoints: StatPointsInput;
   moves: MoveData[];
+  // フォルムを持つポケモン（ギルガルド等）の初期フォルムとフォルム別種族値。
+  form?: FormName;
+  formStats?: Record<string, FormDefinition>;
 }
 
 export interface MetaTeamEntry {
@@ -46,7 +49,10 @@ export function toPokemon(member: MetaTeamMember): Pokemon {
     baseStats: { ...member.baseStats },
     statPoints: { ...member.statPoints },
     nature: member.nature,
-    moves: member.moves,
+    // 技は Pokemon ごとに複製する（PP が共有されるとミラー対戦で二重に減る）。
+    moves: member.moves.map(cloneMove),
+    form: member.form,
+    formStats: member.formStats,
   });
 }
 

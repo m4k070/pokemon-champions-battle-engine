@@ -146,6 +146,33 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     abilityChange: 'magic-bounce',
     statBoosts: { ATK: 10, DEF: 20, SPATK: 40, SPDEF: 20, SPEED: 10 },
   },
+  // メガフラエッテ（えいえんのはな）: フェアリー単・フェアリーオーラ・74-85-87-155-148-102（A+20/D+20/SA+30/SD+20/S+10 = +100）。
+  // 出典: gamewith.jp/pokemon-champions/555537 の構築カード（メガフラエッテ）2026-10-19 取得
+  'floettite': {
+    pokemon: 'floette-eternal',
+    megaName: 'mega-floette-eternal',
+    typeChange: ['fairy'],
+    abilityChange: 'fairy-aura',
+    statBoosts: { ATK: 20, DEF: 20, SPATK: 30, SPDEF: 20, SPEED: 10 },
+  },
+  // メガジュペッタ: ゴースト単・いたずらごころ・64-165-75-93-83-75（A+50/D+10/SA+10/SD+20/S+10 = +100）。
+  // 出典: 同上（メガジュペッタ）
+  'banettite': {
+    pokemon: 'banette',
+    megaName: 'mega-banette',
+    typeChange: ['ghost'],
+    abilityChange: 'prankster',
+    statBoosts: { ATK: 50, DEF: 10, SPATK: 10, SPDEF: 20, SPEED: 10 },
+  },
+  // メガウツボット: くさ/どく・とびだすなかみ・80-125-85-135-95-70（A+20/D+20/SA+35/SD+25/S+0 = +100）。
+  // 出典: 同上（メガウツボット）。特性「とびだすなかみ」は Champions 独自で英語名が未公開。
+  'victreebelite': {
+    pokemon: 'victreebel',
+    megaName: 'mega-victreebel',
+    typeChange: ['grass', 'poison'],
+    abilityChange: 'tobidasu-nakami',
+    statBoosts: { ATK: 20, DEF: 20, SPATK: 35, SPDEF: 25, SPEED: 0 },
+  },
   // ---- 標準メガ（Poke API実データに基づく）----
   'venusaurite': {
     pokemon: 'venusaur',
