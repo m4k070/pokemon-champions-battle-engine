@@ -209,6 +209,10 @@ describe('上位構築向け特性（meta-abilities）', () => {
     });
     const makeDef = () => makePokemon('Defender', 'none', { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 });
 
+    // ダメージの揺れ（T0）が入ったため、比較する2回のダメージは同じ乱数で引く。
+    // 注入しないと単発と親子愛で別の揺れを引き、優劣が確率的に反転する。
+    engine.rng = fixedRandom(0.5);
+
     // 親子愛なしの単発ダメージを基準にする
     const normal = makeKangaskhan('none');
     const def1 = makeDef();
@@ -245,6 +249,9 @@ describe('上位構築向け特性（meta-abilities）', () => {
   });
 
   test('マルチスケイル: HP満タン時に受けるダメージが半減する', () => {
+    // ダメージの揺れ（T0）で半減の比較が確率的に反転するため、乱数を固定する。
+    engine.rng = fixedRandom(0.5);
+
     const makeDef = (ability: AbilityName) => makePokemon('Def', ability, { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 });
     const attacker = makePokemon('Attacker', 'none', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
 
