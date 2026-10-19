@@ -296,7 +296,18 @@ export function createMove(data: MoveInput): Move {
   return new PhysicalMove(data);
 }
 
-// --- ダメージ技の複製 ---
+// --- 技の複製 ---
+
+// 技を独立したインスタンスとして複製する。
+//
+// BattleEngine は使用時に `move.pp -= 1` で技オブジェクト自体を書き換える。同じ MoveData を
+// 複数の Pokemon に渡すと PP が共有され、同じ構築のミラー対戦で PP が二重に減る。
+// カタログのように「1つのテンプレートから何体も作る」場合は必ずこれで複製する。
+export function cloneMove(move: MoveData): MoveData {
+  if (move.category === 'status') return createMove({ ...move, category: 'status' });
+  if (move.category === 'physical') return createMove({ ...move, category: 'physical' });
+  return createMove({ ...move, category: 'special' });
+}
 
 // 威力・タイプを差し替えたダメージ技を複製する
 // （STAB補正・天候によるタイプ変化・多段ヒットごとの威力調整で使う）。

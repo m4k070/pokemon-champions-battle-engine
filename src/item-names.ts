@@ -25,8 +25,10 @@ export const ITEM_NAMES = [
   // 対象ポケモンと種族値の対応は MEGA_STONE_SEEDS（rules/mega-evolution.ts）が持つ。
   'blastoisinite',
   'blazikenite',
+  'banettite',
   'charizardite-x',
   'garchompite-z',
+  'floettite',
   'golisopodite',
   'lucarionite-z',
   'clefablite',
@@ -52,10 +54,21 @@ export const ITEM_NAMES = [
   'scovillainite',
   'swampertite',
   'venusaurite',
+  'victreebelite',
 
   // --- 名前だけを持つ持ち物 ---
   // ポケモンのデータとしては現れるが、バトル中の分岐には影響しない。
+  // gamewith 最強パーティランキング（2026-10-19）の構築に登場するものもここに含む。
+  'air-balloon',
+  'black-glasses',
+  'damp-rock',
+  'grassy-seed',
+  'haban-berry',
+  'mystic-water',
+  'psychic-seed',
+  'red-card',
   'rocky-helmet',
+  'spell-tag',
 ] as const;
 
 export type ItemName = (typeof ITEM_NAMES)[number];
