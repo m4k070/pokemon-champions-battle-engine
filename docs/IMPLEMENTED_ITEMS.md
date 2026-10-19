@@ -55,6 +55,8 @@
 | ボディプレス | ダメージ計算に「こうげき」ではなく「ぼうぎょ」とその能力ランクを使う。やけどでも半減しない | `calculateAttack`（`usesDefenseForAttack`）。テスト: `tests/stat-stages.test.ts` |
 | かげうち | 優先度+1のゴースト物理技（解決順は既存の優先度ソートに載る） | `battle-runner` の優先度ソート。テスト: `tests/priority-and-encore.test.ts` |
 | アンコール | 相手が直前に使った技を3ターン固定する（交代で解除。直前の技が無ければ失敗） | `useMove`（`inflictsEncore`）→ `Pokemon.applyEncore` / `canUseMove` / `startTurn` の期限解除。テスト: `tests/priority-and-encore.test.ts` |
+| サイコフィールド | 5ターン（グランドコートで8ターン）フィールドを展開。接地している側のエスパー技を1.3倍、接地している相手への先制技を無効化 | `useMove`（`fieldEffect: 'psychic-terrain'`）+ `isGrounded` + 威力補正 + 先制技の無効化。テスト: `tests/terrain.test.ts` |
+| ワイドフォース | サイコフィールド下で接地していれば威力1.5倍（フィールドの1.3倍も重なる） | `calculateAttack` 手前の威力補正（`boostedByPsychicTerrain`）。テスト: `tests/terrain.test.ts` |
 
 出典: yakkun.com（ポケモンチャンピオンズ図鑑）の技説明。
 
