@@ -25,7 +25,10 @@ import { ITEM_NAMES } from './item-names.js';
 const TypeNameSchema = z.enum(TYPE_NAMES);
 const MoveCategorySchema = z.enum(MOVE_CATEGORIES);
 const StatusConditionSchema = z.enum(['sleep', 'poison', 'burn', 'paralysis', 'freeze', 'badly-poisoned']);
-const FieldEffectSchema = z.enum(['tailwind', 'trick-room', 'reflect', 'stealth-rock', 'spikes', 'toxic-spikes']);
+const FieldEffectSchema = z.enum([
+  'tailwind', 'trick-room', 'reflect', 'stealth-rock', 'spikes', 'toxic-spikes',
+  'psychic-terrain', 'misty-terrain', 'aurora-veil',
+]);
 const StatStageKeySchema = z.enum(['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED']);
 
 const BaseStatsSchema = z.object({
@@ -93,6 +96,7 @@ const MoveInputSchema = z.object({
   doublesIfTargetDamaged: z.boolean().optional(),
   alwaysCrit: z.boolean().optional(),
   failsUnlessTargetAttacks: z.boolean().optional(),
+  wishes: z.boolean().optional(),
 }).refine(
   (data) => {
     if (data.multiHitPowers && data.maxHits && data.multiHitPowers.length !== data.maxHits) {

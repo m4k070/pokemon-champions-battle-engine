@@ -1,5 +1,5 @@
 // フィールド（地形）。サイコフィールドは先制技の無効化とエスパー技の強化を持つ。
-export type TerrainType = 'electric-terrain' | 'psychic-terrain' | null;
+export type TerrainType = 'electric-terrain' | 'psychic-terrain' | 'misty-terrain' | null;
 
 export interface SideHazards {
   playerA: number;
@@ -18,6 +18,8 @@ export class BattleField {
   spikes: SideHazards;
   toxicSpikes: SideHazards;
   auroraVeil: SideHazards;
+  // ねがいごと: 残りターン数（0 になったターンの終了時に回復する）。
+  wish: SideHazards;
   reflect: SideHazards;
   lightScreen: SideHazards;
   tailwind: SideHazards;
@@ -29,6 +31,7 @@ export class BattleField {
     this.spikes = { playerA: 0, playerB: 0 };
     this.toxicSpikes = { playerA: 0, playerB: 0 };
     this.auroraVeil = { playerA: 0, playerB: 0 };
+    this.wish = { playerA: 0, playerB: 0 };
     this.reflect = { playerA: 0, playerB: 0 };
     this.lightScreen = { playerA: 0, playerB: 0 };
     this.tailwind = { playerA: 0, playerB: 0 };

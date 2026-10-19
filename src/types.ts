@@ -25,7 +25,7 @@ export type StatStages = Record<StatStageKey, number>;
 export type FieldEffect =
   | 'tailwind' | 'trick-room' | 'reflect'
   | 'stealth-rock' | 'spikes' | 'toxic-spikes'
-  | 'psychic-terrain';
+  | 'psychic-terrain' | 'misty-terrain' | 'aurora-veil';
 
 // ダメージ技に追加効果として付随する状態異常（例: れいとうパンチの10%こおり）。
 // status(ダメージ0の状態異常専用技)とは別概念のため独立したフィールドとして持つ。
@@ -89,6 +89,8 @@ export interface CommonMoveEffects {
   protects?: boolean;
   // ねむる: HPを全回復し、2ターンのねむり状態になる（本編仕様）。
   rests?: boolean;
+  // ねがいごと: 次のターンの終了時に、その側の場に出ているポケモンを最大HPの半分回復する。
+  wishes?: boolean;
 }
 
 // ダメージ技だけが持つ効果。変化技はダメージを与えないため、

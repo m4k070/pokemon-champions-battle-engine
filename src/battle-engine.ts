@@ -394,6 +394,12 @@ export class BattleEngine {
       finalDamage = Math.floor(finalDamage / 2);
     }
 
+    // オーロラベール: 張られている側が受けるダメージを半減する（物理・特殊を問わない。本編仕様）。
+    // 急所は壁を貫通するため適用しない。
+    if (!critical && defenderSide !== null && this.field.auroraVeil[this.sideKey(defenderSide)] > 0) {
+      finalDamage = Math.floor(finalDamage / 2);
+    }
+
     this.events.emit('apply-modifiers', { attacker, defender, move, finalDamage, effectiveness, critical });
 
     return { finalDamage, effectiveness };
@@ -699,13 +705,35 @@ export class BattleEngine {
       return effectApplied();
     }
 
-    // サイコフィールド: 5ターンの間フィールドを展開する。
+    // サイコフィールド / ミストフィールド: 5ターンの間フィールドを展開する。
     // グランドコート持ちなら8ターンになる（本編仕様）。
-    if (move.fieldEffect === 'psychic-terrain') {
+    if (move.fieldEffect === 'psychic-terrain' || move.fieldEffect === 'misty-terrain') {
       const turns = attacker.item === 'terrain-extender' ? 8 : 5;
-      this.field.terrain = 'psychic-terrain';
+      const terrainName = move.fieldEffect === 'psychic-terrain' ? 'サイコフィールド' : 'ミストフィールド';
+      this.field.terrain = move.fieldEffect;
       this.field.terrainTurnsLeft = turns;
-      this.log.push(`${attacker.name}はサイコフィールドを展開した（${turns}ターン）`);
+      this.log.push(`${attacker.name}は${terrainName}を展開した（${turns}ターン）`);
+      return effectApplied();
+    }
+
+    // オーロラベール: 5ターンの間、その側が受けるダメージを半減する（本編仕様）。
+    // TODO: 出典確認（本編は あられ/ゆき が条件。チャンピオンズでの条件は未確認）
+    if (move.fieldEffect === 'aurora-veil') {
+      const side = this.getSide(attacker);
+      if (side !== null) {
+        this.field.auroraVeil[this.sideKey(side)] = 5;
+        this.log.push(`${attacker.name}側にオーロラベールが張られた`);
+      }
+      return effectApplied();
+    }
+
+    // ねがいごと: 次のターンの終了時に、その側の場に出ているポケモンを最大HPの半分回復する（本編仕様）。
+    if (move.wishes) {
+      const side = this.getSide(attacker);
+      if (side !== null) {
+        this.field.wish[this.sideKey(side)] = 2;
+        this.log.push(`${attacker.name}は願い事をした`);
+      }
       return effectApplied();
     }
 
@@ -937,6 +965,11 @@ export class BattleEngine {
       power = Math.floor(power * 1.3);
     }
 
+    // ミストフィールド: 接地している側が受けるドラゴン技は威力が半減する（本編仕様）。
+    if (this.field.terrain === 'misty-terrain' && effectiveType === 'dragon' && this.isGrounded(defender)) {
+      power = Math.floor(power * 0.5);
+    }
+
     // 特性による威力補正（テクニシャン等）。
     const powerAbility = getAbilityDefinition(attacker.ability);
     if (powerAbility?.modifyMovePower) {
@@ -1076,7 +1109,8 @@ export class BattleEngine {
     if (defender.isFainted) {
       this.log.push(`${defender.name}は戦闘不能になった`);
     } else {
-      if (move.secondaryEffect && this.rng.next() * 100 < move.secondaryEffect.chance) {
+      const mistyProtected = this.field.terrain === 'misty-terrain' && this.isGrounded(defender);
+      if (move.secondaryEffect && !mistyProtected && this.rng.next() * 100 < move.secondaryEffect.chance) {
         const applied = defender.applyStatus(move.secondaryEffect.status, this.rng);
         if (applied) {
           this.log.push(`${defender.name}は${move.secondaryEffect.status}状態になった`);
@@ -1161,6 +1195,12 @@ export class BattleEngine {
       return { outcome: 'no-effect', reason: 'status-immune', pivot };
     }
 
+    // ミストフィールド: 接地しているポケモンは状態異常にならない（本編仕様）。
+    if (this.field.terrain === 'misty-terrain' && this.isGrounded(defender)) {
+      this.log.push(`${defender.name}はミストフィールドに守られている`);
+      return { outcome: 'no-effect', reason: 'status-immune', pivot };
+    }
+
     const applied = defender.applyStatus(status, this.rng);
     if (!applied) {
       this.log.push('効果がない');
@@ -1222,6 +1262,12 @@ export class BattleEngine {
           this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側のリフレクターが消えた`);
         }
       }
+      if (this.field.auroraVeil[key] > 0) {
+        this.field.auroraVeil[key]--;
+        if (this.field.auroraVeil[key] === 0) {
+          this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側のオーロラベールが消えた`);
+        }
+      }
     }
 
     // まもる: 防護はそのターン限りなので、ターン開始時に解除する（本編仕様）。
@@ -1273,6 +1319,19 @@ export class BattleEngine {
     this.applyDrowsySleep(statusWeatherTeam);
     this.applyLeechSeed(teamA, teamB);
     this.applyWeatherDamage(statusWeatherTeam);
+    // ねがいごと: 残りターンを減らし、0になったらその側の場に出ているポケモンを回復する（本編仕様）。
+    for (const side of [0, 1] as const) {
+      const key = this.sideKey(side);
+      if (this.field.wish[key] <= 0) continue;
+      this.field.wish[key]--;
+      if (this.field.wish[key] !== 0) continue;
+      const active = side === 0 ? this.activePokemon0 : this.activePokemon1;
+      if (!active || active.isFainted) continue;
+      const heal = Math.floor(active.maxHP / 2);
+      active.heal(heal);
+      this.log.push(`${active.name}は願い事で${heal}回復した`);
+    }
+
     this.events.emit('end-turn', { team: [...teamA, ...teamB], engine: this });
     this.attackersDealtDamageThisTurn.clear();
     this.defendersDamagedThisTurn.clear();
