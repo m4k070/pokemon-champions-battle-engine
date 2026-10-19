@@ -76,6 +76,8 @@ export interface CommonMoveEffects {
   inflictsDrowsy?: boolean;
   // なまける等: 自分のHPを最大HPの指定割合だけ回復する（0.5 = 半分）。
   selfHealPercent?: number | null;
+  // アンコール: 相手が直前に使った技を3ターンの間使い続けさせる（交代で解除）。
+  inflictsEncore?: boolean;
 }
 
 // ダメージ技だけが持つ効果。変化技はダメージを与えないため、

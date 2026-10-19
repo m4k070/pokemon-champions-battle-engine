@@ -53,6 +53,8 @@
 | こわいかお | 相手のすばやさランクを2段階下げる（下限 -6） | `applyTargetStatChange`（`targetStatChange`）。テスト: `tests/stat-stages.test.ts` |
 | てっぺき | 自分のぼうぎょランクを2段階上げる | `applySelfStatChange`（`selfStatChange`）。テスト: `tests/stat-stages.test.ts` |
 | ボディプレス | ダメージ計算に「こうげき」ではなく「ぼうぎょ」とその能力ランクを使う。やけどでも半減しない | `calculateAttack`（`usesDefenseForAttack`）。テスト: `tests/stat-stages.test.ts` |
+| かげうち | 優先度+1のゴースト物理技（解決順は既存の優先度ソートに載る） | `battle-runner` の優先度ソート。テスト: `tests/priority-and-encore.test.ts` |
+| アンコール | 相手が直前に使った技を3ターン固定する（交代で解除。直前の技が無ければ失敗） | `useMove`（`inflictsEncore`）→ `Pokemon.applyEncore` / `canUseMove` / `startTurn` の期限解除。テスト: `tests/priority-and-encore.test.ts` |
 
 出典: yakkun.com（ポケモンチャンピオンズ図鑑）の技説明。
 

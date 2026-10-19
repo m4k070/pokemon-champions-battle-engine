@@ -46,6 +46,11 @@ export interface PokémonConstructorData {
   tauntTurnsLeft?: number;
   // あくび（ねむけ）: このターン終了時にねむりになる。交代で解除。
   drowsyUntilTurn?: number | null;
+  // アンコール: 直前に使った技の名前（アンコールの固定対象を決めるのに使う）。
+  lastMoveName?: string | null;
+  // アンコール: 固定中の技のインデックスと、効果が切れるターン番号。交代で解除。
+  encoredMoveIndex?: number | null;
+  encoredUntilTurn?: number | null;
   // フォルムチェンジ（バトルスイッチ等）。現在のフォルム名と、フォルム別種族値。
   form?: FormName;
   formStats?: Record<string, FormDefinition>;
@@ -78,6 +83,12 @@ export class Pokemon {
   // 「残りターン数」ではなくターン番号で持つのは、あくびを使ったターンの終了では
   // 眠らず、その次のターンの終了で眠るため（比較だけで判定でき、数え漏れが起きない）。
   drowsyUntilTurn: number | null;
+  // アンコール: 直前に使った技の名前。未使用なら null。
+  lastMoveName: string | null;
+  // アンコール: 固定中の技のインデックス。null なら固定されていない。
+  encoredMoveIndex: number | null;
+  // アンコール: 効果が切れるターン番号（このターンの終了までは固定が続く）。
+  encoredUntilTurn: number | null;
   // フォルムチェンジ（バトルスイッチ等）。現在のフォルム名。formStats 未指定なら 'normal'。
   form: FormName;
   // フォルム別定義。例: ギルガルド { shield: { baseStats: {...} }, blade: { baseStats: {...} } }。未指定なら変更不可。
@@ -101,6 +112,9 @@ export class Pokemon {
     this.isSeeded = data.isSeeded ?? false;
     this.tauntTurnsLeft = data.tauntTurnsLeft ?? 0;
     this.drowsyUntilTurn = data.drowsyUntilTurn ?? null;
+    this.lastMoveName = data.lastMoveName ?? null;
+    this.encoredMoveIndex = data.encoredMoveIndex ?? null;
+    this.encoredUntilTurn = data.encoredUntilTurn ?? null;
     this.form = data.form ?? 'normal';
     this.formStats = data.formStats ?? null;
     this.level = data.level ?? 50;
@@ -249,6 +263,27 @@ export class Pokemon {
     this.drowsyUntilTurn = null;
   }
 
+  // アンコール: 直前に使った技を記録する（技を実行したときに BattleEngine が呼ぶ）。
+  recordLastMove(moveName: string): void {
+    this.lastMoveName = moveName;
+  }
+
+  // アンコール: 相手の直前に使った技を untilTurn のターン終了まで固定する。
+  get isEncored(): boolean {
+    return this.encoredMoveIndex !== null;
+  }
+
+  applyEncore(moveIndex: number, untilTurn: number): void {
+    this.encoredMoveIndex = moveIndex;
+    this.encoredUntilTurn = untilTurn;
+  }
+
+  // 交代で場を離れるとアンコールは解除される（本編仕様）。
+  resetEncore(): void {
+    this.encoredMoveIndex = null;
+    this.encoredUntilTurn = null;
+  }
+
   // ちょうはつ: 攻撃技を使えない状態（2〜4ターン）。交代で解除。
   get isTaunted(): boolean {
     return this.tauntTurnsLeft > 0;
@@ -264,6 +299,10 @@ export class Pokemon {
   }
 
   canUseMove(moveIndex: number): boolean {
+    // アンコール: 固定された技以外は選べない（交代は選べる）。
+    if (this.encoredMoveIndex !== null && this.encoredMoveIndex !== moveIndex) {
+      return false;
+    }
     if (this.lockedMove !== null && this.lockedMove !== moveIndex) {
       return false;
     }

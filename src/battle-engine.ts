@@ -23,6 +23,9 @@ export interface MoveLogEntry {
 // 猛毒(どくどく)のダメージ増加は本編仕様に合わせて15ターン目で頭打ちにする。
 const TOXIC_MAX_COUNTER = 15;
 
+// アンコール: 相手の直前の技を固定するターン数（本編仕様）。
+const ENCORE_TURNS = 3;
+
 // ターン終了時の割合ダメージの分母（やけどは最大HPの1/16、どくは1/8）。
 // 猛毒は経過ターン数 n に対して maxHP * n / 16。
 const BURN_DAMAGE_DENOMINATOR = 16;
@@ -481,6 +484,16 @@ export class BattleEngine {
       }
     }
 
+    // アンコール: 固定された技以外は出せない。合法手（getLegalActions）からも除外されるが、
+    // 直接 useMove を呼ばれた場合にも効くようエンジン側でも拒否する。
+    const encoredMove = attacker.encoredMoveIndex === null
+      ? null
+      : attacker.moves[attacker.encoredMoveIndex] ?? null;
+    if (encoredMove && encoredMove.name !== move.name) {
+      this.log.push(`${attacker.name}はアンコールで${encoredMove.name}しか出せない！`);
+      return { outcome: 'failed', reason: 'encored' };
+    }
+
     // ぼうだん等の技無効化特性は命中判定より前に解決する（本編仕様）。
     // かたやぶり（mold-breaker）持ちの攻撃は防御側の特性（ぼうだん・ひらいしん等）を無視する。
     const defenderAbility = getAbilityDefinition(defender.ability);
@@ -530,6 +543,9 @@ export class BattleEngine {
         return { outcome: 'failed', reason: 'missed' };
       }
     }
+
+    // 技が実行に進んだ時点で「直前に使った技」として記録する（アンコールの対象になる）。
+    attacker.recordLastMove(move.name);
 
     if (move.fieldEffect === 'trick-room') {
       if (this.trickRoom) {
@@ -650,6 +666,25 @@ export class BattleEngine {
       }
       defender.applyDrowsy(this.turn + 1);
       this.log.push(`${defender.name}はねむけを誘われた`);
+      return effectApplied();
+    }
+
+    // アンコール: 相手が直前に使った技を3ターンの間固定する（交代で解除）。
+    // 直前の技が無い（まだ技を使っていない）場合は失敗する（本編仕様）。
+    if (move.inflictsEncore) {
+      if (defender.isEncored) {
+        this.log.push(`${defender.name}はすでにアンコールされている`);
+        return noEffect('no-applicable-effect');
+      }
+      const lastIndex = defender.lastMoveName === null
+        ? -1
+        : defender.moves.findIndex((candidate) => candidate.name === defender.lastMoveName);
+      if (lastIndex < 0) {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('no-applicable-effect');
+      }
+      defender.applyEncore(lastIndex, this.turn + ENCORE_TURNS);
+      this.log.push(`${defender.name}はアンコールで${defender.moves[lastIndex].name}を選び続ける`);
       return effectApplied();
     }
 
@@ -974,6 +1009,16 @@ export class BattleEngine {
       pokemon.tauntTurnsLeft--;
       if (pokemon.tauntTurnsLeft === 0) {
         this.log.push(`${pokemon.name}の挑発が解けた`);
+      }
+    }
+
+    // アンコール: 期限のターン終了までは固定が続くため、それを過ぎたら解除する。
+    for (const pokemon of [this.activePokemon0, this.activePokemon1]) {
+      if (!pokemon || pokemon.isFainted || !pokemon.isEncored) continue;
+      const until = pokemon.encoredUntilTurn;
+      if (until !== null && this.turn > until) {
+        pokemon.resetEncore();
+        this.log.push(`${pokemon.name}のアンコールが解けた`);
       }
     }
   }

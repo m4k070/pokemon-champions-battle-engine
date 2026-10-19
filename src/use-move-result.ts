@@ -7,6 +7,7 @@ export type MoveFailureReason =
   | 'frozen'             // こおりで動けない
   | 'paralyzed'          // まひで動けない
   | 'taunted'            // ちょうはつで攻撃技を出せない
+  | 'encored'            // アンコールで直前の技以外を出せない
   | 'blocked-by-ability' // 相手の特性に無効化された（ぼうだん・ひらいしん等）
   | 'missed';            // 命中判定に失敗した
 
