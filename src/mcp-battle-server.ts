@@ -82,6 +82,10 @@ const MoveInputSchema = z.object({
   drainPercent: z.number().min(0).max(1).nullable().optional(),
   resetsStatStages: z.boolean().optional(),
   createsSubstitute: z.boolean().optional(),
+  protects: z.boolean().optional(),
+  rests: z.boolean().optional(),
+  recoilPercent: z.number().min(0).max(1).nullable().optional(),
+  recoilMaxHpPercent: z.number().min(0).max(1).nullable().optional(),
 }).refine(
   (data) => {
     if (data.multiHitPowers && data.maxHits && data.multiHitPowers.length !== data.maxHits) {

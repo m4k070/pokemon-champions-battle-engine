@@ -48,6 +48,10 @@ export interface PokémonConstructorData {
   drowsyUntilTurn?: number | null;
   // みがわり: 身代わりの残りHP（0 なら場に出ていない）。
   substituteHP?: number;
+  // まもる: このターン相手の技を防いでいるか。
+  protecting?: boolean;
+  // まもる: 連続で使った回数（成功するたびに増え、成功率が半減していく）。
+  protectStreak?: number;
   // ばけのかわ: 既に身代わりになったか（交代で場を離れると復活する）。
   disguiseBroken?: boolean;
   // アンコール: 直前に使った技の名前（アンコールの固定対象を決めるのに使う）。
@@ -89,6 +93,10 @@ export class Pokemon {
   drowsyUntilTurn: number | null;
   // みがわり: 身代わりの残りHP。
   substituteHP: number;
+  // まもる: このターン相手の技を防いでいるか。
+  protecting: boolean;
+  // まもる: 連続で使った回数。
+  protectStreak: number;
   // ばけのかわ: 既に身代わりになったか。
   disguiseBroken: boolean;
   // アンコール: 直前に使った技の名前。未使用なら null。
@@ -121,6 +129,8 @@ export class Pokemon {
     this.tauntTurnsLeft = data.tauntTurnsLeft ?? 0;
     this.drowsyUntilTurn = data.drowsyUntilTurn ?? null;
     this.substituteHP = data.substituteHP ?? 0;
+    this.protecting = data.protecting ?? false;
+    this.protectStreak = data.protectStreak ?? 0;
     this.disguiseBroken = data.disguiseBroken ?? false;
     this.lastMoveName = data.lastMoveName ?? null;
     this.encoredMoveIndex = data.encoredMoveIndex ?? null;
@@ -222,6 +232,12 @@ export class Pokemon {
     return true;
   }
 
+  // ねむる: 指定ターン数のねむり状態にする（本編のねむるは2ターン）。
+  // applyStatus はランダムなターン数になるため、ねむる専用に固定値で入れる。
+  applySleep(turns: number): void {
+    this.statusState = { kind: 'sleep', turnsLeft: turns };
+  }
+
   removeStatus(): void {
     this.statusState = NO_STATUS;
   }
@@ -271,6 +287,12 @@ export class Pokemon {
 
   resetDrowsy(): void {
     this.drowsyUntilTurn = null;
+  }
+
+  // まもる: 防護状態と連続使用のカウントを解除する。
+  resetProtect(): void {
+    this.protecting = false;
+    this.protectStreak = 0;
   }
 
   // みがわり: 交代で場を離れると消える（本編仕様）。
