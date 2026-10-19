@@ -249,7 +249,9 @@ export class BattleEngine {
   }
 
   calculateAttack(attacker: Pokemon, move: MoveData, options: AttackCalculationOptions = {}): number {
-    const statKey: StatStageKey = isPhysicalMove(move) ? 'ATK' : 'SPATK';
+    // ボディプレスは「こうげき」ではなく「ぼうぎょ」とその能力ランクを参照する（本編仕様）。
+    const usesDefense = isDamageMove(move) && move.usesDefenseForAttack === true;
+    const statKey: StatStageKey = usesDefense ? 'DEF' : isPhysicalMove(move) ? 'ATK' : 'SPATK';
     // 急所は攻撃側のマイナスランクを無視する（0段階として扱う）。
     const ignoresDrop = options.critical === true && attacker.statStages[statKey] < 0;
     // 防御側がてんねん(ignoresOpponentStatChanges)なら、攻撃側の能力ランクを無視する。
@@ -260,7 +262,9 @@ export class BattleEngine {
     const stageMultiplier = ignoreStages || ignoresDrop ? 1 : attacker.getStatStageMultiplier(statKey);
     let attack = Math.floor(attacker.stats[statKey] * stageMultiplier);
 
-    if (attacker.status === 'burn' && isPhysicalMove(move)) {
+    // やけどは「こうげき」を半減させる効果なので、ぼうぎょを参照する技には効かない。
+    // TODO: 出典確認（ちからもち等「こうげき」を倍にする特性との相互作用は未確認）
+    if (attacker.status === 'burn' && isPhysicalMove(move) && !usesDefense) {
       attack = Math.floor(attack / 2);
     }
 

@@ -88,6 +88,8 @@ export interface DamageOnlyEffects {
   crashDamage?: boolean;
   contact?: boolean;
   inflictsSpikes?: boolean;
+  // ボディプレス: ダメージ計算に「こうげき」ではなく「ぼうぎょ」を使う（本編仕様）。
+  usesDefenseForAttack?: boolean;
 }
 
 // --- discriminated union 型（判別子は category） ---

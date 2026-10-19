@@ -86,6 +86,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   inflictsSpikes: boolean;
   inflictsDrowsy: boolean;
   selfHealPercent: number | null;
+  usesDefenseForAttack: boolean;
 
   constructor(data: DamageMoveInput) {
     this.name = data.name;
@@ -113,6 +114,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.inflictsSpikes = data.inflictsSpikes ?? false;
     this.inflictsDrowsy = data.inflictsDrowsy ?? false;
     this.selfHealPercent = data.selfHealPercent ?? null;
+    this.usesDefenseForAttack = data.usesDefenseForAttack ?? false;
   }
 }
 
