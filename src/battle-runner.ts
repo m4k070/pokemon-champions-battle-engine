@@ -1,6 +1,7 @@
 import { BattleEngine } from './battle-engine.js';
 import type { RandomSource } from './rng.js';
 import { MegaEvolutionSystem } from './rules/mega-evolution.js';
+import { isDamageMove } from './move.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
 import type { Pokemon } from './pokemon.js';
 import type { AgentAction } from './types.js';
@@ -397,6 +398,13 @@ export class BattleSession {
     if (actionB.type === 'move') {
       const moveB = this.activeB.moves[actionB.moveIndex];
       attackers.push({ side: 1, pokemon: this.activeB, priority: moveB?.priority ?? 0 });
+    }
+
+    // ふいうちの判定材料: そのターン攻撃技を選んでいるかを両者に記録する（本編仕様）。
+    for (const [side, action] of [[0, actionA], [1, actionB]] as const) {
+      const pokemon = side === 0 ? this.activeA : this.activeB;
+      const chosen = action.type === 'move' ? pokemon.moves[action.moveIndex] : undefined;
+      pokemon.intendsToAttackThisTurn = chosen !== undefined && isDamageMove(chosen);
     }
 
     // priority 降順 → speed 降順の2段ソート（同速はランダム）

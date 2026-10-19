@@ -109,6 +109,20 @@ export interface DamageOnlyEffects {
   recoilPercent?: number | null;
   // 反動技（てっていこうせん等）: 最大HPの指定割合を自分も受ける（与えたダメージに依存しない）。
   recoilMaxHpPercent?: number | null;
+  // イカサマ: ダメージ計算に自分のこうげきではなく相手のこうげきを使う（本編仕様）。
+  usesTargetAttack?: boolean;
+  // くさむすび・けたぐり: 威力が相手の体重で決まる（本編仕様）。
+  weightBasedPower?: boolean;
+  // はたきおとす: 相手が落とせる持ち物を持っていれば威力1.5倍、命中後にその持ち物を落とす。
+  knockOff?: boolean;
+  // ポルターガイスト: 相手が持ち物を持っていなければ失敗する（本編仕様）。
+  failsIfNoItem?: boolean;
+  // ダメおし: そのターン既に相手がダメージを受けていれば威力2倍（本編仕様）。
+  doublesIfTargetDamaged?: boolean;
+  // トリックフラワー等: 必ず急所に当たる（本編仕様）。
+  alwaysCrit?: boolean;
+  // ふいうち: 相手がそのターン攻撃技を選んでいなければ失敗する（本編仕様）。
+  failsUnlessTargetAttacks?: boolean;
 }
 
 // --- discriminated union 型（判別子は category） ---
