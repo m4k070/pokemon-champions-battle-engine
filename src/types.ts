@@ -24,7 +24,8 @@ export type StatStages = Record<StatStageKey, number>;
 // ひけんちえなみは「まきびしを設置する追加効果を持つ技」のため fieldEffect には含めない。
 export type FieldEffect =
   | 'tailwind' | 'trick-room' | 'reflect'
-  | 'stealth-rock' | 'spikes' | 'toxic-spikes';
+  | 'stealth-rock' | 'spikes' | 'toxic-spikes'
+  | 'psychic-terrain';
 
 // ダメージ技に追加効果として付随する状態異常（例: れいとうパンチの10%こおり）。
 // status(ダメージ0の状態異常専用技)とは別概念のため独立したフィールドとして持つ。
@@ -78,6 +79,8 @@ export interface CommonMoveEffects {
   selfHealPercent?: number | null;
   // アンコール: 相手が直前に使った技を3ターンの間使い続けさせる（交代で解除）。
   inflictsEncore?: boolean;
+  // ワイドフォース: サイコフィールド下で接地していれば威力1.5倍（本編仕様）。
+  boostedByPsychicTerrain?: boolean;
 }
 
 // ダメージ技だけが持つ効果。変化技はダメージを与えないため、

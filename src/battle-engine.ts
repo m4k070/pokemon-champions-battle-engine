@@ -494,6 +494,14 @@ export class BattleEngine {
       return { outcome: 'failed', reason: 'encored' };
     }
 
+    // サイコフィールド: 接地している相手には先制技（優先度+1以上）が効かない（本編仕様）。
+    // 相手が接地していなければ（ひこう・ふゆう）通常どおり効く。
+    if (this.field.terrain === 'psychic-terrain' && move.priority > 0
+        && targetsOpponent(move) && this.isGrounded(defender)) {
+      this.log.push(`${defender.name}はサイコフィールドに守られている！`);
+      return { outcome: 'failed', reason: 'blocked-by-terrain' };
+    }
+
     // ぼうだん等の技無効化特性は命中判定より前に解決する（本編仕様）。
     // かたやぶり（mold-breaker）持ちの攻撃は防御側の特性（ぼうだん・ひらいしん等）を無視する。
     const defenderAbility = getAbilityDefinition(defender.ability);
@@ -618,6 +626,16 @@ export class BattleEngine {
           this.log.push(`${attacker.name}側の場にどくびしが${this.field.toxicSpikes[key]}層設置された`);
         }
       }
+      return effectApplied();
+    }
+
+    // サイコフィールド: 5ターンの間フィールドを展開する。
+    // グランドコート持ちなら8ターンになる（本編仕様）。
+    if (move.fieldEffect === 'psychic-terrain') {
+      const turns = attacker.item === 'terrain-extender' ? 8 : 5;
+      this.field.terrain = 'psychic-terrain';
+      this.field.terrainTurnsLeft = turns;
+      this.log.push(`${attacker.name}はサイコフィールドを展開した（${turns}ターン）`);
       return effectApplied();
     }
 
@@ -775,6 +793,18 @@ export class BattleEngine {
       power *= 1.5;
     } else if (attacker.item === 'choice-specs' && isSpecialMove(move)) {
       power *= 1.5;
+    }
+
+    // ワイドフォース: サイコフィールド下で接地していれば威力1.5倍（本編仕様）。
+    if (isDamageMove(move) && move.boostedByPsychicTerrain === true
+        && this.field.terrain === 'psychic-terrain' && this.isGrounded(attacker)) {
+      power = Math.floor(power * 1.5);
+    }
+
+    // サイコフィールド: 接地している側のエスパー技は威力1.3倍（本編仕様）。
+    if (this.field.terrain === 'psychic-terrain' && effectiveType === 'psychic'
+        && this.isGrounded(attacker)) {
+      power = Math.floor(power * 1.3);
     }
 
     // 特性による威力補正（テクニシャン等）。
@@ -1220,6 +1250,13 @@ export class BattleEngine {
     }
 
     return pokemon;
+  }
+
+  // 接地しているか。フィールド（地形）の効果は接地しているポケモンだけが受ける。
+  // ひこうタイプとふゆう特性は地に足がついていないため恩恵を受けない（本編仕様）。
+  // TODO: 出典確認（ふうせん等、接地を打ち消す持ち物は未実装）
+  isGrounded(pokemon: Pokemon): boolean {
+    return !pokemon.types.includes('flying') && pokemon.ability !== 'levitate';
   }
 
   calculateSpeed(pokemon: Pokemon): number {

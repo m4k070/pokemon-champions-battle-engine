@@ -1,4 +1,5 @@
-export type TerrainType = 'electric-terrain' | null;
+// フィールド（地形）。サイコフィールドは先制技の無効化とエスパー技の強化を持つ。
+export type TerrainType = 'electric-terrain' | 'psychic-terrain' | null;
 
 export interface SideHazards {
   playerA: number;

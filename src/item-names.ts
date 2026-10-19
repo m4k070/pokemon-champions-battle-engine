@@ -16,6 +16,7 @@ export const ITEM_NAMES = [
   'shed-shell',
   'shuca-berry',
   'sitrus-berry',
+  'terrain-extender',
   'toxic-orb',
   'white-herb',
   'x-speed',
