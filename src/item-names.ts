@@ -26,6 +26,7 @@ export const ITEM_NAMES = [
   'blastoisinite',
   'blazikenite',
   'charizardite-x',
+  'garchompite-z',
   'charizardite-y',
   'delphoxite',
   'dragoniteite',
