@@ -87,6 +87,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   inflictsDrowsy: boolean;
   selfHealPercent: number | null;
   usesDefenseForAttack: boolean;
+  inflictsEncore: boolean;
 
   constructor(data: DamageMoveInput) {
     this.name = data.name;
@@ -115,6 +116,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.inflictsDrowsy = data.inflictsDrowsy ?? false;
     this.selfHealPercent = data.selfHealPercent ?? null;
     this.usesDefenseForAttack = data.usesDefenseForAttack ?? false;
+    this.inflictsEncore = data.inflictsEncore ?? false;
   }
 }
 
@@ -150,6 +152,7 @@ export class StatusMove implements StatusMoveData {
   restoresShieldForm: boolean;
   inflictsDrowsy: boolean;
   selfHealPercent: number | null;
+  inflictsEncore: boolean;
 
   constructor(data: StatusMoveInput) {
     this.name = data.name;
@@ -170,6 +173,7 @@ export class StatusMove implements StatusMoveData {
     this.restoresShieldForm = data.restoresShieldForm ?? false;
     this.inflictsDrowsy = data.inflictsDrowsy ?? false;
     this.selfHealPercent = data.selfHealPercent ?? null;
+    this.inflictsEncore = data.inflictsEncore ?? false;
   }
 }
 
