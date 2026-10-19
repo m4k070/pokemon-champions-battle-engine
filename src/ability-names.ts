@@ -17,6 +17,8 @@ export const ABILITY_NAMES = [
   'insomnia',
   'intimidate',
   'levitate',
+  'clear-body',
+  'psychic-surge',
   'lightning-rod',
   'magic-bounce',
   'magician',

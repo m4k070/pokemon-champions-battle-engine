@@ -215,6 +215,18 @@ export const ELECTRIC_SURGE: AbilityDefinition = {
   },
 };
 
+// サイコメイカー: 入場時にサイコフィールドを展開する（5ターン。グランドコート持ちなら8ターン）。
+// フィールドの効果（エスパー技1.3倍・先制技の無効化）は battle-engine 側が field.terrain を見て行う。
+export const PSYCHIC_SURGE: AbilityDefinition = {
+  name: 'psychic-surge',
+  onSwitchIn: ({ pokemon, engine }) => {
+    const turns = pokemon.item === 'terrain-extender' ? 8 : 5;
+    engine.field.terrain = 'psychic-terrain';
+    engine.field.terrainTurnsLeft = turns;
+    engine.log.push(`${pokemon.name}のサイコメイカーでサイコフィールドが発動した！`);
+  },
+};
+
 // すいすい: 雨のとき素早さが2倍になる（速度計算は battle-engine の calculateSpeed 側で判定）。
 export const SWIFT_SWIM: AbilityDefinition = {
   name: 'swift-swim',
@@ -373,6 +385,7 @@ export const META_ABILITIES: AbilityDefinition[] = [
   INNER_FOCUS,
   SPICY_SPRAY,
   ELECTRIC_SURGE,
+  PSYCHIC_SURGE,
   SWIFT_SWIM,
   PARENTAL_BOND,
   MULTISCALE,
