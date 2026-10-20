@@ -20,6 +20,12 @@ import type { BattleAgent, BattleContext, AgentDecision } from './battle-agent.j
 
 const EPSILON = 1e-9;
 
+// 場を整える特性（先発に向く）。天候・フィールドの始動役。
+const SETTER_ABILITIES = new Set([
+  'drizzle', 'drought', 'sand-stream', 'snow-warning', 'sand-spit',
+  'psychic-surge', 'electric-surge', 'grassy-surge', 'misty-surge',
+]);
+
 // 能力ランクの倍率（本編と同じ式）。
 function stageMultiplier(stage: number): number {
   return stage >= 0 ? (2 + stage) / 2 : 2 / (2 - stage);
@@ -40,12 +46,41 @@ export function typeMultiplier(attack: TypeName, defenders: TypeName[]): number 
   return multiplier;
 }
 
+// フィールドごとの だいちのはどう のタイプ（本編仕様）。
+const TERRAIN_PULSE_TYPE = {
+  'psychic-terrain': 'psychic',
+  'electric-terrain': 'electric',
+  'grassy-terrain': 'grass',
+  'misty-terrain': 'fairy',
+} as const;
+
+function isGroundedAgainstTerrain(pokemon: Pokemon): boolean {
+  return !pokemon.types.includes('flying') && pokemon.ability !== 'levitate';
+}
+
 // ダメージの代理指標。HPに対する割合で返す（0〜）。
-export function damageRatio(attacker: Pokemon, defender: Pokemon, move: MoveData): number {
+// field を渡すと、だいちのはどうのタイプ変化・威力2倍と、ワイドフォースのフィールド補正を織り込む。
+export function damageRatio(
+  attacker: Pokemon,
+  defender: Pokemon,
+  move: MoveData,
+  field?: BattleContext['field'],
+): number {
   if (move.category === 'status') return 0;
-  const effectiveness = typeMultiplier(move.type, defender.types);
+
+  let effectiveType = move.type;
+  let effectivePower = move.power;
+  if (move.terrainPulse && field && field.terrain !== null && isGroundedAgainstTerrain(attacker)) {
+    effectiveType = TERRAIN_PULSE_TYPE[field.terrain];
+    effectivePower *= 2;
+  }
+  if (move.boostedByPsychicTerrain && field?.terrain === 'psychic-terrain' && isGroundedAgainstTerrain(attacker)) {
+    effectivePower = Math.floor(effectivePower * 1.5);
+  }
+
+  const effectiveness = typeMultiplier(effectiveType, defender.types);
   if (effectiveness === 0) return 0;
-  const stab = attacker.types.includes(move.type) ? 1.5 : 1;
+  const stab = attacker.types.includes(effectiveType) ? 1.5 : 1;
   const attackKey: StatStageKey = move.usesDefenseForAttack
     ? 'DEF'
     : move.category === 'physical'
@@ -55,7 +90,7 @@ export function damageRatio(attacker: Pokemon, defender: Pokemon, move: MoveData
   const attack = statWithStage(attacker, attackKey);
   const defense = Math.max(1, statWithStage(defender, defenseKey));
   const accuracy = move.accuracy > 0 ? move.accuracy / 100 : 1;
-  const raw = move.power * effectiveness * stab * accuracy * (attack / defense);
+  const raw = effectivePower * effectiveness * stab * accuracy * (attack / defense);
   // 実ダメージ式（レベル50相当の係数）に寄せた概算。係数は比較用なので絶対値の意味は薄い。
   return (raw * 0.09) / Math.max(1, defender.maxHP);
 }
@@ -110,7 +145,7 @@ function statusMoveScore(move: MoveData, context: BattleContext): number {
     // 相手の最大打点を食らって半分以下になるなら、積む前に落とされる（からをやぶる等の自己弱体化も同じ）。
     const worstIncoming = Math.max(
       0,
-      ...context.opponent.moves.map((opponentMove) => damageRatio(context.opponent, self, opponentMove)),
+      ...context.opponent.moves.map((opponentMove) => damageRatio(context.opponent, self, opponentMove, context.field)),
     );
     const survivesSetup = selfHp - worstIncoming >= 0.5 ? 1 : 0.08;
     return 62 * (gain / 2) * readiness * survivesSetup;
@@ -168,12 +203,12 @@ function matchupScore(candidate: Pokemon, context: BattleContext): number {
   const opponent = context.opponent;
   let incoming = 0;
   for (const move of opponent.moves) {
-    incoming = Math.max(incoming, damageRatio(opponent, candidate, move));
+    incoming = Math.max(incoming, damageRatio(opponent, candidate, move, context.field));
   }
   let outgoing = 0;
   for (const move of candidate.moves) {
     if (move.pp <= 0) continue;
-    outgoing = Math.max(outgoing, damageRatio(candidate, opponent, move));
+    outgoing = Math.max(outgoing, damageRatio(candidate, opponent, move, context.field));
   }
   // 被ダメージが小さいほど高評価。1発で沈む候補は大きく減点する。
   const survivability = incoming >= 0.9 ? -120 : -incoming * 100;
@@ -185,21 +220,31 @@ export interface HeuristicOptions {
   allowVoluntarySwitch?: boolean;
   // メガストーン持ちを先頭に出す（false にすると team[0] 固定。アブレーション用）。
   leadWithMega?: boolean;
+  // 天候・フィールドの始動役を先頭に出す（既定 true）。false なら メガ→team[0] の順で選ぶ。
+  leadWithSetter?: boolean;
 }
 
 export class HeuristicBattleAgent implements BattleAgent {
   private readonly allowVoluntarySwitch: boolean;
   private readonly leadWithMega: boolean;
+  private readonly leadWithSetter: boolean;
 
   constructor(private readonly rng: RandomSource = SYSTEM_RANDOM, options: HeuristicOptions = {}) {
     this.allowVoluntarySwitch = options.allowVoluntarySwitch ?? true;
     this.leadWithMega = options.leadWithMega ?? true;
+    this.leadWithSetter = options.leadWithSetter ?? true;
   }
 
   async selectLead(team: Pokemon[]): Promise<Pokemon> {
     // 相手の情報が無い段階なので、選出の判断はしない。ただし「メガストーン持ちを先頭に置く」だけは
     // 行う。team[0] 固定だと、メガ枠が2番目以降の構築が1ターン目からメガを出せず、
     // 構築の強さではなく並び順を測ってしまう（2026-10-20 の検証で判明）。
+    // 天候・フィールドの始動役を先頭に置く。イエカメ（イエッサン初手→メガカメックス）のように
+    // 「場を整えてからエースを通す」構築は、先頭を間違えると構築の意図が消える。
+    if (this.leadWithSetter) {
+      const setter = team.find((pokemon) => SETTER_ABILITIES.has(pokemon.ability));
+      if (setter) return setter;
+    }
     if (this.leadWithMega) {
       const megaHolder = team.find((pokemon) => pokemon.item !== null && /ite(-z)?$/.test(pokemon.item));
       if (megaHolder) return megaHolder;
@@ -217,7 +262,7 @@ export class HeuristicBattleAgent implements BattleAgent {
     }
 
     const scored: ScoredAction[] = moves.map(({ index, move }) => {
-      const ratio = damageRatio(context.self, context.opponent, move);
+      const ratio = damageRatio(context.self, context.opponent, move, context.field);
       const lethal = ratio >= hpRatio(context.opponent) ? 1000 : 0;
       const damageScore = (ratio * 400 + lethal) * selfDropPenalty(move);
       const utility = move.category === 'status' ? statusMoveScore(move, context) : 0;
@@ -232,7 +277,7 @@ export class HeuristicBattleAgent implements BattleAgent {
     // 引っ込める判断: 決定打が無く、体力が少ない／相手の決定打を耐えられない場合のみ。
     const best = this.pickBest(scored);
     const bestDamageRatio = Math.max(
-      ...context.self.moves.map((move) => damageRatio(context.self, context.opponent, move)),
+      ...context.self.moves.map((move) => damageRatio(context.self, context.opponent, move, context.field)),
     );
     const incomingWorst = Math.max(
       ...context.opponent.moves.map((move) => damageRatio(context.opponent, context.self, move)),
