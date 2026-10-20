@@ -184,7 +184,16 @@ export class BattleEngine {
       const team = data.team;
       if (!Array.isArray(team)) return;
 
-      for (const pokemon of team) {
+      // 持ち物による回復・反動は「その時点で場に出ているポケモン」にだけ適用する。
+      // 以前は team（両陣営の全員＝12体）を回していたため、控えのポケモンが
+      // たべのこしで回復し続けていた（2026-10-20 の検証で判明）。
+      // activePokemon が未設定のケース（テストで直接エンジンを使う）だけ全員に適用する。
+      const actives = [this.activePokemon0, this.activePokemon1].filter(
+        (pokemon): pokemon is Pokemon => pokemon !== null,
+      );
+      const targets = actives.length > 0 ? actives : team;
+
+      for (const pokemon of targets) {
         if (!pokemon || typeof pokemon !== 'object') continue;
         const p = pokemon as Pokemon;
         if (p.isFainted) continue;
