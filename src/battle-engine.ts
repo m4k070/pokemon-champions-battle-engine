@@ -1,6 +1,7 @@
 import { EventEmitter } from './event-emitter.js';
 import { TYPE_CHART } from './type-chart.js';
 import { BattleField } from './battle-field.js';
+import type { TerrainType } from './battle-field.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
 import type { Pokemon } from './pokemon.js';
 import type { MoveData, StatusCondition, StatStageKey, TypeName, WeatherType, TypeChart } from './types.js';
@@ -39,6 +40,15 @@ const WEATHER_BALL_TYPE: Partial<Record<WeatherType, TypeName>> = {
   sun: 'fire',
   sand: 'rock',
   hail: 'ice',
+};
+
+// だいちのはどう: フィールドの種類に応じてタイプが変わる（威力は2倍）。
+// 使用者が接地しているときだけ適用する（ふゆう・ひこうは変化しない）。
+const TERRAIN_PULSE_TYPE: Record<NonNullable<TerrainType>, TypeName> = {
+  'electric-terrain': 'electric',
+  'psychic-terrain': 'psychic',
+  'grassy-terrain': 'grass',
+  'misty-terrain': 'fairy',
 };
 
 // あさのひざし等、天候依存の自己回復技の回復割合（本編仕様）。
@@ -939,6 +949,12 @@ export class BattleEngine {
       : move.type;
 
     let power = move.power;
+
+    // だいちのはどう: フィールド下ではタイプが変わり威力2倍。使用者が接地している場合のみ。
+    if (move.terrainPulse === true && this.field.terrain !== null && this.isGrounded(attacker)) {
+      effectiveType = TERRAIN_PULSE_TYPE[this.field.terrain];
+      power *= 2;
+    }
 
     // スカイスキン（aerilate）: ノーマル技がひこう技になる（威力1.2倍）
     // フェアリースキン（pixilate）: ノーマル技がフェアリー技になる（威力1.2倍）

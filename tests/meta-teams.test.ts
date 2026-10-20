@@ -1,4 +1,5 @@
 import { META_TEAMS, teamToPokemons, toPokemon } from '../src/data/meta-teams.js';
+import { isDamageMove, isStatusMove } from '../src/move.js';
 import { GAMEWITH_TEAMS } from '../src/data/meta-teams-catalog.js';
 import { BattleSession } from '../src/battle-runner.js';
 import { RandomBattleAgent } from '../src/ai/battle-agent.js';
@@ -201,4 +202,32 @@ describe('現環境PTカタログ', () => {
       expect(session.engine.getLog().length).toBeGreaterThan(0);
     }
   }, 120000);
+
+  test('メガカメックス構築の からをやぶる は A+2/C+2/S+2・B-1/D-1 を持つ', () => {
+    const entry = META_TEAMS.find((team) => team.name === 'メガカメックス構築')!;
+    const blastoise = toPokemon(entry.members.find((member) => member.name === 'blastoise')!);
+    const move = blastoise.moves.find((candidate) => candidate.name === 'からをやぶる')!;
+
+    expect(isStatusMove(move)).toBe(true);
+    if (!isStatusMove(move)) throw new Error('からをやぶる は変化技のはず');
+    expect(move.selfStatChange).toEqual([
+      { stat: 'DEF', delta: -1 },
+      { stat: 'SPDEF', delta: -1 },
+      { stat: 'ATK', delta: 2 },
+      { stat: 'SPATK', delta: 2 },
+      { stat: 'SPEED', delta: 2 },
+    ]);
+  });
+
+  test('メガカメックス構築の だいちのはどう は terrainPulse を持つ', () => {
+    const entry = META_TEAMS.find((team) => team.name === 'メガカメックス構築')!;
+    const blastoise = toPokemon(entry.members.find((member) => member.name === 'blastoise')!);
+    const move = blastoise.moves.find((candidate) => candidate.name === 'だいちのはどう')!;
+
+    expect(isDamageMove(move)).toBe(true);
+    if (!isDamageMove(move)) throw new Error('だいちのはどう はダメージ技のはず');
+    expect(move.terrainPulse).toBe(true);
+    expect(move.type).toBe('normal');
+    expect(move.power).toBe(50);
+  });
 });

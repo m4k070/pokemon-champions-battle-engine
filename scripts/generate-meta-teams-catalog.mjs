@@ -66,6 +66,7 @@ const MOVE_FLAGS = {
   クイックターン: { pivot: true },
   ボルトチェンジ: { pivot: true },
   ワイドフォース: { boostedByPsychicTerrain: true },
+  だいちのはどう: { terrainPulse: true },
   ボディプレス: { usesDefenseForAttack: true },
   イカサマ: { usesTargetAttack: true },
   くさむすび: { weightBasedPower: true },
@@ -178,7 +179,7 @@ function moveEntry(jaName) {
       cat2 === 'net-good-stats' ||
       cat2 === 'damage-raise' ||
       (cat2 === 'unique' && !/target/i.test(effect));
-    if (toSelf && (cat2 === 'net-good-stats' || meta.stat_chance === 100)) {
+    if (toSelf && (cat2 === 'net-good-stats' || cat2 === 'unique' || meta.stat_chance === 100)) {
       const list = statChanges.map((s) => `{ stat: '${STAT_KEY[s.stat]}', delta: ${s.change} }`);
       add('selfStatChange', `selfStatChange: [${list.join(', ')}]`);
     } else if (!toSelf) {

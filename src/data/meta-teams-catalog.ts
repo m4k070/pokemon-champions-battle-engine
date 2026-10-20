@@ -562,10 +562,10 @@ export const GAMEWITH_TEAMS: MetaTeamEntry[] = [
         nature: 'ひかえめ',
         statPoints: { HP: 17, DEF: 1, SPATK: 16, SPEED: 32 },
         moves: [
-          createMove({ name: 'だいちのはどう', type: 'normal', power: 50, accuracy: 100, pp: 10, category: 'special' }),
+          createMove({ name: 'だいちのはどう', type: 'normal', power: 50, accuracy: 100, pp: 10, category: 'special', terrainPulse: true }),
           createMove({ name: 'はどうだん', type: 'fighting', power: 80, accuracy: 100, pp: 20, category: 'special' }),
           createMove({ name: 'あくのはどう', type: 'dark', power: 80, accuracy: 100, pp: 15, category: 'special' }),
-          createMove({ name: 'からをやぶる', type: 'normal', power: 0, accuracy: 100, pp: 15, category: 'status' }),
+          createMove({ name: 'からをやぶる', type: 'normal', power: 0, accuracy: 100, pp: 15, category: 'status', selfStatChange: [{ stat: 'DEF', delta: -1 }, { stat: 'SPDEF', delta: -1 }, { stat: 'ATK', delta: 2 }, { stat: 'SPATK', delta: 2 }, { stat: 'SPEED', delta: 2 }] }),
         ],
       },
       {

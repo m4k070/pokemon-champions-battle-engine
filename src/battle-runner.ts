@@ -529,6 +529,20 @@ export class BattleSession {
     this.runRemainingMoves();
   }
 
+  // 瀕死交代を両者とも不要になるまで解決する。
+  // 交代先が設置技（ステルスロック等）で瀕死になることがあり、1回では終わらない。
+  // ここで打ち切ると applyTurn の「瀕死が残っている」ガードで例外になる。
+  private async resolveForcedSwitches(agentA: BattleAgent, agentB: BattleAgent): Promise<void> {
+    while (this.needsForcedSwitch(0) || this.needsForcedSwitch(1)) {
+      if (this.needsForcedSwitch(0)) {
+        this.applyForcedSwitch(0, await agentA.selectAction(this.getContext(0)));
+      }
+      if (this.needsForcedSwitch(1)) {
+        this.applyForcedSwitch(1, await agentB.selectAction(this.getContext(1)));
+      }
+    }
+  }
+
   // ターン終了処理（状態異常・天候ダメージ・持ち物）。次のbeginTurn()に備える。
   endTurn(): void {
     if (!this.isTurnComplete()) {
@@ -543,12 +557,7 @@ export class BattleSession {
   async playTurn(agentA: BattleAgent, agentB: BattleAgent): Promise<void> {
     this.beginTurn();
 
-    if (this.needsForcedSwitch(0)) {
-      this.applyForcedSwitch(0, await agentA.selectAction(this.getContext(0)));
-    }
-    if (this.needsForcedSwitch(1)) {
-      this.applyForcedSwitch(1, await agentB.selectAction(this.getContext(1)));
-    }
+    await this.resolveForcedSwitches(agentA, agentB);
 
     if (this.isFinished()) {
       this.endTurn();

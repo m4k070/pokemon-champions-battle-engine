@@ -1,5 +1,7 @@
 // フィールド（地形）。サイコフィールドは先制技の無効化とエスパー技の強化を持つ。
-export type TerrainType = 'electric-terrain' | 'psychic-terrain' | 'misty-terrain' | null;
+// グラスフィールドは だいちのはどう のタイプ変化のためだけに定義している
+// （展開する技・毎ターン回復・くさ技1.5倍は未実装）。
+export type TerrainType = 'electric-terrain' | 'psychic-terrain' | 'misty-terrain' | 'grassy-terrain' | null;
 
 export interface SideHazards {
   playerA: number;

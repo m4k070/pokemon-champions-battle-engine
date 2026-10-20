@@ -99,7 +99,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'raichu',
     megaName: 'mega-raichu-x',
     typeChange: ['electric'],
-    abilityChange: 'electric-surge', // エレキメイカー（未実装・効果調査待ち）
+    abilityChange: 'electric-surge', // エレキメイカー（battle-engine のフィールド展開とでんき技1.3倍で実装済み）
     statBoosts: { ATK: 45, DEF: 40, SPATK: 0, SPDEF: 15, SPEED: 0 },
   },
   'raichunite-y': {
@@ -221,7 +221,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'kangaskhan',
     megaName: 'mega-kangaskhan',
     typeChange: ['normal'],
-    abilityChange: 'parental-bond', // おやこあい（未実装）
+    abilityChange: 'parental-bond', // おやこあい（battle-engine で2回ヒット・2回目1/4威力として実装済み）
     statBoosts: { ATK: 30, DEF: 20, SPATK: 20, SPDEF: 20, SPEED: 10 },
   },
   'scizorite': {
@@ -261,7 +261,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'gyarados',
     megaName: 'mega-gyarados',
     typeChange: ['water', 'dark'],
-    abilityChange: 'mold-breaker', // かたやぶり（未実装）
+    abilityChange: 'mold-breaker', // かたやぶり（battle-engine で防御側特性の無視として実装済み）
     // ギャラドス A125/D79/SA60/SD100/S81 → メガ A155/D109/SA70/SD130/S81
     statBoosts: { ATK: 30, DEF: 30, SPATK: 10, SPDEF: 30, SPEED: 0 },
   },
@@ -285,7 +285,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'salamence',
     megaName: 'mega-salamence',
     typeChange: ['dragon', 'flying'],
-    abilityChange: 'aerilate', // スカイスキン（未実装）
+    abilityChange: 'aerilate', // スカイスキン（battle-engine のノーマル技タイプ変更で実装済み）
     // ボーマンダ A135/D80/SA110/SD80/S100 → メガ A145/D130/SA120/SD90/S120
     statBoosts: { ATK: 10, DEF: 50, SPATK: 10, SPDEF: 10, SPEED: 20 },
   },
@@ -293,7 +293,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'gardevoir',
     megaName: 'mega-gardevoir',
     typeChange: ['psychic', 'fairy'],
-    abilityChange: 'pixilate', // フェアリースキン（未実装）
+    abilityChange: 'pixilate', // フェアリースキン（battle-engine のノーマル技タイプ変更で実装済み）
     // サーナイト A65/D65/SA125/SD115/S80 → メガ A85/D65/SA165/SD135/S100
     statBoosts: { ATK: 20, DEF: 0, SPATK: 40, SPDEF: 20, SPEED: 20 },
   },
@@ -301,7 +301,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'sableye',
     megaName: 'mega-sableye',
     typeChange: ['dark', 'ghost'],
-    abilityChange: 'magic-bounce', // マジックミラー（未実装）
+    abilityChange: 'magic-bounce', // マジックミラー（battle-engine の変化技の跳ね返しで実装済み）
     // ヤミラミ A75/D75/SA65/SD65/S50 → メガ A85/D125/SA85/SD115/S20
     statBoosts: { ATK: 10, DEF: 50, SPATK: 20, SPDEF: 50, SPEED: -30 },
   },
