@@ -52,8 +52,9 @@ async function main(): Promise<void> {
   // --max-turns=N: 引き分け（打ち切り）を減らしたいときに使う。
   const maxTurnsArg = process.argv.find((arg) => arg.startsWith('--max-turns='));
   const maxTurns = maxTurnsArg ? Number(maxTurnsArg.split('=')[1]) : undefined;
+  const noSwitch = process.argv.includes('--no-switch');
   const makeAgent = (seed: number) => agentKind === 'heuristic'
-    ? new HeuristicBattleAgent(new SeededRandom(seed))
+    ? new HeuristicBattleAgent(new SeededRandom(seed), { allowVoluntarySwitch: !noSwitch })
     : new RandomBattleAgent(new SeededRandom(seed));
   const teams = META_TEAMS.filter((team) => team.name !== EXCLUDED).map((team) => ({
     name: team.name,

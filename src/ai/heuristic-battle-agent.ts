@@ -107,7 +107,13 @@ function statusMoveScore(move: MoveData, context: BattleContext): number {
     const gain = usable.reduce((sum, change) => sum + change.delta, 0);
     // 体力が減っているときは積む余裕がないとみなす（全抜き前提の判断）。
     const readiness = selfHp >= 0.55 ? 1 : 0.15;
-    return 62 * (gain / 2) * readiness;
+    // 相手の最大打点を食らって半分以下になるなら、積む前に落とされる（からをやぶる等の自己弱体化も同じ）。
+    const worstIncoming = Math.max(
+      0,
+      ...context.opponent.moves.map((opponentMove) => damageRatio(context.opponent, self, opponentMove)),
+    );
+    const survivesSetup = selfHp - worstIncoming >= 0.5 ? 1 : 0.08;
+    return 62 * (gain / 2) * readiness * survivesSetup;
   }
 
   // 場に残る効果（ステロ・まきびし・壁・おいかぜ・トリックルーム）
@@ -174,11 +180,30 @@ function matchupScore(candidate: Pokemon, context: BattleContext): number {
   return survivability + outgoing * 160;
 }
 
+export interface HeuristicOptions {
+  // 自分から交代するか（アブレーション用。false にすると瀕死交代だけになる）。
+  allowVoluntarySwitch?: boolean;
+  // メガストーン持ちを先頭に出す（false にすると team[0] 固定。アブレーション用）。
+  leadWithMega?: boolean;
+}
+
 export class HeuristicBattleAgent implements BattleAgent {
-  constructor(private readonly rng: RandomSource = SYSTEM_RANDOM) {}
+  private readonly allowVoluntarySwitch: boolean;
+  private readonly leadWithMega: boolean;
+
+  constructor(private readonly rng: RandomSource = SYSTEM_RANDOM, options: HeuristicOptions = {}) {
+    this.allowVoluntarySwitch = options.allowVoluntarySwitch ?? true;
+    this.leadWithMega = options.leadWithMega ?? true;
+  }
 
   async selectLead(team: Pokemon[]): Promise<Pokemon> {
-    // 相手の情報が無い段階なので、先頭をそのまま出す（選出の判断は未実装）。
+    // 相手の情報が無い段階なので、選出の判断はしない。ただし「メガストーン持ちを先頭に置く」だけは
+    // 行う。team[0] 固定だと、メガ枠が2番目以降の構築が1ターン目からメガを出せず、
+    // 構築の強さではなく並び順を測ってしまう（2026-10-20 の検証で判明）。
+    if (this.leadWithMega) {
+      const megaHolder = team.find((pokemon) => pokemon.item !== null && /ite(-z)?$/.test(pokemon.item));
+      if (megaHolder) return megaHolder;
+    }
     return team[0];
   }
 
@@ -214,7 +239,7 @@ export class HeuristicBattleAgent implements BattleAgent {
     );
     const noAnswer = bestDamageRatio < 0.25;
     const inDanger = hpRatio(context.self) < 0.4 || incomingWorst >= 0.8;
-    if (noAnswer && inDanger && switches.length > 0) {
+    if (this.allowVoluntarySwitch && noAnswer && inDanger && switches.length > 0) {
       const candidate = this.rankSwitches(context, switches)[0]!;
       if (matchupScore(candidate.pokemon, context) > -60) {
         return { action: { type: 'switch', pokemonIndex: candidate.index } };

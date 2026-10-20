@@ -651,7 +651,14 @@ export async function runBattle(
   options: RunBattleOptions = {}
 ): Promise<BattleResult> {
   const maxTurns = options.maxTurns ?? 50;
-  const session = await BattleSession.start(teamA, teamB, options);
+  // 先発はエージェントに決めさせる（leadA/leadB を明示した場合はそちらを優先）。
+  // これまでは team[0] 固定だったため、メガ枠が2番目以降の構築が1ターン目からメガを出せず、
+  // 構築の強さではなく並び順を測ってしまっていた。
+  const session = await BattleSession.start(teamA, teamB, {
+    ...options,
+    leadA: options.leadA ?? (await agentA.selectLead(teamA)),
+    leadB: options.leadB ?? (await agentB.selectLead(teamB)),
+  });
 
   while (!session.isFinished() && session.engine.turn < maxTurns) {
     await session.playTurn(agentA, agentB);
