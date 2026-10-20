@@ -11,6 +11,9 @@ export interface StealthRockView {
 export interface BattleFieldView {
   weather: WeatherType | null;
   weatherTurnsLeft: number;
+  // 地形（サイコフィールド等）。エージェントが技の価値を判断するのに必要。
+  terrain: 'psychic-terrain' | 'electric-terrain' | 'grassy-terrain' | 'misty-terrain' | null;
+  terrainTurnsLeft: number;
   trickRoom: boolean;
   trickRoomTurnsLeft: number;
   stealthRock: StealthRockView;

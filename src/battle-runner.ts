@@ -49,6 +49,8 @@ function buildContext(
     field: {
       weather: engine.weather,
       weatherTurnsLeft: engine.weatherTurnsLeft,
+      terrain: engine.field.terrain,
+      terrainTurnsLeft: engine.field.terrainTurnsLeft,
       trickRoom: engine.trickRoom,
       trickRoomTurnsLeft: engine.trickRoomTurnsLeft,
       stealthRock: {

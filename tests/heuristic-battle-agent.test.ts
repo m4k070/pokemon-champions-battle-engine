@@ -1,6 +1,6 @@
 import { Pokemon } from '../src/pokemon.js';
 import { createMove } from '../src/move.js';
-import { HeuristicBattleAgent } from '../src/ai/heuristic-battle-agent.js';
+import { HeuristicBattleAgent, damageRatio } from '../src/ai/heuristic-battle-agent.js';
 import type { BattleContext } from '../src/ai/battle-agent.js';
 import { SeededRandom } from '../src/rng.js';
 import type { MoveData, TypeName } from '../src/types.js';
@@ -44,6 +44,8 @@ function makeContext(self: Pokemon, opponent: Pokemon, overrides: Partial<Battle
     field: {
       weather: null,
       weatherTurnsLeft: 0,
+      terrain: null,
+      terrainTurnsLeft: 0,
       trickRoom: false,
       trickRoomTurnsLeft: 0,
       stealthRock: { self: false, opponent: false },
@@ -140,6 +142,49 @@ describe('HeuristicBattleAgent', () => {
     const decision = await agent.selectAction(makeContext(self, opponent, { canMegaEvolve: true }));
     expect(decision.action).toMatchObject({ type: 'move', megaEvolve: true });
   });
+
+describe('フィールドを考慮した技の評価', () => {
+  const terrainPulse = () => createMove({
+    name: 'だいちのはどう', type: 'normal', power: 50, accuracy: 100, pp: 10, category: 'special', terrainPulse: true,
+  });
+  const wideForce = () => createMove({
+    name: 'ワイドフォース', type: 'psychic', power: 80, accuracy: 100, pp: 10, category: 'special', boostedByPsychicTerrain: true,
+  });
+
+  it('だいちのはどうはフィールド下でタイプが変わり威力2倍として評価される', () => {
+    const user = makePokemon('User', ['water'], [terrainPulse()], { spa: 150 });
+    // はがね相手: ノーマルでは等倍、サイコフィールド下のエスパーでは等倍、エレキなら等倍。
+    // ここでは「はがね/かくとう」相手にノーマル(0.5) vs エスパー(2.0) の差が出ることを見る。
+    const target = makePokemon('Target', ['fighting'], [tackle()]);
+    const withoutField = damageRatio(user, target, terrainPulse());
+    const withTerrain = damageRatio(user, target, terrainPulse(), {
+      weather: null, weatherTurnsLeft: 0, terrain: 'psychic-terrain', terrainTurnsLeft: 5,
+      trickRoom: false, trickRoomTurnsLeft: 0, stealthRock: { self: false, opponent: false },
+    });
+    expect(withTerrain).toBeGreaterThan(withoutField * 3);
+  });
+
+  it('ワイドフォースはサイコフィールド下で1.5倍として評価される', () => {
+    const user = makePokemon('User', ['psychic'], [wideForce()], { spa: 150 });
+    const target = makePokemon('Target', ['normal'], [tackle()]);
+    const withoutField = damageRatio(user, target, wideForce());
+    const withTerrain = damageRatio(user, target, wideForce(), {
+      weather: null, weatherTurnsLeft: 0, terrain: 'psychic-terrain', terrainTurnsLeft: 5,
+      trickRoom: false, trickRoomTurnsLeft: 0, stealthRock: { self: false, opponent: false },
+    });
+    expect(withTerrain / withoutField).toBeCloseTo(1.5, 1);
+  });
+
+  it('始動役（あめふらし等）を先頭に選ぶ', async () => {
+    const setter = makePokemon('Setter', ['water'], [tackle()]);
+    setter.ability = 'drizzle';
+    const mega = makePokemon('Mega', ['water'], [tackle()]);
+    mega.item = 'swampertite';
+    const agent = new HeuristicBattleAgent(new SeededRandom(1));
+    const lead = await agent.selectLead([mega, setter]);
+    expect(lead.name).toBe('Setter');
+  });
+});
 
   it('同じ状況なら同じ手を選ぶ（seed固定で再現）', async () => {
     const build = () => {
