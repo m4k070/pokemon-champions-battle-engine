@@ -60,6 +60,19 @@ export function damageRatio(attacker: Pokemon, defender: Pokemon, move: MoveData
   return (raw * 0.09) / Math.max(1, defender.maxHP);
 }
 
+// りゅうせいぐん・オーバーヒートのように「撃つと自分の攻撃系ランクが下がる」技の割引。
+// これを見ないと、火力の高さだけで連打して自分から弱っていく。
+function selfDropPenalty(move: MoveData): number {
+  if (move.category === 'status' || !move.selfStatChange) return 1;
+  let penalty = 1;
+  for (const change of move.selfStatChange) {
+    if (change.delta < 0 && (change.stat === 'ATK' || change.stat === 'SPATK')) {
+      penalty *= 1 / (1 + 0.45 * Math.abs(change.delta));
+    }
+  }
+  return penalty;
+}
+
 function hpRatio(pokemon: Pokemon): number {
   return pokemon.currentHP / pokemon.maxHP;
 }
@@ -181,7 +194,7 @@ export class HeuristicBattleAgent implements BattleAgent {
     const scored: ScoredAction[] = moves.map(({ index, move }) => {
       const ratio = damageRatio(context.self, context.opponent, move);
       const lethal = ratio >= hpRatio(context.opponent) ? 1000 : 0;
-      const damageScore = ratio * 400 + lethal;
+      const damageScore = (ratio * 400 + lethal) * selfDropPenalty(move);
       const utility = move.category === 'status' ? statusMoveScore(move, context) : 0;
       const pivotBonus = move.pivot ? 10 : 0;
       return {

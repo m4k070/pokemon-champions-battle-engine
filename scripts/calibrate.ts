@@ -2,10 +2,13 @@
 //
 // 条件（docs/WORK_ORDER_2026-10-18.md の T9 検証と同じ）:
 //   - ジュペッタ構築を除く11構築の全ペア 55 × seed 6 = 330試合
-//   - 行動: RandomBattleAgent(SeededRandom(seed*31+1)) vs (seed*31+2)
-//   - maxTurns は runBattle の既定（50）
+//   - 行動: 既定は RandomBattleAgent、--agent=heuristic で HeuristicBattleAgent
+//   - maxTurns の既定は 50（--max-turns=N で変更。50だと引き分けが3割出る）
 //
-// 使い方: npx tsx scripts/calibrate.ts [--json]
+// 使い方: npx tsx scripts/calibrate.ts [--json] [--agent=heuristic] [--max-turns=300] [--engine-seed]
+//
+// 注意: --engine-seed を付けないとエンジン側の乱数（命中・急所・ダメージ揺れ）が毎回変わり、
+//       同じseedでも結果が再現しない。方策や構築の比較をするときは必ず付ける。
 // 出力: 構築ごとの勝率、Tier（SS/S/A）別の対戦勝率、例外の発生数。
 
 import { runBattle } from '../src/battle-runner.js';
