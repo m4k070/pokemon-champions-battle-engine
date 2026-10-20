@@ -57,6 +57,8 @@ async function main(): Promise<void> {
   // --selection=rule: 6体から3体をルールで選出してから対戦する（シングル3選出の再現）。
   const useSelection = process.argv.includes('--selection=rule');
   const usePlan = process.argv.includes('--selection=plan');
+  // --information=partial: 相手の未公開情報を伏せた状態で対戦する。
+  const information = process.argv.includes('--information=partial') ? 'partial' as const : 'full' as const;
   const prepare = (entry: Parameters<typeof teamToPokemons>[0]) => {
     const full = teamToPokemons(entry);
     if (usePlan) return selectTeamWithPlan(entry, full).members;
@@ -108,6 +110,7 @@ async function main(): Promise<void> {
               // 選出順の先頭を初手にする（エージェントの selectLead より優先）。
               leadA: selectedA[0],
               leadB: selectedB[0],
+              information,
             },
           );
           a.games++;

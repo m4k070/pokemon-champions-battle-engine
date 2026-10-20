@@ -66,6 +66,10 @@ function isTeamWiped(team: Pokemon[]): boolean {
   return team.every((p) => p.isFainted);
 }
 
+// 不完全情報モード: 相手の技・持ち物・特性は「使われたもの」だけ見える。
+// 実戦の読み合い（型の特定・技の記憶）を再現するためのモード。
+export type InformationLevel = 'full' | 'partial';
+
 export interface StartSessionOptions {
   leadA?: Pokemon;
   leadB?: Pokemon;
@@ -73,6 +77,8 @@ export interface StartSessionOptions {
   megaEvolutionSystem?: MegaEvolutionSystem;
   // 乱数の供給源。engine を渡さないときに engine 側へ引き継ぐ（seed 固定の入口）。
   rng?: RandomSource;
+  // 既定は 'full'（これまでの挙動）。'partial' で相手の未公開情報を伏せる。
+  information?: InformationLevel;
 }
 
 // 1ターンずつ進められるバトルの実行単位。snapshot()/restore()/fork()により
@@ -87,6 +93,11 @@ export class BattleSession {
   activeB: Pokemon;
   megaEvolutionSystem: MegaEvolutionSystem;
   private megaUsed: [boolean, boolean] = [false, false];
+  // 不完全情報モード用の「見えた情報」。viewer → (相手ポケモン → 見えた技index / 持ち物 / 特性)。
+  readonly information: InformationLevel;
+  private knownMoves: [Map<Pokemon, Set<number>>, Map<Pokemon, Set<number>>] = [new Map(), new Map()];
+  private knownItems: [Set<Pokemon>, Set<Pokemon>] = [new Set(), new Set()];
+  private knownAbilities: [Set<Pokemon>, Set<Pokemon>] = [new Set(), new Set()];
   reasoningLog: TurnReasoning[] = [];
   private turnBegun = false;
   // 技の実行途中でpivot技の交代先入力を待つために、ターンの進行状態をここに保持する。
@@ -99,8 +110,10 @@ export class BattleSession {
     teamB: Pokemon[],
     activeA: Pokemon,
     activeB: Pokemon,
-    megaEvolutionSystem: MegaEvolutionSystem
+    megaEvolutionSystem: MegaEvolutionSystem,
+    information: InformationLevel = 'full'
   ) {
+    this.information = information;
     this.engine = engine;
     this.teamA = teamA;
     this.teamB = teamB;
@@ -129,7 +142,7 @@ export class BattleSession {
       engine.switchIn(entry.pokemon, entry.team, entry.side);
     }
 
-    return new BattleSession(engine, teamA, teamB, leadA, leadB, megaEvolutionSystem);
+    return new BattleSession(engine, teamA, teamB, leadA, leadB, megaEvolutionSystem, options.information ?? 'full');
   }
 
   static fromSnapshot(snapshot: BattleSnapshot, megaEvolutionSystem: MegaEvolutionSystem = new MegaEvolutionSystem()): BattleSession {
@@ -218,9 +231,52 @@ export class BattleSession {
     // 瀕死交代とpivot交代はどちらも「技を選べず交代先だけを選ぶ場面」なので同じフラグに集約する。
     const mustSwitch = this.needsForcedSwitch(side) || this.needsPivotSwitch(side);
 
-    return side === 0
-      ? buildContext(this.engine, 0, this.activeA, this.teamA, this.activeB, this.teamB, canMegaEvolve, mustSwitch)
-      : buildContext(this.engine, 1, this.activeB, this.teamB, this.activeA, this.teamA, canMegaEvolve, mustSwitch);
+    const opponent = side === 0 ? this.activeB : this.activeA;
+    const opponentTeam = side === 0 ? this.teamB : this.teamA;
+    const self = side === 0 ? this.activeA : this.activeB;
+    const selfTeam = side === 0 ? this.teamA : this.teamB;
+
+    return buildContext(
+      this.engine,
+      side,
+      self,
+      selfTeam,
+      this.redact(side, opponent),
+      opponentTeam.map((pokemon) => this.redact(side, pokemon)),
+      canMegaEvolve,
+      mustSwitch,
+    );
+  }
+
+  // 相手の情報を「見えている分だけ」に絞る。full モードでは素通し。
+  // 見えないもの: 技（使われるまで）、持ち物、特性（メガシンカ等で判明するまで）。
+  private redact(viewer: 0 | 1, pokemon: Pokemon): Pokemon {
+    if (this.information === 'full') return pokemon;
+
+    const revealedMoves = this.knownMoves[viewer]!.get(pokemon) ?? new Set<number>();
+    const clone = Object.create(Object.getPrototypeOf(pokemon)) as Pokemon;
+    Object.assign(clone, pokemon);
+    clone.moves = pokemon.moves.filter((_, index) => revealedMoves.has(index));
+    clone.item = this.knownItems[viewer]!.has(pokemon) ? pokemon.item : null;
+    clone.ability = this.knownAbilities[viewer]!.has(pokemon) ? pokemon.ability : ('none' as Pokemon['ability']);
+    return clone;
+  }
+
+  // 行動から相手に伝わる情報を記録する（使った技・メガシンカによる持ち物と特性の判明）。
+  private reveal(viewer: 0 | 1, actor: Pokemon, action: AgentAction): void {
+    if (this.information === 'full') return;
+    if (action.type !== 'move') return;
+
+    let revealed = this.knownMoves[viewer]!.get(actor);
+    if (!revealed) {
+      revealed = new Set<number>();
+      this.knownMoves[viewer]!.set(actor, revealed);
+    }
+    revealed.add(action.moveIndex);
+    if (action.megaEvolve) {
+      this.knownItems[viewer]!.add(actor);
+      this.knownAbilities[viewer]!.add(actor);
+    }
   }
 
   // ターン開始処理（天候・トリックルームの残りターン消費）。1ターンにつき1回だけ効く。
@@ -570,6 +626,10 @@ export class BattleSession {
       agentA.selectAction(this.getContext(0)),
       agentB.selectAction(this.getContext(1)),
     ]);
+
+    // 不完全情報モード: 使った技と、メガシンカで判明する持ち物・特性を相手に開示する。
+    this.reveal(1, this.activeA, decisionA.action);
+    this.reveal(0, this.activeB, decisionB.action);
 
     this.applyTurn(decisionA, decisionB);
 

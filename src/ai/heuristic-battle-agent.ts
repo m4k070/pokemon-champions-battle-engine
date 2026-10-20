@@ -108,6 +108,31 @@ function selfDropPenalty(move: MoveData): number {
   return penalty;
 }
 
+// 相手の技が見えないとき（不完全情報モード）の被ダメージ推定。
+// タイプ一致・威力90相当の攻撃が飛んでくる、という相場観で代用する。
+function unknownThreatRatio(attacker: Pokemon, defender: Pokemon): number {
+  const category = attacker.stats.ATK >= attacker.stats.SPATK ? 'physical' : 'special';
+  const attack = category === 'physical' ? attacker.stats.ATK : attacker.stats.SPATK;
+  const defense = category === 'physical' ? defender.stats.DEF : defender.stats.SPDEF;
+  let worst = 0;
+  for (const type of attacker.types) {
+    const effectiveness = typeMultiplier(type, defender.types);
+    if (effectiveness === 0) continue;
+    const ratio = (90 * effectiveness * 1.5 * (attack / Math.max(1, defense)) * 0.09) / Math.max(1, defender.maxHP);
+    worst = Math.max(worst, ratio);
+  }
+  return worst;
+}
+
+// 相手から受ける最大打点（技が見えなければタイプ一致の想定で補う）。
+function worstIncomingRatio(context: BattleContext, defender: Pokemon): number {
+  if (context.opponent.moves.length === 0) return unknownThreatRatio(context.opponent, defender);
+  return Math.max(
+    0,
+    ...context.opponent.moves.map((move) => damageRatio(context.opponent, defender, move, context.field)),
+  );
+}
+
 function hpRatio(pokemon: Pokemon): number {
   return pokemon.currentHP / pokemon.maxHP;
 }
@@ -143,10 +168,7 @@ function statusMoveScore(move: MoveData, context: BattleContext): number {
     // 体力が減っているときは積む余裕がないとみなす（全抜き前提の判断）。
     const readiness = selfHp >= 0.55 ? 1 : 0.15;
     // 相手の最大打点を食らって半分以下になるなら、積む前に落とされる（からをやぶる等の自己弱体化も同じ）。
-    const worstIncoming = Math.max(
-      0,
-      ...context.opponent.moves.map((opponentMove) => damageRatio(context.opponent, self, opponentMove, context.field)),
-    );
+    const worstIncoming = worstIncomingRatio(context, self);
     const survivesSetup = selfHp - worstIncoming >= 0.5 ? 1 : 0.08;
     return 62 * (gain / 2) * readiness * survivesSetup;
   }
@@ -197,18 +219,14 @@ interface ScoredAction {
   label: string;
 }
 
-// 交代先の評価。相手の実際の技（完全情報）から被ダメージ割合を出し、
-// 「受けられるか」と「こちらから通せるか」の和で順位づけする。
+// 交代先の評価。相手から受ける最大打点と、こちらが通せる打点の和で順位づけする。
+// 不完全情報モードでは相手の技が未知なので、タイプ一致の想定で補う（worstIncomingRatio）。
 function matchupScore(candidate: Pokemon, context: BattleContext): number {
-  const opponent = context.opponent;
-  let incoming = 0;
-  for (const move of opponent.moves) {
-    incoming = Math.max(incoming, damageRatio(opponent, candidate, move, context.field));
-  }
+  const incoming = worstIncomingRatio(context, candidate);
   let outgoing = 0;
   for (const move of candidate.moves) {
     if (move.pp <= 0) continue;
-    outgoing = Math.max(outgoing, damageRatio(candidate, opponent, move, context.field));
+    outgoing = Math.max(outgoing, damageRatio(candidate, context.opponent, move, context.field));
   }
   // 被ダメージが小さいほど高評価。1発で沈む候補は大きく減点する。
   const survivability = incoming >= 0.9 ? -120 : -incoming * 100;
@@ -282,9 +300,7 @@ export class HeuristicBattleAgent implements BattleAgent {
     const bestDamageRatio = Math.max(
       ...context.self.moves.map((move) => damageRatio(context.self, context.opponent, move, context.field)),
     );
-    const incomingWorst = Math.max(
-      ...context.opponent.moves.map((move) => damageRatio(context.opponent, context.self, move)),
-    );
+    const incomingWorst = worstIncomingRatio(context, context.self);
     const noAnswer = bestDamageRatio < 0.25;
     const inDanger = hpRatio(context.self) < 0.4 || incomingWorst >= 0.8;
     if (this.allowVoluntarySwitch && noAnswer && inDanger && switches.length > 0) {
