@@ -264,7 +264,10 @@ export class HeuristicBattleAgent implements BattleAgent {
     const scored: ScoredAction[] = moves.map(({ index, move }) => {
       const ratio = damageRatio(context.self, context.opponent, move, context.field);
       const lethal = ratio >= hpRatio(context.opponent) ? 1000 : 0;
-      const damageScore = (ratio * 400 + lethal) * selfDropPenalty(move);
+      // ふいうち等「相手の行動を条件にする技」は、相手が変化技を击つと空振りする。
+      // 相手の選択を予測しない方策では当てにできないので割り引く（実測: グソクムシャ構築の改善）。
+      const conditionalPenalty = move.category !== 'status' && move.failsUnlessTargetAttacks ? 0.35 : 1;
+      const damageScore = (ratio * 400 + lethal) * selfDropPenalty(move) * conditionalPenalty;
       const utility = move.category === 'status' ? statusMoveScore(move, context) : 0;
       const pivotBonus = move.pivot ? 10 : 0;
       return {
