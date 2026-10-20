@@ -16,6 +16,13 @@ import type {
   WeatherType,
 } from './types.js';
 
+// 波動技（メガランチャーの対象）。カタログの表記（日本語）と英語IDの両方を受ける。
+// 名前から既定値を決めるのは、構築カタログの全定義にフラグを書き足さなくて済むようにするため。
+const PULSE_MOVE_NAMES = new Set([
+  'はどうだん', 'あくのはどう', 'みずのはどう', 'りゅうのはどう', 'だいちのはどう', 'こんげんのはどう',
+  'aura-sphere', 'dark-pulse', 'water-pulse', 'dragon-pulse', 'terrain-pulse', 'origin-pulse',
+]);
+
 // カテゴリを省略した技はダメージ技（物理）として扱う。
 // 変化技は power の概念を持たないため、必ず category: 'status' の明示を要求する。
 const DEFAULT_MOVE_CATEGORY = 'physical' as const;
@@ -106,6 +113,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   alwaysCrit: boolean;
   failsUnlessTargetAttacks: boolean;
   terrainPulse: boolean;
+  pulse: boolean;
 
   constructor(data: DamageMoveInput) {
     this.name = data.name;
@@ -153,6 +161,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.alwaysCrit = data.alwaysCrit ?? false;
     this.failsUnlessTargetAttacks = data.failsUnlessTargetAttacks ?? false;
     this.terrainPulse = data.terrainPulse ?? false;
+    this.pulse = data.pulse ?? PULSE_MOVE_NAMES.has(data.name);
   }
 }
 

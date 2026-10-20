@@ -956,6 +956,11 @@ export class BattleEngine {
       power *= 2;
     }
 
+    // メガランチャー: 波動技の威力1.5倍（本編仕様）。
+    if (move.pulse === true && attacker.ability === 'mega-launcher') {
+      power = Math.floor(power * 1.5);
+    }
+
     // スカイスキン（aerilate）: ノーマル技がひこう技になる（威力1.2倍）
     // フェアリースキン（pixilate）: ノーマル技がフェアリー技になる（威力1.2倍）
     if (effectiveType === 'normal') {
