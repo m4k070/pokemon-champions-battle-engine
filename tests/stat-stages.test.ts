@@ -200,3 +200,52 @@ describe('ボディプレス（こうげきの代わりにぼうぎょで計算�
     expect(burnedDamage).toBeLessThan(healthyDamage);
   });
 });
+
+describe('からをやぶる（自分の能力を複数段階まとめて変える）', () => {
+  // 本編仕様: こうげき・とくこう・すばやさ +2、ぼうぎょ・とくぼう -1。
+  const shellSmash = () => createMove({
+    name: 'からをやぶる', type: 'normal', category: 'status',
+    selfStatChange: [
+      { stat: 'DEF', delta: -1 },
+      { stat: 'SPDEF', delta: -1 },
+      { stat: 'ATK', delta: 2 },
+      { stat: 'SPATK', delta: 2 },
+      { stat: 'SPEED', delta: 2 },
+    ],
+  });
+
+  test('使用した側だけが A+2/C+2/S+2・B-1/D-1 になる', () => {
+    // Arrange
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const user = makePokemon({ name: 'User' });
+    const target = makePokemon({ name: 'Target' });
+    engine.setActivePokemon(0, user);
+    engine.setActivePokemon(1, target);
+
+    // Act
+    const result = engine.useMove(user, target, shellSmash());
+
+    // Assert
+    expect(result.outcome).toBe('effect-applied');
+    expect(user.statStages).toMatchObject({ ATK: 2, SPATK: 2, SPEED: 2, DEF: -1, SPDEF: -1 });
+    // 相手には何も起きない。
+    expect(target.statStages).toMatchObject({ ATK: 0, SPATK: 0, SPEED: 0, DEF: 0, SPDEF: 0 });
+  });
+
+  test('すでに上限（+6）の能力はそれ以上上がらない', () => {
+    // Arrange
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    const user = makePokemon({ name: 'User' });
+    const target = makePokemon({ name: 'Target' });
+    engine.setActivePokemon(0, user);
+    engine.setActivePokemon(1, target);
+    user.modifyStatStage('ATK', 6);
+
+    // Act
+    engine.useMove(user, target, shellSmash());
+
+    // Assert
+    expect(user.statStages.ATK).toBe(6);
+    expect(user.statStages.SPEED).toBe(2);
+  });
+});

@@ -105,6 +105,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   doublesIfTargetDamaged: boolean;
   alwaysCrit: boolean;
   failsUnlessTargetAttacks: boolean;
+  terrainPulse: boolean;
 
   constructor(data: DamageMoveInput) {
     this.name = data.name;
@@ -151,6 +152,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.doublesIfTargetDamaged = data.doublesIfTargetDamaged ?? false;
     this.alwaysCrit = data.alwaysCrit ?? false;
     this.failsUnlessTargetAttacks = data.failsUnlessTargetAttacks ?? false;
+    this.terrainPulse = data.terrainPulse ?? false;
   }
 }
 

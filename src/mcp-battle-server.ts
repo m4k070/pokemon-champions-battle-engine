@@ -98,6 +98,7 @@ const MoveInputSchema = z.object({
   failsUnlessTargetAttacks: z.boolean().optional(),
   wishes: z.boolean().optional(),
   forcesSwitch: z.boolean().optional(),
+  terrainPulse: z.boolean().optional(),
 }).refine(
   (data) => {
     if (data.multiHitPowers && data.maxHits && data.multiHitPowers.length !== data.maxHits) {

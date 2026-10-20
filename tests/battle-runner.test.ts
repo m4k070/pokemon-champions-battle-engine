@@ -5,6 +5,9 @@ import { Pokemon } from '../src/pokemon.js';
 import { Move, createMove } from '../src/move.js';
 import type { ItemName } from '../src/item-names.js';
 import type { AgentDecision } from '../src/ai/battle-agent.js';
+import type { BattleAgent, BattleContext } from '../src/ai/battle-agent.js';
+import { SeededRandom } from '../src/rng.js';
+import { META_TEAMS, teamToPokemons } from '../src/data/meta-teams.js';
 
 // 素早いAttacker(単一技・確定OHKO)とのろまなDefenderで、
 // 「先攻が必ず勝つ」決定論的なシナリオを作る（Randomでも選択肢が1つしかないため揺れない）。
@@ -953,4 +956,83 @@ describe('技フェーズの進行状態（PendingTurn）', () => {
     expect(session.activeA).toBe(bench);
     expect(bench.currentHP).toBeLessThan(benchHpBeforeResume);
   });
+});
+
+describe('瀕死交代が1ターンで終わらないケース', () => {
+  // 交代先が設置技（ステルスロック）で瀕死になると、同じターン中に再度の交代が必要になる。
+  // 以前は playTurn が1側につき1回しか交代を解決せず、applyTurn のガードで例外になっていた。
+  class ScriptedSwitchAgent implements BattleAgent {
+    private pending: number[];
+
+    constructor(switches: number[]) {
+      this.pending = [...switches];
+    }
+
+    async selectLead(team: Pokemon[]): Promise<Pokemon> {
+      return team[0]!;
+    }
+
+    async selectAction(context: BattleContext): Promise<AgentDecision> {
+      if (context.mustSwitch) {
+        const pokemonIndex = this.pending.shift();
+        if (pokemonIndex === undefined) throw new Error('強制交代の指定が尽きた');
+        return { action: { type: 'switch', pokemonIndex } };
+      }
+      return { action: { type: 'move', moveIndex: 0, target: 0 } };
+    }
+  }
+
+  function makeMon(name: string): Pokemon {
+    return new Pokemon({
+      name,
+      types: ['normal'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 200, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 50 },
+      moves: [createMove({ name: 'tackle', type: 'normal', power: 40, accuracy: 100, pp: 20, category: 'physical' })],
+    });
+  }
+
+  test('交代先がステルスロックで瀕死になると、次の控えまで交代が進む', async () => {
+    // Arrange
+    const lead = makeMon('Lead');
+    const frail = makeMon('Frail');
+    const healthy = makeMon('Healthy');
+    const opponent = makeMon('Opponent');
+    const session = await BattleSession.start([lead, frail, healthy], [opponent]);
+    session.engine.field.stealthRock.playerA = true;
+    frail.currentHP = 1; // ステルスロック（最大HPの1/8）で瀕死になる
+    lead.currentHP = 0; // 前のターンに倒された想定
+    const agentA = new ScriptedSwitchAgent([1, 2]);
+
+    // Act / Assert: 例外を投げずにターンが完了し、2体目まで交代が進む
+    await expect(session.playTurn(agentA, new RandomBattleAgent(new SeededRandom(7)))).resolves.toBeUndefined();
+    expect(frail.isFainted).toBe(true);
+    expect(session.activeA).toBe(healthy);
+  });
+
+  test('以前に例外が出たクロス対戦ペアが最後まで走る', async () => {
+    // カタログ構築のクロス対戦（seed固定）。修正前はこの条件で例外が出ていた。
+    const cases: [string, string, number][] = [
+      ['メガグソクムシャ構築', 'カバマンダ構築', 101],
+      ['カバルカ構築', 'メガラグラージ構築', 202],
+      ['メガライチュウY構築', 'カバルカ構築', 303],
+    ];
+
+    for (const [nameA, nameB, seed] of cases) {
+      const entryA = META_TEAMS.find((entry) => entry.name === nameA)!;
+      const entryB = META_TEAMS.find((entry) => entry.name === nameB)!;
+
+      const result = await runBattle(
+        teamToPokemons(entryA),
+        teamToPokemons(entryB),
+        new RandomBattleAgent(new SeededRandom(seed * 31 + 1)),
+        new RandomBattleAgent(new SeededRandom(seed * 31 + 2)),
+        { rng: new SeededRandom(seed * 31 + 3) },
+      );
+
+      expect(`${nameA} vs ${nameB}: turns=${result.turns > 0}`).toContain('turns=true');
+      expect(result.log.length).toBeGreaterThan(0);
+    }
+  }, 60000);
 });

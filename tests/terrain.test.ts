@@ -236,3 +236,66 @@ describe('サイコフィールド: 先制技の無効化', () => {
     expect(result.outcome).toBe('damaged');
   });
 });
+
+describe('だいちのはどう（フィールドでタイプと威力が変わる）', () => {
+  // ノーマル特殊・威力50。フィールド上ではタイプが変わり威力2倍。
+  // 使用者が接地している場合のみ（ふゆう・ひこうは変化しない）。
+  const terrainPulse = () => createMove({
+    name: 'だいちのはどう', type: 'normal', power: 50, accuracy: 100, pp: 10,
+    category: 'special', terrainPulse: true,
+  });
+
+  // 計算に渡された技（タイプ・威力）を捕まえる。
+  function useAndCapture(
+    terrain: 'psychic-terrain' | 'electric-terrain' | 'grassy-terrain' | 'misty-terrain' | null,
+    attackerParams: { types?: TypeName[]; ability?: AbilityName } = {},
+  ): { type: string; power: number } {
+    const engine = new BattleEngine({ rng: fixedRandom(0.5) });
+    // ノーマル単の相手なら、どの変化後タイプでも等倍なので威力だけを比べられる。
+    const user = makePokemon({ name: 'User', types: attackerParams.types ?? ['water'], ability: attackerParams.ability });
+    const target = makePokemon({ name: 'Target', types: ['normal'] });
+    engine.setActivePokemon(0, user);
+    engine.setActivePokemon(1, target);
+    engine.field.terrain = terrain;
+    engine.field.terrainTurnsLeft = terrain === null ? 0 : 5;
+
+    let captured: { type: string; power: number } = { type: '', power: 0 };
+    engine.events.on('calculate-attack', (data) => {
+      const move = data.move as { type: string; power: number };
+      captured = { type: move.type, power: move.power };
+    });
+    engine.useMove(user, target, terrainPulse());
+    return captured;
+  }
+
+  test.each([
+    // サイコフィールドは接地したエスパー技をさらに1.3倍するため 50→100→130 になる。
+    // グラスフィールドのくさ技1.5倍は未実装なので、だいちのはどうの2倍だけが乗る。
+    ['psychic-terrain', 'psychic', 130],
+    ['electric-terrain', 'electric', 100],
+    ['grassy-terrain', 'grass', 100],
+    ['misty-terrain', 'fairy', 100],
+  ] as const)('%s では %s タイプ・威力が2倍になる', (terrain, expectedType, expectedPower) => {
+    const captured = useAndCapture(terrain);
+    expect(captured.type).toBe(expectedType);
+    expect(captured.power).toBe(expectedPower);
+  });
+
+  test('フィールドが無ければノーマル・威力50のまま', () => {
+    const captured = useAndCapture(null);
+    expect(captured.type).toBe('normal');
+    expect(captured.power).toBe(50);
+  });
+
+  test('接地していない（ひこうタイプ）とフィールド下でも変化しない', () => {
+    const captured = useAndCapture('psychic-terrain', { types: ['water', 'flying'] });
+    expect(captured.type).toBe('normal');
+    expect(captured.power).toBe(50);
+  });
+
+  test('接地していない（ふゆう）とフィールド下でも変化しない', () => {
+    const captured = useAndCapture('electric-terrain', { ability: 'levitate' });
+    expect(captured.type).toBe('normal');
+    expect(captured.power).toBe(50);
+  });
+});

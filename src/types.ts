@@ -127,6 +127,8 @@ export interface DamageOnlyEffects {
   alwaysCrit?: boolean;
   // ふいうち: 相手がそのターン攻撃技を選んでいなければ失敗する（本編仕様）。
   failsUnlessTargetAttacks?: boolean;
+  // だいちのはどう: フィールド下で使用者が接地していればタイプと威力が変わる（本編仕様）。
+  terrainPulse?: boolean;
 }
 
 // --- discriminated union 型（判別子は category） ---
