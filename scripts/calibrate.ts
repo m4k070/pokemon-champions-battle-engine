@@ -14,6 +14,7 @@
 import { runBattle } from '../src/battle-runner.js';
 import { RandomBattleAgent } from '../src/ai/battle-agent.js';
 import { HeuristicBattleAgent } from '../src/ai/heuristic-battle-agent.js';
+import { selectTeam, selectTeamWithPlan } from '../src/ai/team-selection.js';
 import { SeededRandom } from '../src/rng.js';
 import { META_TEAMS, teamToPokemons } from '../src/data/meta-teams.js';
 import { writeFileSync } from 'node:fs';
@@ -53,6 +54,14 @@ async function main(): Promise<void> {
   const maxTurnsArg = process.argv.find((arg) => arg.startsWith('--max-turns='));
   const maxTurns = maxTurnsArg ? Number(maxTurnsArg.split('=')[1]) : undefined;
   const noSwitch = process.argv.includes('--no-switch');
+  // --selection=rule: 6体から3体をルールで選出してから対戦する（シングル3選出の再現）。
+  const useSelection = process.argv.includes('--selection=rule');
+  const usePlan = process.argv.includes('--selection=plan');
+  const prepare = (entry: Parameters<typeof teamToPokemons>[0]) => {
+    const full = teamToPokemons(entry);
+    if (usePlan) return selectTeamWithPlan(entry, full).members;
+    return useSelection ? selectTeam(full).members : full;
+  };
   const makeAgent = (seed: number) => agentKind === 'heuristic'
     ? new HeuristicBattleAgent(new SeededRandom(seed), { allowVoluntarySwitch: !noSwitch })
     : new RandomBattleAgent(new SeededRandom(seed));
@@ -65,6 +74,13 @@ async function main(): Promise<void> {
 
   const tierStats = new Map<string, { games: number; wins: number }>();
   const games: { a: string; b: string; seed: number; winner: 0 | 1 | null; error?: string }[] = [];
+  if (process.argv.includes('--show-selection')) {
+    for (const entry of META_TEAMS) {
+      const full = teamToPokemons(entry);
+      const picked = usePlan ? selectTeamWithPlan(entry, full) : selectTeam(full);
+      console.log(`${entry.name}: ${picked.members.map((pokemon) => pokemon.name).join(' / ')}`);
+    }
+  }
   let errors = 0;
   let totalGames = 0;
 
@@ -77,14 +93,22 @@ async function main(): Promise<void> {
         const a = stats.get(teamA.name)!;
         const b = stats.get(teamB.name)!;
         try {
+          const selectedA = prepare(teamA.entry);
+          const selectedB = prepare(teamB.entry);
           const result = await runBattle(
-            teamToPokemons(teamA.entry),
-            teamToPokemons(teamB.entry),
+            selectedA,
+            selectedB,
             makeAgent(seed * 31 + 1),
             makeAgent(seed * 31 + 2),
             // エンジン側（命中・急所・ダメージ揺れ・同速）も固定する。
             // 指定しないと SYSTEM_RANDOM になり、同じseedでも結果が毎回変わる。
-            { ...(maxTurns !== undefined ? { maxTurns } : {}), ...(engineSeeded ? { rng: new SeededRandom(seed * 31 + 3) } : {}) },
+            {
+              ...(maxTurns !== undefined ? { maxTurns } : {}),
+              ...(engineSeeded ? { rng: new SeededRandom(seed * 31 + 3) } : {}),
+              // 選出順の先頭を初手にする（エージェントの selectLead より優先）。
+              leadA: selectedA[0],
+              leadB: selectedB[0],
+            },
           );
           a.games++;
           b.games++;
