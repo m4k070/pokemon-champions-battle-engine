@@ -10,6 +10,7 @@
 
 import { runBattle } from '../src/battle-runner.js';
 import { RandomBattleAgent } from '../src/ai/battle-agent.js';
+import { HeuristicBattleAgent } from '../src/ai/heuristic-battle-agent.js';
 import { SeededRandom } from '../src/rng.js';
 import { META_TEAMS, teamToPokemons } from '../src/data/meta-teams.js';
 import { writeFileSync } from 'node:fs';
@@ -43,6 +44,14 @@ interface TeamStat {
 async function main(): Promise<void> {
   // エンジン乱数も固定するモード（前後比較の主測定）。既定は指示書どおり行動だけを固定。
   const engineSeeded = process.argv.includes('--engine-seed');
+  // --agent=heuristic: ルールベース方策で回す（行動の価値を測るため）。
+  const agentKind = (process.argv.find((arg) => arg.startsWith('--agent=')) ?? '--agent=random').split('=')[1];
+  // --max-turns=N: 引き分け（打ち切り）を減らしたいときに使う。
+  const maxTurnsArg = process.argv.find((arg) => arg.startsWith('--max-turns='));
+  const maxTurns = maxTurnsArg ? Number(maxTurnsArg.split('=')[1]) : undefined;
+  const makeAgent = (seed: number) => agentKind === 'heuristic'
+    ? new HeuristicBattleAgent(new SeededRandom(seed))
+    : new RandomBattleAgent(new SeededRandom(seed));
   const teams = META_TEAMS.filter((team) => team.name !== EXCLUDED).map((team) => ({
     name: team.name,
     entry: team,
@@ -67,11 +76,11 @@ async function main(): Promise<void> {
           const result = await runBattle(
             teamToPokemons(teamA.entry),
             teamToPokemons(teamB.entry),
-            new RandomBattleAgent(new SeededRandom(seed * 31 + 1)),
-            new RandomBattleAgent(new SeededRandom(seed * 31 + 2)),
+            makeAgent(seed * 31 + 1),
+            makeAgent(seed * 31 + 2),
             // エンジン側（命中・急所・ダメージ揺れ・同速）も固定する。
             // 指定しないと SYSTEM_RANDOM になり、同じseedでも結果が毎回変わる。
-            engineSeeded ? { rng: new SeededRandom(seed * 31 + 3) } : {},
+            { ...(maxTurns !== undefined ? { maxTurns } : {}), ...(engineSeeded ? { rng: new SeededRandom(seed * 31 + 3) } : {}) },
           );
           a.games++;
           b.games++;
