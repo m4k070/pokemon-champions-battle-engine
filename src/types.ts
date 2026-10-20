@@ -127,6 +127,8 @@ export interface DamageOnlyEffects {
   alwaysCrit?: boolean;
   // ふいうち: 相手がそのターン攻撃技を選んでいなければ失敗する（本編仕様）。
   failsUnlessTargetAttacks?: boolean;
+  // 波動技（はどうだん・あくのはどう・だいちのはどう等）: メガランチャーで威力1.5倍（本編仕様）。
+  pulse?: boolean;
   // だいちのはどう: フィールド下で使用者が接地していればタイプと威力が変わる（本編仕様）。
   terrainPulse?: boolean;
 }
