@@ -53,6 +53,7 @@ describe('ハイブリッド方策', () => {
   test('相談条件を満たすとLLMに聞き、同意なら機械判断をそのまま使う', async () => {
     const agent = new HybridBattleAgent(new SeededRandom(1), {
       apiKey: 'dummy',
+      hesitationMargin: -1, // 拮抗トリガーを切って単一技トリガーだけを見る
       ask: async () => '{"agree":true}',
     });
     const decision = await agent.selectAction(context(2));
@@ -131,6 +132,54 @@ describe('ハイブリッド方策', () => {
     const decision = await agent.selectAction(context(2));
     expect(agent.consultations[0]!.agreed).toBe(true);
     expect(decision.reasoning ?? '').not.toContain('上書き');
+  });
+
+  test('上位2候補が僅差なら「判断が拮抗」で相談する', async () => {
+    const agent = new HybridBattleAgent(new SeededRandom(1), {
+      apiKey: 'dummy',
+      ask: async () => '{"agree":true}',
+    });
+    // 同威力の2技 → スコア差がほぼ無い
+    const decision = await agent.selectAction(context(2));
+    expect(agent.consultations).toHaveLength(1);
+    expect(agent.consultations[0]!.reason).toBe('判断が拮抗');
+    expect(agent.consultations[0]!.margin).toBeLessThan(0.12);
+    expect(decision.action.type).toBe('move');
+  });
+
+  test('上位が離れていれば相談しない', async () => {
+    const strong = makePokemon('エース', ['たいあたり']);
+    strong.moves.push(createMove({ name: 'ずつき', type: 'normal', power: 140, accuracy: 100, pp: 20, category: 'physical' }));
+    strong.currentHP = Math.floor(strong.maxHP * 0.8);
+    const bench = makePokemon('受け', ['たいあたり']);
+    const opponent = makePokemon('相手', ['たいあたり']);
+    opponent.moves.push(createMove({ name: 'ずつき', type: 'normal', power: 60, accuracy: 100, pp: 20, category: 'physical' }));
+    const ctx: BattleContext = {
+      turn: 1,
+      self: strong,
+      selfTeam: [strong, bench],
+      opponent,
+      opponentTeam: [opponent],
+      canMegaEvolve: false,
+      mustSwitch: false,
+      field: {
+        weather: null, weatherTurnsLeft: 0, terrain: null, terrainTurnsLeft: 0,
+        trickRoom: false, trickRoomTurnsLeft: 0, stealthRock: { self: false, opponent: false },
+      },
+      recentLog: [],
+    };
+    const agent = new HybridBattleAgent(new SeededRandom(1), { apiKey: 'dummy', ask: async () => '{"agree":true}' });
+    await agent.selectAction(ctx);
+    expect(agent.consultations).toHaveLength(0);
+  });
+
+  test('LLMの自己申告の確信度を記録する', async () => {
+    const agent = new HybridBattleAgent(new SeededRandom(1), {
+      apiKey: 'dummy',
+      ask: async () => '{"action":{"type":"move","moveIndex":0},"confidence":0.35,"reason":"迷う"}',
+    });
+    await agent.selectAction(context(2));
+    expect(agent.consultations[0]!.confidence).toBeCloseTo(0.35, 5);
   });
 
   test('条件に当てはまらない序盤は相談しない', async () => {

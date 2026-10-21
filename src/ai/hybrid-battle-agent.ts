@@ -16,13 +16,24 @@ const SETUP_MOVES = new Set([
 ]);
 const STATUS_MOVES = new Set(['あくび', 'でんじは', 'おにび', 'どくどく', 'こわいかお', 'アンコール', 'ちょうはつ', 'ねむりごな']);
 
-export type ConsultReason = '単一技の読み' | '危険な被弾' | '積みの好機' | '状態技の押しどころ' | '終盤の詰め';
+export type ConsultReason =
+  | '常時'         // 毎手相談（アブレーション用）
+  | '判断が拮抗'   // 上位2候補のスコア差が小さい（ヒューリスティック自身が迷っている）
+  | '単一技の読み'
+  | '危険な被弾'
+  | '積みの好機'
+  | '状態技の押しどころ'
+  | '終盤の詰め';
 
 export interface ConsultationRecord {
   turn: number;
   reason: ConsultReason;
   agreed: boolean;
   ms: number;
+  // ヒューリスティック側の迷い度合い（上位2候補のスコア差 / 1位のスコア）。
+  margin?: number;
+  // LLMが自己申告した確信度（0-1）。返さなければ undefined。
+  confidence?: number;
   error?: string;
 }
 
@@ -34,6 +45,12 @@ export interface HybridOptions {
   timeoutMs?: number;
   // 機械判断を提示して同意を求めるか。既定 false（提示すると「同意」に寄るバイアスが出る）。
   revealProposal?: boolean;
+  // 「迷い」と判定するスコア差の閾値（1位に対する相対値）。既定 0.12。
+  hesitationMargin?: number;
+  // 使うトリガーを限定する（アブレーション用）。既定は全部。
+  triggers?: ConsultReason[];
+  // 毎手相談する（上限コストの基準を測るため）。
+  alwaysConsult?: boolean;
   // テスト用の差し替え口。プロンプトを受け取って生の応答文字列を返す。
   ask?: (prompt: string) => Promise<string>;
 }
@@ -48,9 +65,14 @@ export class HybridBattleAgent implements BattleAgent {
   private readonly cooldownTurns: number;
   private readonly timeoutMs: number;
   private readonly revealProposal: boolean;
+  private readonly hesitationMargin: number;
+  private readonly enabledTriggers: Set<ConsultReason>;
+  private readonly alwaysConsult: boolean;
   private readonly sessionId: string;
   private readonly ask: (prompt: string) => Promise<string>;
   readonly consultations: ConsultationRecord[] = [];
+  // 直近のLLM生応答（検証用。空応答＝同意と誤認していないか確認するため）。
+  readonly rawResponses: string[] = [];
   private lastConsultTurn = -99;
 
   constructor(rng: RandomSource = SYSTEM_RANDOM, options: HybridOptions) {
@@ -61,6 +83,11 @@ export class HybridBattleAgent implements BattleAgent {
     this.cooldownTurns = options.cooldownTurns ?? 2;
     this.timeoutMs = options.timeoutMs ?? 20_000;
     this.revealProposal = options.revealProposal ?? false;
+    this.hesitationMargin = options.hesitationMargin ?? 0.12;
+    this.enabledTriggers = new Set(options.triggers ?? [
+      '判断が拮抗', '単一技の読み', '危険な被弾', '積みの好機', '状態技の押しどころ', '終盤の詰め',
+    ]);
+    this.alwaysConsult = options.alwaysConsult ?? false;
     this.sessionId = `hybrid-${randomUUID()}`;
     this.ask = options.ask ?? ((prompt) => this.callApi(prompt));
   }
@@ -78,9 +105,17 @@ export class HybridBattleAgent implements BattleAgent {
     const started = Date.now();
     try {
       const raw = await this.ask(this.buildPrompt(context, base, reason));
+      this.rawResponses.push(raw);
       const proposed = parseReply(raw, context);
       const same = proposed === null || sameAction(proposed, base.action);
-      this.consultations.push({ turn: context.turn, reason, agreed: same, ms: Date.now() - started });
+      this.consultations.push({
+        turn: context.turn,
+        reason,
+        agreed: same,
+        ms: Date.now() - started,
+        margin: this.margin() ?? undefined,
+        confidence: parseConfidence(raw),
+      });
       if (same) return base;
       return { action: proposed, reasoning: `[hybrid:${reason}] LLMが上書き` };
     } catch (error) {
@@ -89,6 +124,7 @@ export class HybridBattleAgent implements BattleAgent {
         reason,
         agreed: true,
         ms: Date.now() - started,
+        margin: this.margin() ?? undefined,
         error: String(error).slice(0, 120),
       });
       return base;
@@ -98,41 +134,60 @@ export class HybridBattleAgent implements BattleAgent {
   // 相談する局面かどうか。予算とクールダウンで上限をかける。
   private shouldConsult(context: BattleContext): ConsultReason | null {
     if (this.consultations.length >= this.maxConsultations) return null;
+    if (this.alwaysConsult) return '常時';
     if (context.turn - this.lastConsultTurn < this.cooldownTurns) return null;
 
     const legal = getLegalActions(context);
     const hasSwitch = legal.switches.length > 0;
     const hpRatio = context.self.currentHP / context.self.maxHP;
 
+    // ヒューリスティック自身が迷っている局面（上位2候補が僅差）は、判断の質が問われる。
+    const margin = this.margin();
+    if (margin !== null && margin < this.hesitationMargin && context.turn >= 2) return this.enabled('判断が拮抗');
+
     // 相手の見えている技が1つだけで、こちらの相性が極端（無効・半減 or 抜群）→ 交代読みが要る。
     if (context.opponent.moves.length === 1 && hasSwitch && context.turn >= 2) {
       const revealed = context.opponent.moves[0]!;
       const effectiveness = typeMultiplier(revealed.type, context.self.types);
-      if (effectiveness === 0 || effectiveness >= 2) return '単一技の読み';
+      if (effectiveness === 0 || effectiveness >= 2) return this.enabled('単一技の読み');
     }
 
     // 相手の最大打点がHPの45%以上 → 居座るか逃げるか。
-    if (hasSwitch && context.turn >= 2 && hpRatio < 0.9 && this.worstIncoming(context) >= 0.45) return '危険な被弾';
+    if (hasSwitch && context.turn >= 2 && hpRatio < 0.9 && this.worstIncoming(context) >= 0.45) return this.enabled('危険な被弾');
 
     // 積み技を押すタイミングは結果を分ける。
     if (legal.moves.some(({ move }) => SETUP_MOVES.has(move.name))) {
       const opponentHp = context.opponent.currentHP / context.opponent.maxHP;
-      if (hpRatio >= 0.6 && opponentHp >= 0.6 && context.turn >= 2) return '積みの好機';
+      if (hpRatio >= 0.6 && opponentHp >= 0.6 && context.turn >= 2) return this.enabled('積みの好機');
     }
     if (
       legal.moves.some(({ move }) => STATUS_MOVES.has(move.name)) &&
       context.opponent.status === null &&
       context.turn >= 4
     ) {
-      return '状態技の押しどころ';
+      return this.enabled('状態技の押しどころ');
     }
 
     // 終盤（どちらかの残り駒が2以下）。
     const selfLeft = context.selfTeam.filter((pokemon) => !pokemon.isFainted).length;
     const opponentLeft = context.opponentTeam.filter((pokemon) => !pokemon.isFainted).length;
-    if (context.turn >= 6 && (selfLeft <= 2 || opponentLeft <= 2)) return '終盤の詰め';
+    if (context.turn >= 6 && (selfLeft <= 2 || opponentLeft <= 2)) return this.enabled('終盤の詰め');
 
     return null;
+  }
+
+  // トリガーが有効なら理由を返し、無効なら null。
+  private enabled(reason: ConsultReason): ConsultReason | null {
+    return this.enabledTriggers.has(reason) ? reason : null;
+  }
+
+  // 上位2候補のスコア差を1位に対する相対値で返す。候補が1つ以下なら null。
+  private margin(): number | null {
+    const scores = this.inner.lastEvaluation.map((entry) => entry.score).sort((a, b) => b - a);
+    if (scores.length < 2) return null;
+    const top = scores[0]!;
+    const scale = Math.abs(top) > 1e-6 ? Math.abs(top) : 1;
+    return (top - scores[1]!) / scale;
   }
 
   // 相手の最大打点をHP割合でざっくり見積もる（タイプ相性・一致・威力から。乱数と急所は無視）。
@@ -177,8 +232,8 @@ export class HybridBattleAgent implements BattleAgent {
       lines.push('{"action":{"type":"switch","pokemonIndex":N},"reason":"20字以内"}。JSONだけを返す。');
     } else {
       lines.push(`この局面で最善の行動を1つ選べ（着眼点: ${reason}）。`);
-      lines.push('{"action":{"type":"move","moveIndex":N},"reason":"20字以内"} か');
-      lines.push('{"action":{"type":"switch","pokemonIndex":N},"reason":"20字以内"}。JSONだけを返す。');
+      lines.push('{"action":{"type":"move","moveIndex":N},"confidence":0.0-1.0,"reason":"20字以内"} か');
+      lines.push('{"action":{"type":"switch","pokemonIndex":N},"confidence":0.0-1.0,"reason":"20字以内"}。JSONだけを返す。');
     }
     return lines.join('\n');
   }
@@ -195,15 +250,18 @@ export class HybridBattleAgent implements BattleAgent {
       signal: AbortSignal.timeout(this.timeoutMs),
       body: JSON.stringify({
         model: this.model,
-        max_tokens: 300,
-        // 思考にトークンを食わせない。付けると content が空で返る。
-        reasoning_effort: 'minimal',
+        max_tokens: 400,
+        // 思考トークンを止める。'minimal' でも思考が上限まで伸びて content が空で返るため 'none' を使う。
+        reasoning_effort: 'none',
         messages: [{ role: 'user', content: prompt }],
       }),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
-    return body.choices?.[0]?.message?.content ?? '';
+    const content = body.choices?.[0]?.message?.content ?? '';
+    // 空応答は「同意」ではなく失敗として扱う（同意と誤認すると上書き率を過小評価する）。
+    if (content.trim() === '') throw new Error('空応答（content が空）');
+    return content;
   }
 
   // 予算・クールダウンを無視して必ず1回相談する（テスト用）。
@@ -212,6 +270,14 @@ export class HybridBattleAgent implements BattleAgent {
     const override = parseReply(raw, context);
     return override === null ? base : { action: override, reasoning: '[hybrid:forced]' };
   }
+}
+
+// 自己申告の確信度（0-1）。無ければ undefined。
+export function parseConfidence(raw: string): number | undefined {
+  const match = /"confidence"\s*:\s*([0-9.]+)/.exec(raw);
+  if (!match) return undefined;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : undefined;
 }
 
 function sameAction(a: AgentAction, b: AgentAction): boolean {

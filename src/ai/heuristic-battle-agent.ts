@@ -247,6 +247,9 @@ export class HeuristicBattleAgent implements BattleAgent {
   private readonly leadWithMega: boolean;
   private readonly leadWithSetter: boolean;
 
+  // 直近の selectAction で各候補に付けたスコア（ハイブリッド方策の「迷い検出」用）。
+  lastEvaluation: { label: string; score: number; kind: 'move' | 'switch' }[] = [];
+
   constructor(private readonly rng: RandomSource = SYSTEM_RANDOM, options: HeuristicOptions = {}) {
     this.allowVoluntarySwitch = options.allowVoluntarySwitch ?? true;
     this.leadWithMega = options.leadWithMega ?? true;
@@ -276,6 +279,11 @@ export class HeuristicBattleAgent implements BattleAgent {
     if (moves.length === 0) {
       if (switches.length === 0) return { action: { type: 'forfeit' } };
       const ranked = this.rankSwitches(context, switches);
+      this.lastEvaluation = ranked.map(({ pokemon, index }) => ({
+        label: `交代:${pokemon.name}`,
+        score: matchupScore(pokemon, context),
+        kind: 'switch' as const,
+      }));
       return { action: { type: 'switch', pokemonIndex: ranked[0]!.index } };
     }
 
@@ -295,6 +303,8 @@ export class HeuristicBattleAgent implements BattleAgent {
       };
     });
 
+    this.lastEvaluation = scored.map(({ label, score }) => ({ label, score, kind: 'move' as const }));
+
     // 引っ込める判断: 決定打が無く、体力が少ない／相手の決定打を耐えられない場合のみ。
     const best = this.pickBest(scored);
     const bestDamageRatio = Math.max(
@@ -306,6 +316,10 @@ export class HeuristicBattleAgent implements BattleAgent {
     if (this.allowVoluntarySwitch && noAnswer && inDanger && switches.length > 0) {
       const candidate = this.rankSwitches(context, switches)[0]!;
       if (matchupScore(candidate.pokemon, context) > -60) {
+        this.lastEvaluation = [
+          { label: `交代:${candidate.pokemon.name}`, score: matchupScore(candidate.pokemon, context), kind: 'switch' as const },
+          ...this.lastEvaluation,
+        ];
         return { action: { type: 'switch', pokemonIndex: candidate.index } };
       }
     }
