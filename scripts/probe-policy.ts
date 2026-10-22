@@ -14,8 +14,10 @@ const kind = process.argv[3] ?? 'heuristic';
 const seed = Number(process.argv[4] ?? '101');
 const maxTurns = Number(process.argv[5] ?? '100');
 
+const passTo = process.argv[6];
+const targetBoost = process.argv[7] ? Number(process.argv[7]) : undefined;
 const makeAgent = (s: number) => kind === 'scripted'
-  ? new ScriptedComboAgent(new SeededRandom(s))
+  ? new ScriptedComboAgent(new SeededRandom(s), { ...(passTo ? { passTo } : {}), ...(targetBoost !== undefined ? { targetBoost } : {}) })
   : kind === 'random'
   ? new RandomBattleAgent(new SeededRandom(s))
   : kind === 'hybrid'
@@ -31,9 +33,12 @@ async function main() {
     const opp = selectTeamWithPlan(other, teamToPokemons(other)).members;
     const agentA = makeAgent(seed * 31 + 1);
     const agentB = makeAgent(seed * 31 + 2);
+    // 先発は方策に決めさせる（台本は「積み役を先頭」、ヒューリスティックは始動役）。
+    const leadA = await agentA.selectLead(team);
+    const leadB = await agentB.selectLead(opp);
     const result = await runBattle(team, opp, agentA, agentB, {
       maxTurns, rng: new SeededRandom(seed * 31 + 3), information: 'partial',
-      leadA: team[0], leadB: opp[0],
+      leadA, leadB,
     });
     games++;
     if (result.winner === 0) wins++; else if (result.winner === null) draws++;

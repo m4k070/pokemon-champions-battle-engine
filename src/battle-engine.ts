@@ -977,6 +977,15 @@ export class BattleEngine {
       power = Math.floor(power * 1.5);
     }
 
+    // アシストパワー: 自分の能力上昇1段階につき威力+20（本編仕様、上限860）。
+    if (move.storedPower === true) {
+      const stages = Object.entries(attacker.statStages as Record<string, number>)
+        .filter(([key]) => key !== 'ACCURACY' && key !== 'EVASION')
+        .reduce((sum, [, value]) => sum + Math.max(0, value), 0);
+      power = Math.min(860, 20 + 20 * stages);
+      this.log.push(`アシストパワーの威力が${power}になった`);
+    }
+
     // スカイスキン（aerilate）: ノーマル技がひこう技になる（威力1.2倍）
     // フェアリースキン（pixilate）: ノーマル技がフェアリー技になる（威力1.2倍）
     if (effectiveType === 'normal') {

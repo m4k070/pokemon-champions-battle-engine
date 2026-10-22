@@ -885,7 +885,7 @@ export const GAMEWITH_TEAMS: MetaTeamEntry[] = [
         nature: 'ずぶとい',
         statPoints: { HP: 32, DEF: 31, SPEED: 3 },
         moves: [
-          createMove({ name: 'アシストパワー', type: 'psychic', power: 20, accuracy: 100, pp: 10, category: 'special' }),
+          createMove({ name: 'アシストパワー', type: 'psychic', power: 20, accuracy: 100, pp: 10, category: 'special', storedPower: true }),
           createMove({ name: 'かえんほうしゃ', type: 'fire', power: 90, accuracy: 100, pp: 15, category: 'special', secondaryEffect: { status: 'burn', chance: 10 } }),
           createMove({ name: 'めいそう', type: 'psychic', power: 0, accuracy: 100, pp: 20, category: 'status', selfStatChange: [{ stat: 'SPATK', delta: 1 }, { stat: 'SPDEF', delta: 1 }] }),
           createMove({ name: 'つきのひかり', type: 'fairy', power: 0, accuracy: 100, pp: 5, category: 'status', selfHealPercent: 0.5, weatherHeal: true }),
