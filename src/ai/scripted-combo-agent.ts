@@ -27,6 +27,10 @@ export class ScriptedComboAgent implements BattleAgent {
   private readonly targetBoost: number;
   private readonly passTo: string | undefined;
 
+  // 台本の実行回数（検証用）。
+  batonCount = 0;
+  setupCount = 0;
+
   constructor(private readonly rng: RandomSource = SYSTEM_RANDOM, options: ComboOptions = {}) {
     this.setupMoves = options.setupMoves ?? ['めいそう', 'ちょうのまい', 'わるだくみ', 'つるぎのまい', 'りゅうのまい', 'てっぺき', 'からをやぶる'];
     this.passMove = options.passMove ?? 'バトンタッチ';
@@ -61,15 +65,25 @@ export class ScriptedComboAgent implements BattleAgent {
     const passIndex = legal.moves.find(({ move }) => move.name === this.passMove)?.index;
     const setupIndex = legal.moves.find(({ move }) => this.setupMoves.includes(move.name))?.index;
 
+    // 瀕死寸前（タスキで1残し等）なら、積みが足りなくても即バトンタッチ。
+    // 天候・設置技の削りで落ちる前に引き継ぐのが実戦の形。
+    const hpRatio = self.currentHP / self.maxHP;
+    if (passIndex !== undefined && hpRatio <= 0.25 && this.boostSum(self) > 0) {
+      this.batonCount++;
+      return { action: { type: 'move', moveIndex: passIndex, target: 0 }, reasoning: 'コンボ: 瀕死前に即バトン' };
+    }
+
     // 積み切ったらバトンタッチ（引き継ぎ先が残っているときだけ）。
     const passTargetAlive = this.passTo === undefined
       || context.selfTeam.some((pokemon) => !pokemon.isFainted && pokemon !== self && (pokemon.name === this.passTo));
     if (passIndex !== undefined && boost >= this.targetBoost && passTargetAlive) {
+      this.batonCount++;
       return { action: { type: 'move', moveIndex: passIndex, target: 0 }, reasoning: `コンボ: ${boost}段でバトン` };
     }
     // まだ足りなければ積む。
     if (setupIndex !== undefined && boost < this.targetBoost) {
-      return { action: { type: 'move', moveIndex: setupIndex, target: 0 }, reasoning: `コンボ: 積み(${boost}段)` };
+      this.setupCount++;
+      return { action: { type: 'move', moveIndex: setupIndex, target: 0, megaEvolve: legal.canMegaEvolve || undefined }, reasoning: `コンボ: 積み(${boost}段)` };
     }
     // 積み役でなければ最大打点。
     let best = legal.moves[0]!;
@@ -87,7 +101,8 @@ export class ScriptedComboAgent implements BattleAgent {
       if (!pick) return { action: { type: 'forfeit' } };
       return { action: { type: 'switch', pokemonIndex: pick.index } };
     }
-    return { action: { type: 'move', moveIndex: best.index, target: 0 }, reasoning: 'コンボ: エースで攻撃' };
+    // メガシンカは技に添えて宣言する（宣言しないとメガ枠が素のまま戦ってしまう）。
+    return { action: { type: 'move', moveIndex: best.index, target: 0, megaEvolve: legal.canMegaEvolve || undefined }, reasoning: 'コンボ: エースで攻撃' };
   }
 
   // 能力ランクの合計（命中・回避は除く）。

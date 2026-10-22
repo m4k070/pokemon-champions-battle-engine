@@ -26,10 +26,11 @@ const makeAgent = (s: number) => kind === 'scripted'
 
 async function main() {
   const entry = META_TEAMS.find((t) => t.name === target)!;
-  const team = selectTeamWithPlan(entry, teamToPokemons(entry)).members;
   let wins = 0, games = 0, draws = 0, consults = 0, overrides = 0;
   for (const other of META_TEAMS) {
     if (other.name === target || other.name === 'メガジュペッタ構築') continue;
+    // 毎試合チームを作り直す（runBattle は渡した個体を直接傷つけるため、使い回すとHPが持ち越される）。
+    const team = selectTeamWithPlan(entry, teamToPokemons(entry)).members;
     const opp = selectTeamWithPlan(other, teamToPokemons(other)).members;
     const agentA = makeAgent(seed * 31 + 1);
     const agentB = makeAgent(seed * 31 + 2);
