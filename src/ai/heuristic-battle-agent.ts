@@ -152,6 +152,58 @@ function boostTotal(pokemon: Pokemon): number {
 }
 
 // 変化技の価値。状況依存なので、条件を満たさないときは0にする（撃ち得でない技を撃たない）。
+
+// 能力ランクの上昇合計（ATK/DEF/SPATK/SPDEF/SPEED）。
+function positiveStageSum(pokemon: Pokemon): number {
+  return (['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED'] as const)
+    .reduce((sum, key) => sum + Math.max(0, pokemon.statStages[key]), 0);
+}
+
+// その個体が相手に通せる最大のダメージ比率。
+function bestDamageAgainst(attacker: Pokemon, defender: Pokemon, field?: BattleContext['field']): number {
+  let best = 0;
+  for (const move of attacker.moves) {
+    if (move.category === 'status' || move.pp <= 0) continue;
+    best = Math.max(best, damageRatio(attacker, defender, move, field));
+  }
+  return best;
+}
+
+// バトンタッチで能力変化を渡したとき、受け手の打点がどれだけ伸びるか（最大の伸び）。
+// extra は「これから積む分」を渡す前評価に含めるための差分。
+function passGain(
+  context: BattleContext,
+  extra: { stat: StatStageKey; delta: number }[] = [],
+): number {
+  const self = context.self;
+  let best = 0;
+  for (const candidate of context.selfTeam) {
+    if (candidate.isFainted || candidate === self) continue;
+    const before = bestDamageAgainst(candidate, context.opponent, context.field);
+    const original = { ...candidate.statStages };
+    const boosted = { ...original };
+    for (const key of Object.keys(boosted) as StatStageKey[]) {
+      boosted[key] = Math.max(-6, Math.min(6, boosted[key] + self.statStages[key]));
+    }
+    for (const change of extra) {
+      boosted[change.stat] = Math.max(-6, Math.min(6, boosted[change.stat] + change.delta));
+    }
+    Object.assign(candidate.statStages, boosted);
+    const after = bestDamageAgainst(candidate, context.opponent, context.field);
+    Object.assign(candidate.statStages, original);
+    best = Math.max(best, after - before);
+  }
+  return best;
+}
+
+// バトンタッチで渡した能力変化を、受け手が何ターン活かせるか見込む係数。
+const SWEEP_HORIZON = 3;
+
+// 積み技か（自分の能力を上げる変化技）。
+function isSetupMove(move: MoveData): boolean {
+  return (move.selfStatChange ?? []).some((change) => change.delta > 0);
+}
+
 function statusMoveScore(move: MoveData, context: BattleContext): number {
   const self = context.self;
   const opponent = context.opponent;
@@ -293,6 +345,12 @@ export class HeuristicBattleAgent implements BattleAgent {
       return { action: { type: 'switch', pokemonIndex: ranked[0]!.index } };
     }
 
+    // バトンタッチ（能力変化を引き継いで退場する技）の価値。
+    // 「積む→渡す」が噛み合う構築では、この2手を評価しないと永久に選ばれない。
+    const hasPassMove = moves.some(({ move }) => move.passStats);
+    const stagesHeld = positiveStageSum(context.self);
+    const passGainNow = hasPassMove ? passGain(context) : 0;
+
     const scored: ScoredAction[] = moves.map(({ index, move }) => {
       const ratio = damageRatio(context.self, context.opponent, move, context.field);
       const lethal = ratio >= hpRatio(context.opponent) ? 1000 : 0;
@@ -300,11 +358,24 @@ export class HeuristicBattleAgent implements BattleAgent {
       // 相手の選択を予測しない方策では当てにできないので割り引く（実測: グソクムシャ構築の改善）。
       const conditionalPenalty = move.category !== 'status' && move.failsUnlessTargetAttacks ? 0.35 : 1;
       const damageScore = (ratio * 400 + lethal) * selfDropPenalty(move) * conditionalPenalty;
-      const utility = move.category === 'status' ? statusMoveScore(move, context) : 0;
+      let utility = move.category === 'status' ? statusMoveScore(move, context) : 0;
+      if (hasPassMove) {
+        // 渡す技そのもの: 積んだ段数が多いほど、かつ瀕死に近いほど（＝今渡す価値が高い）加点。
+        if (move.passStats) {
+          // 渡した後の受け手は複数ターン戦うので、1発分ではなく数ターン分として評価する。
+          utility = stagesHeld > 0 ? passGainNow * 400 * SWEEP_HORIZON * (1 + (1 - hpRatio(context.self))) : 0;
+        } else if (move.category === 'status' && isSetupMove(move)) {
+          // 積み技: 「積んでから渡す」将来の伸びを先に見込む（渡す1ターンが残るので半減）。
+          const changes = (move.selfStatChange ?? []).filter((change) => change.delta > 0);
+          utility += passGain(context, changes) * 200 * SWEEP_HORIZON;
+        }
+      }
       const pivotBonus = move.pivot ? 10 : 0;
+      // 何も積んでいないバトンタッチは、交代するだけの空振り。pivotボーナスも与えない。
+      const emptyPass = move.passStats && stagesHeld === 0;
       return {
         action: { type: 'move', moveIndex: index, target: 0, megaEvolve: canMegaEvolve || undefined },
-        score: damageScore + utility + pivotBonus,
+        score: emptyPass ? 0 : damageScore + utility + pivotBonus,
         label: move.name,
       };
     });

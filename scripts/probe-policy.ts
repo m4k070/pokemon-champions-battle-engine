@@ -26,7 +26,7 @@ const makeAgent = (s: number) => kind === 'scripted'
 
 async function main() {
   const entry = META_TEAMS.find((t) => t.name === target)!;
-  let wins = 0, games = 0, draws = 0, consults = 0, overrides = 0;
+  let wins = 0, games = 0, draws = 0, consults = 0, overrides = 0, passUsed = 0;
   for (const other of META_TEAMS) {
     if (other.name === target || other.name === 'メガジュペッタ構築') continue;
     // 毎試合チームを作り直す（runBattle は渡した個体を直接傷つけるため、使い回すとHPが持ち越される）。
@@ -42,12 +42,13 @@ async function main() {
       leadA, leadB,
     });
     games++;
+    passUsed += String(result.log).split('\n').filter((line) => line.includes('バトンタッチ')).length;
     if (result.winner === 0) wins++; else if (result.winner === null) draws++;
     if (agentA instanceof HybridBattleAgent) {
       consults += agentA.consultations.length;
       overrides += agentA.consultations.filter((c) => !c.agreed).length;
     }
   }
-  console.log(`POLICY ${kind} team=${target} ${wins}勝/${games} 分${draws} (${((wins / games) * 100).toFixed(1)}%) 相談${consults} 上書き${overrides}`);
+  console.log(`POLICY ${kind} team=${target} ${wins}勝/${games} 分${draws} (${((wins / games) * 100).toFixed(1)}%) 相談${consults} 上書き${overrides} バトン${passUsed}`);
 }
 main();
