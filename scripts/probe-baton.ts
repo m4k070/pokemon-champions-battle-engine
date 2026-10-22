@@ -55,7 +55,7 @@ const makeAgent = (s: number) => kind === 'random'
     : new ScriptedComboAgent(new SeededRandom(s), { passTo, targetBoost, setupMoves: ['つるぎのまい'] });
 
 async function main() {
-  let wins = 0, draws = 0, games = 0, batons = 0, setups = 0;
+  let wins = 0, draws = 0, games = 0, batons = 0, setups = 0, passUsed = 0;
   for (const other of META_TEAMS) {
     if (other.name === 'メガジュペッタ構築') continue;
     // 毎試合チームを作り直す（同じオブジェクトを使い回すと、前の試合の瀕死状態が残る）。
@@ -71,10 +71,12 @@ async function main() {
     games++;
     if (agentA instanceof ScriptedComboAgent) { batons += agentA.batonCount; setups += agentA.setupCount; }
     if (result.winner === 0) wins++; else if (result.winner === null) draws++;
+    // バトンタッチが実際に選ばれた回数（ログベース）。
+    passUsed += String(result.log).split('\n').filter((line) => line.includes('バトンタッチ')).length;
     if (process.argv.includes('--debug')) {
       console.log(`  vs ${other.name}: winner=${result.winner} turns=${result.turns} baton=${agentA instanceof ScriptedComboAgent ? agentA.batonCount : '-'}`);
     }
   }
-  console.log(`BATON policy=${kind} passTo=${passTo} boost=${targetBoost} ${wins}勝/${games} 分${draws} (${((wins / games) * 100).toFixed(1)}%) baton=${batons} setup=${setups}`);
+  console.log(`BATON policy=${kind} passTo=${passTo} boost=${targetBoost} ${wins}勝/${games} 分${draws} (${((wins / games) * 100).toFixed(1)}%) baton=${batons} setup=${setups} passUsed=${passUsed}`);
 }
 main();
