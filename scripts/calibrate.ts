@@ -14,6 +14,7 @@
 import { runBattle } from '../src/battle-runner.js';
 import { RandomBattleAgent } from '../src/ai/battle-agent.js';
 import { HeuristicBattleAgent } from '../src/ai/heuristic-battle-agent.js';
+import { HybridBattleAgent } from '../src/ai/hybrid-battle-agent.js';
 import { selectTeam, selectTeamWithPlan } from '../src/ai/team-selection.js';
 import { SeededRandom } from '../src/rng.js';
 import { META_TEAMS, teamToPokemons } from '../src/data/meta-teams.js';
@@ -35,7 +36,10 @@ const TIERS: Record<string, 'SS' | 'S' | 'A'> = {
   'メガラグラージ構築': 'A',
 };
 
-const SEEDS = [101, 202, 303, 404, 505, 606];
+const ALL_SEEDS = [101, 202, 303, 404, 505, 606];
+// --seeds=N: 試合数を絞る（LLM方策は1試合が遅いため）。
+const seedArg = process.argv.find((arg) => arg.startsWith('--seeds='));
+const SEEDS = seedArg ? ALL_SEEDS.slice(0, Number(seedArg.split('=')[1])) : ALL_SEEDS;
 const EXCLUDED = 'メガジュペッタ構築';
 
 interface TeamStat {
@@ -64,9 +68,13 @@ async function main(): Promise<void> {
     if (usePlan) return selectTeamWithPlan(entry, full).members;
     return useSelection ? selectTeam(full).members : full;
   };
+  // --agent=hybrid: 拮抗した局面だけLLMに聞く（既定トリガーは「判断が拮抗」）。
+  const apiKey = process.env.OPENCODE_GO_API_KEY ?? process.env.OPENCODE_API_KEY ?? '';
   const makeAgent = (seed: number) => agentKind === 'heuristic'
     ? new HeuristicBattleAgent(new SeededRandom(seed), { allowVoluntarySwitch: !noSwitch })
-    : new RandomBattleAgent(new SeededRandom(seed));
+    : agentKind === 'hybrid'
+      ? new HybridBattleAgent(new SeededRandom(seed), { apiKey, maxConsultations: 12, cooldownTurns: 0 })
+      : new RandomBattleAgent(new SeededRandom(seed));
   const teams = META_TEAMS.filter((team) => team.name !== EXCLUDED).map((team) => ({
     name: team.name,
     entry: team,
@@ -85,6 +93,7 @@ async function main(): Promise<void> {
   }
   let errors = 0;
   let totalGames = 0;
+  const hybridStats = { consults: 0, overrides: 0, failures: 0, ms: 0 };
 
   for (let i = 0; i < teams.length; i++) {
     for (let j = i + 1; j < teams.length; j++) {
@@ -97,11 +106,13 @@ async function main(): Promise<void> {
         try {
           const selectedA = prepare(teamA.entry);
           const selectedB = prepare(teamB.entry);
+          const agentA = makeAgent(seed * 31 + 1);
+          const agentB = makeAgent(seed * 31 + 2);
           const result = await runBattle(
             selectedA,
             selectedB,
-            makeAgent(seed * 31 + 1),
-            makeAgent(seed * 31 + 2),
+            agentA,
+            agentB,
             // エンジン側（命中・急所・ダメージ揺れ・同速）も固定する。
             // 指定しないと SYSTEM_RANDOM になり、同じseedでも結果が毎回変わる。
             {
@@ -113,6 +124,14 @@ async function main(): Promise<void> {
               information,
             },
           );
+          if (agentKind === 'hybrid') {
+            for (const agent of [agentA, agentB] as HybridBattleAgent[]) {
+              hybridStats.consults += agent.consultations.length;
+              hybridStats.overrides += agent.consultations.filter((entry) => !entry.agreed).length;
+              hybridStats.failures += agent.consultations.filter((entry) => entry.error).length;
+              hybridStats.ms += agent.consultations.reduce((sum, entry) => sum + entry.ms, 0);
+            }
+          }
           a.games++;
           b.games++;
           games.push({ a: teamA.name, b: teamB.name, seed, winner: result.winner });
@@ -170,6 +189,10 @@ async function main(): Promise<void> {
     );
   }
   console.log('\nTier別（勝率は from 側から見た値）');
+  if (agentKind === 'hybrid') {
+    const perGame = hybridStats.consults / Math.max(1, totalGames);
+    console.log(`\nLLM相談: 合計${hybridStats.consults}回 (${perGame.toFixed(1)}/試合) 上書き${hybridStats.overrides} 失敗${hybridStats.failures} 平均${(hybridStats.ms / Math.max(1, hybridStats.consults) / 1000).toFixed(1)}秒`);
+  }
   for (const [key, value] of [...tierStats.entries()].sort()) {
     console.log(`${key}: ${value.wins}/${value.games} (${pct(value.wins, value.games)})`);
   }

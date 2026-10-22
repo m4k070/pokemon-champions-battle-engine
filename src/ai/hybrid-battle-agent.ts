@@ -84,9 +84,8 @@ export class HybridBattleAgent implements BattleAgent {
     this.timeoutMs = options.timeoutMs ?? 20_000;
     this.revealProposal = options.revealProposal ?? false;
     this.hesitationMargin = options.hesitationMargin ?? 0.12;
-    this.enabledTriggers = new Set(options.triggers ?? [
-      '判断が拮抗', '単一技の読み', '危険な被弾', '積みの好機', '状態技の押しどころ', '終盤の詰め',
-    ]);
+    // 既定は「拮抗」だけ。実測で、毎手相談と同等の上書き率を1/4のコストで拾えた唯一のトリガー。
+    this.enabledTriggers = new Set(options.triggers ?? ['判断が拮抗']);
     this.alwaysConsult = options.alwaysConsult ?? false;
     this.sessionId = `hybrid-${randomUUID()}`;
     this.ask = options.ask ?? ((prompt) => this.callApi(prompt));
@@ -131,49 +130,56 @@ export class HybridBattleAgent implements BattleAgent {
     }
   }
 
-  // 相談する局面かどうか。予算とクールダウンで上限をかける。
+  // 相談する局面かどうか。予算・クールダウン・有効なトリガーで絞る。
   private shouldConsult(context: BattleContext): ConsultReason | null {
     if (this.consultations.length >= this.maxConsultations) return null;
     if (this.alwaysConsult) return '常時';
     if (context.turn - this.lastConsultTurn < this.cooldownTurns) return null;
 
+    // 優先順に見て、最初に「当たったかつ有効な」トリガーを採用する。
+    for (const reason of this.matchedTriggers(context)) {
+      if (this.enabledTriggers.has(reason)) return reason;
+    }
+    return null;
+  }
+
+  // 局面に当てはまるトリガーを優先順に列挙する（有効/無効は見ない）。
+  private *matchedTriggers(context: BattleContext): Generator<ConsultReason> {
     const legal = getLegalActions(context);
     const hasSwitch = legal.switches.length > 0;
     const hpRatio = context.self.currentHP / context.self.maxHP;
 
     // ヒューリスティック自身が迷っている局面（上位2候補が僅差）は、判断の質が問われる。
     const margin = this.margin();
-    if (margin !== null && margin < this.hesitationMargin && context.turn >= 2) return this.enabled('判断が拮抗');
+    if (margin !== null && margin < this.hesitationMargin && context.turn >= 2) yield '判断が拮抗';
 
     // 相手の見えている技が1つだけで、こちらの相性が極端（無効・半減 or 抜群）→ 交代読みが要る。
     if (context.opponent.moves.length === 1 && hasSwitch && context.turn >= 2) {
       const revealed = context.opponent.moves[0]!;
       const effectiveness = typeMultiplier(revealed.type, context.self.types);
-      if (effectiveness === 0 || effectiveness >= 2) return this.enabled('単一技の読み');
+      if (effectiveness === 0 || effectiveness >= 2) yield '単一技の読み';
     }
 
     // 相手の最大打点がHPの45%以上 → 居座るか逃げるか。
-    if (hasSwitch && context.turn >= 2 && hpRatio < 0.9 && this.worstIncoming(context) >= 0.45) return this.enabled('危険な被弾');
+    if (hasSwitch && context.turn >= 2 && hpRatio < 0.9 && this.worstIncoming(context) >= 0.45) yield '危険な被弾';
 
     // 積み技を押すタイミングは結果を分ける。
     if (legal.moves.some(({ move }) => SETUP_MOVES.has(move.name))) {
       const opponentHp = context.opponent.currentHP / context.opponent.maxHP;
-      if (hpRatio >= 0.6 && opponentHp >= 0.6 && context.turn >= 2) return this.enabled('積みの好機');
+      if (hpRatio >= 0.6 && opponentHp >= 0.6 && context.turn >= 2) yield '積みの好機';
     }
     if (
       legal.moves.some(({ move }) => STATUS_MOVES.has(move.name)) &&
       context.opponent.status === null &&
       context.turn >= 4
     ) {
-      return this.enabled('状態技の押しどころ');
+      yield '状態技の押しどころ';
     }
 
     // 終盤（どちらかの残り駒が2以下）。
     const selfLeft = context.selfTeam.filter((pokemon) => !pokemon.isFainted).length;
     const opponentLeft = context.opponentTeam.filter((pokemon) => !pokemon.isFainted).length;
-    if (context.turn >= 6 && (selfLeft <= 2 || opponentLeft <= 2)) return this.enabled('終盤の詰め');
-
-    return null;
+    if (context.turn >= 6 && (selfLeft <= 2 || opponentLeft <= 2)) yield '終盤の詰め';
   }
 
   // トリガーが有効なら理由を返し、無効なら null。

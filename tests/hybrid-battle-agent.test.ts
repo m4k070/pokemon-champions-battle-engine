@@ -53,7 +53,7 @@ describe('ハイブリッド方策', () => {
   test('相談条件を満たすとLLMに聞き、同意なら機械判断をそのまま使う', async () => {
     const agent = new HybridBattleAgent(new SeededRandom(1), {
       apiKey: 'dummy',
-      hesitationMargin: -1, // 拮抗トリガーを切って単一技トリガーだけを見る
+      triggers: ['単一技の読み'], // 単一技トリガーだけを見る（既定は拮抗のみ）
       ask: async () => '{"agree":true}',
     });
     const decision = await agent.selectAction(context(2));
