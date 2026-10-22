@@ -132,6 +132,11 @@ async function main(): Promise<void> {
               hybridStats.ms += agent.consultations.reduce((sum, entry) => sum + entry.ms, 0);
             }
           }
+          // 進捗を1試合ごとに出す（LLM方策は1試合が遅く、無音だと止まったか判別できない）。
+          if (process.argv.includes('--progress')) {
+            const mark = result.winner === 0 ? 'A' : result.winner === 1 ? 'B' : '分';
+            console.log(`[${totalGames}] ${teamA.name} vs ${teamB.name} seed${seed} → ${mark} (${result.turns}T)`);
+          }
           a.games++;
           b.games++;
           games.push({ a: teamA.name, b: teamB.name, seed, winner: result.winner });
