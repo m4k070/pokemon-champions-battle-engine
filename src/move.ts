@@ -87,6 +87,8 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   maxHits?: number;
   multiHitPowers?: number[];
   pivot: boolean;
+  // バトンタッチ等: 交代時に能力変化を引き継ぐ。
+  passStats: boolean;
   crashDamage: boolean;
   contact: boolean;
   restoresShieldForm: boolean;
@@ -135,6 +137,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.maxHits = data.maxHits;
     this.multiHitPowers = data.multiHitPowers;
     this.pivot = data.pivot ?? false;
+    this.passStats = data.passStats ?? false;
     this.crashDamage = data.crashDamage ?? false;
     this.contact = data.contact ?? false;
     this.restoresShieldForm = data.restoresShieldForm ?? false;
@@ -194,6 +197,7 @@ export class StatusMove implements StatusMoveData {
   weatherHeal: boolean;
   weather: WeatherType | null;
   pivot: boolean;
+  passStats: boolean;
   restoresShieldForm: boolean;
   inflictsDrowsy: boolean;
   selfHealPercent: number | null;
@@ -222,6 +226,7 @@ export class StatusMove implements StatusMoveData {
     this.weatherHeal = data.weatherHeal ?? false;
     this.weather = data.weather ?? null;
     this.pivot = data.pivot ?? false;
+    this.passStats = data.passStats ?? false;
     this.restoresShieldForm = data.restoresShieldForm ?? false;
     this.inflictsDrowsy = data.inflictsDrowsy ?? false;
     this.selfHealPercent = data.selfHealPercent ?? null;

@@ -79,6 +79,8 @@ export interface CommonMoveEffects {
   selfHealPercent?: number | null;
   // アンコール: 相手が直前に使った技を3ターンの間使い続けさせる（交代で解除）。
   inflictsEncore?: boolean;
+  // バトンタッチ: 交代先に能力変化（能力ランク）を引き継ぐ。
+  passStats?: boolean;
   // ワイドフォース: サイコフィールド下で接地していれば威力1.5倍（本編仕様）。
   boostedByPsychicTerrain?: boolean;
   // くろいきり: 場に出ている全員の能力変化をリセットする（本編仕様）。

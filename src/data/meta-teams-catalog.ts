@@ -920,7 +920,7 @@ export const GAMEWITH_TEAMS: MetaTeamEntry[] = [
           createMove({ name: 'ルミナコリジョン', type: 'psychic', power: 80, accuracy: 100, pp: 10, category: 'special', targetStatChange: [{ stat: 'SPDEF', delta: -2, chance: 100 }] }),
           createMove({ name: 'めいそう', type: 'psychic', power: 0, accuracy: 100, pp: 20, category: 'status', selfStatChange: [{ stat: 'SPATK', delta: 1 }, { stat: 'SPDEF', delta: 1 }] }),
           createMove({ name: 'まもる', type: 'normal', power: 0, accuracy: 100, pp: 10, category: 'status', priority: 4, protects: true }),
-          createMove({ name: 'バトンタッチ', type: 'normal', power: 0, accuracy: 100, pp: 40, category: 'status' }),
+          createMove({ name: 'バトンタッチ', type: 'normal', power: 0, accuracy: 100, pp: 40, category: 'status', pivot: true, passStats: true }),
         ],
       },
       {
