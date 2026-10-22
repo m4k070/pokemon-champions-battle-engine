@@ -250,9 +250,10 @@ function statusMoveScore(move: MoveData, context: BattleContext): number {
     }
   }
 
-  // あくび: 相手が状態異常でなく、ねむけでもないときだけ価値がある（ねむけは文脈に無いので状態で近似）。
+  // あくび: 相手が状態異常でなく、まだねむけでもないときだけ価値がある。
+  // ねむけを見ないと、寝る前の相手に撃ち続けて空振りする（実測で44%が空振りだった）。
   if (move.inflictsDrowsy) {
-    return opponent.status === null && opponent.isFainted === false ? 85 : 0;
+    return opponent.status === null && !opponent.isDrowsy ? 85 : 0;
   }
 
   // 状態異常を入れる技（でんじは・おにび・どくどく等）
