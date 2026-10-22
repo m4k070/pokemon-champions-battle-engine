@@ -77,6 +77,12 @@ export function damageRatio(
   if (move.boostedByPsychicTerrain && field?.terrain === 'psychic-terrain' && isGroundedAgainstTerrain(attacker)) {
     effectivePower = Math.floor(effectivePower * 1.5);
   }
+  // アシストパワー: 能力上昇1段階につき威力+20（本編仕様）。バトンタッチで引き継いだ後が本命。
+  if (move.storedPower) {
+    const stages = (['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED'] as const)
+      .reduce((sum, key) => sum + Math.max(0, attacker.statStages[key]), 0);
+    effectivePower = Math.min(860, 20 + 20 * stages);
+  }
 
   const effectiveness = typeMultiplier(effectiveType, defender.types);
   if (effectiveness === 0) return 0;

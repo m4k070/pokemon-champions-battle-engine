@@ -89,6 +89,8 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   pivot: boolean;
   // バトンタッチ等: 交代時に能力変化を引き継ぐ。
   passStats: boolean;
+  // アシストパワー: 能力上昇の合計で威力が上がる。
+  storedPower: boolean;
   crashDamage: boolean;
   contact: boolean;
   restoresShieldForm: boolean;
@@ -138,6 +140,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.multiHitPowers = data.multiHitPowers;
     this.pivot = data.pivot ?? false;
     this.passStats = data.passStats ?? false;
+    this.storedPower = data.storedPower ?? false;
     this.crashDamage = data.crashDamage ?? false;
     this.contact = data.contact ?? false;
     this.restoresShieldForm = data.restoresShieldForm ?? false;

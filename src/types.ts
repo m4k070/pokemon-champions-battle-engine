@@ -81,6 +81,8 @@ export interface CommonMoveEffects {
   inflictsEncore?: boolean;
   // バトンタッチ: 交代先に能力変化（能力ランク）を引き継ぐ。
   passStats?: boolean;
+  // アシストパワー: 自分の能力上昇の合計で威力が上がる（20 + 20×段数、上限860）。
+  storedPower?: boolean;
   // ワイドフォース: サイコフィールド下で接地していれば威力1.5倍（本編仕様）。
   boostedByPsychicTerrain?: boolean;
   // くろいきり: 場に出ている全員の能力変化をリセットする（本編仕様）。

@@ -15,17 +15,23 @@ export interface ComboOptions {
   passMove?: string;
   // 何段階積んだらバトンタッチするか（能力ランクの合計）。
   targetBoost?: number;
+  // バトンタッチの引き継ぎ先（名前 or 表示名）。未指定なら「積み役でない最初の駒」。
+  passTo?: string;
+  // 積み役が場に出ている間、攻撃より積みを優先する（既定 true）。
+  alwaysSetup?: boolean;
 }
 
 export class ScriptedComboAgent implements BattleAgent {
   private readonly setupMoves: string[];
   private readonly passMove: string;
   private readonly targetBoost: number;
+  private readonly passTo: string | undefined;
 
   constructor(private readonly rng: RandomSource = SYSTEM_RANDOM, options: ComboOptions = {}) {
     this.setupMoves = options.setupMoves ?? ['めいそう', 'ちょうのまい', 'わるだくみ', 'つるぎのまい', 'りゅうのまい', 'てっぺき', 'からをやぶる'];
     this.passMove = options.passMove ?? 'バトンタッチ';
     this.targetBoost = options.targetBoost ?? 2;
+    this.passTo = options.passTo;
   }
 
   async selectLead(team: Pokemon[]): Promise<Pokemon> {
@@ -39,7 +45,13 @@ export class ScriptedComboAgent implements BattleAgent {
     const self = context.self;
 
     if (context.mustSwitch) {
-      // バトンタッチ後は、積み役でない（＝殴れる）相手を優先する。
+      // 台本で指定された引き継ぎ先（エース）を最優先する。
+      const designated = this.passTo === undefined
+        ? undefined
+        : legal.switches.find(({ pokemon }) => pokemon.name === this.passTo);
+      if (designated) {
+        return { action: { type: 'switch', pokemonIndex: designated.index }, reasoning: `コンボ: ${this.passTo}へバトン` };
+      }
       const candidates = legal.switches.filter(({ pokemon }) => !pokemon.moves.some((move) => this.setupMoves.includes(move.name)));
       const pick = (candidates[0] ?? legal.switches[0])!;
       return { action: { type: 'switch', pokemonIndex: pick.index }, reasoning: 'コンボ: 引き継ぎ先へ' };
@@ -49,8 +61,10 @@ export class ScriptedComboAgent implements BattleAgent {
     const passIndex = legal.moves.find(({ move }) => move.name === this.passMove)?.index;
     const setupIndex = legal.moves.find(({ move }) => this.setupMoves.includes(move.name))?.index;
 
-    // 積み切ったらバトンタッチ。
-    if (passIndex !== undefined && boost >= this.targetBoost) {
+    // 積み切ったらバトンタッチ（引き継ぎ先が残っているときだけ）。
+    const passTargetAlive = this.passTo === undefined
+      || context.selfTeam.some((pokemon) => !pokemon.isFainted && pokemon !== self && (pokemon.name === this.passTo));
+    if (passIndex !== undefined && boost >= this.targetBoost && passTargetAlive) {
       return { action: { type: 'move', moveIndex: passIndex, target: 0 }, reasoning: `コンボ: ${boost}段でバトン` };
     }
     // まだ足りなければ積む。
