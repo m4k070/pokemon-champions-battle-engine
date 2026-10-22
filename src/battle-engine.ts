@@ -943,6 +943,13 @@ export class BattleEngine {
       return this.inflictStatusCondition(defender, move.status, statusMovePivot);
     }
 
+    // バトンタッチ: 技自体は「能力を引き継いで退場する」効果なので成立扱いにする。
+    // 引き継ぎ本体は交代時（BattleSession.applyPivotSwitch）で処理する。
+    if (isStatusMove(move) && move.passStats) {
+      this.log.push(`${attacker.name}は能力を引き継ぐ準備をした`);
+      return effectApplied();
+    }
+
     // ここに到達する変化技は、対応する効果フィールドを持たないもの（まもる・はねる等の未実装技）。
     // 威力0のためダメージ計算に進めても何も起きないので、この時点で解決を終える。
     if (isStatusMove(move)) {

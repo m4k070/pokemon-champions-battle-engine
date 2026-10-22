@@ -574,8 +574,21 @@ export class BattleSession {
     const active = side === 0 ? this.activeA : this.activeB;
     const replacement = this.requireSwitchTarget(side, decision.action.pokemonIndex, 'pivot交代');
 
+    // バトンタッチ: 交代前に能力ランクを控えておく（switchTo が退場側をリセットするため）。
+    const pivotAction = side === 0 ? pending.actionA : pending.actionB;
+    const pivotMove = pivotAction.type === 'move' ? active.moves[pivotAction.moveIndex] : null;
+    const carriedStages = pivotMove?.passStats ? { ...active.statStages } : null;
+
     this.reasoningLog.push({ turn: this.engine.turn, side, pokemonName: active.name, reasoning: decision.reasoning });
     this.switchTo(side, replacement, team);
+
+    if (carriedStages !== null) {
+      const incoming = side === 0 ? this.activeA : this.activeB;
+      for (const [key, value] of Object.entries(carriedStages)) {
+        incoming.statStages[key as keyof typeof incoming.statStages] = value;
+      }
+      this.engine.log.push(`${incoming.name}は能力変化を引き継いだ`);
+    }
 
     // 交代が済んだので、残りの技を解決できる状態へ戻す。
     this.pendingTurn = {
