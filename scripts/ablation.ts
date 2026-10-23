@@ -14,7 +14,8 @@ import { Pokemon } from '../src/pokemon.js';
 
 const mode = process.argv[2] ?? 'control';
 const subject = process.argv[3] ?? 'メガリザードンY構築';
-const SEEDS = Array.from({ length: 20 }, (_, i) => 101 + i);
+const SEED_COUNT = Number(process.argv[4] ?? '20');
+const SEEDS = Array.from({ length: SEED_COUNT }, (_, i) => 101 + i);
 
 function buildVariant(): Pokemon[] {
   const entry = META_TEAMS.find((t) => t.name === subject)!;
@@ -23,6 +24,20 @@ function buildVariant(): Pokemon[] {
     const mega = team.find((p) => p.item === 'charizardite-y');
     if (!mega) throw new Error('メガストーン持ちが見つかりません');
     mega.item = 'life-orb';
+  }
+  if (mode === 'rock-swap' || mode === 'rock-cut') {
+    const chomp = team.find((p) => p.name === 'garchomp');
+    if (!chomp) throw new Error('garchomp がいません');
+    const index = chomp.moves.findIndex((m) => m.name === 'ステルスロック');
+    if (index < 0) throw new Error('ステルスロック を持っていません');
+    if (mode === 'rock-cut') {
+      chomp.moves = chomp.moves.filter((m) => m.name !== 'ステルスロック');
+    } else {
+      chomp.moves[index] = createMove({
+        name: 'だいちのちから', type: 'ground', power: 90, accuracy: 100, pp: 10, category: 'special',
+        targetStatChange: [{ stat: 'SPDEF', delta: -1, chance: 10 }],
+      });
+    }
   }
   if (mode === 'yawncut') {
     const hippo = team.find((p) => p.name === 'hippowdon');

@@ -143,6 +143,10 @@ export class BattleEngine {
     return side === 0 ? 'playerA' : 'playerB';
   }
 
+  private opposingSide(side: 0 | 1): 0 | 1 {
+    return side === 0 ? 1 : 0;
+  }
+
   setStealthRock(side: 0 | 1): void {
     const key = this.sideKey(side);
     if (this.field.stealthRock[key]) return;
@@ -691,12 +695,13 @@ export class BattleEngine {
     if (move.fieldEffect === 'stealth-rock') {
       const side = this.getSide(attacker);
       if (side !== null) {
-        const key = this.sideKey(side);
+        // 設置技は「相手の場」に置く（自分の場ではない）。
+        const key = this.sideKey(this.opposingSide(side));
         if (this.field.stealthRock[key]) {
           this.log.push('ステルスロックは既に設置されている');
         } else {
           this.field.stealthRock[key] = true;
-          this.log.push(`${attacker.name}側の場にステルスロックが散りばめられた`);
+          this.log.push(`${defender.name}側の場にステルスロックが散りばめられた`);
         }
       }
       return effectApplied();
@@ -705,12 +710,12 @@ export class BattleEngine {
     if (move.fieldEffect === 'spikes') {
       const side = this.getSide(attacker);
       if (side !== null) {
-        const key = this.sideKey(side);
+        const key = this.sideKey(this.opposingSide(side));
         if (this.field.spikes[key] >= 3) {
           this.log.push('まきびしはこれ以上盛れない');
         } else {
           this.field.spikes[key]++;
-          this.log.push(`${attacker.name}側の場にまきびしが${this.field.spikes[key]}層設置された`);
+          this.log.push(`${defender.name}側の場にまきびしが${this.field.spikes[key]}層設置された`);
         }
       }
       return effectApplied();
@@ -719,12 +724,12 @@ export class BattleEngine {
     if (move.fieldEffect === 'toxic-spikes') {
       const side = this.getSide(attacker);
       if (side !== null) {
-        const key = this.sideKey(side);
+        const key = this.sideKey(this.opposingSide(side));
         if (this.field.toxicSpikes[key] >= 2) {
           this.log.push('どくびしはこれ以上盛れない');
         } else {
           this.field.toxicSpikes[key]++;
-          this.log.push(`${attacker.name}側の場にどくびしが${this.field.toxicSpikes[key]}層設置された`);
+          this.log.push(`${defender.name}側の場にどくびしが${this.field.toxicSpikes[key]}層設置された`);
         }
       }
       return effectApplied();
