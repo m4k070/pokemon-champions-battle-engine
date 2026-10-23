@@ -1660,7 +1660,7 @@ describe('Mental Herb (メンタルハーブ)', () => {
       return createMove({ name, type: 'normal', power: 0, accuracy: 100, pp: 10, category: 'status', fieldEffect: fieldEffect as any });
     }
 
-    test('stealth-rock: sets on attacker side, blocks if already set', () => {
+    test('stealth-rock: sets on the opponent side, blocks if already set', () => {
       const e = new BattleEngine();
       const a = makeMon('A', ['normal']);
       const d = makeMon('D', ['normal']);
@@ -1670,12 +1670,14 @@ describe('Mental Herb (メンタルハーブ)', () => {
 
       const r1 = e.useMove(a, d, move);
       expect(isMoveSuccessful(r1)).toBe(true);
-      expect(e.field.stealthRock.playerA).toBe(true);
+      // 設置技は相手の場（playerB）に置く。自分の場ではない。
+      expect(e.field.stealthRock.playerB).toBe(true);
+      expect(e.field.stealthRock.playerA).toBe(false);
 
       // 2回目も技は成功するが「既に設置済み」
       const r2 = e.useMove(a, d, move);
       expect(isMoveSuccessful(r2)).toBe(true);
-      expect(e.field.stealthRock.playerA).toBe(true);
+      expect(e.field.stealthRock.playerB).toBe(true);
     });
 
     test('stealth-rock: switch-in damage based on type effectiveness', () => {
@@ -1698,17 +1700,17 @@ describe('Mental Herb (メンタルハーブ)', () => {
       const move = statusMove('spikes', 'spikes');
 
       e.useMove(a, d, move);
-      expect(e.field.spikes.playerA).toBe(1);
+      expect(e.field.spikes.playerB).toBe(1);
 
       e.useMove(a, d, move);
-      expect(e.field.spikes.playerA).toBe(2);
+      expect(e.field.spikes.playerB).toBe(2);
 
       e.useMove(a, d, move);
-      expect(e.field.spikes.playerA).toBe(3);
+      expect(e.field.spikes.playerB).toBe(3);
 
       // 4層目は無効
       e.useMove(a, d, move);
-      expect(e.field.spikes.playerA).toBe(3);
+      expect(e.field.spikes.playerB).toBe(3);
     });
 
     test('spikes: flying and levitate are immune to damage', () => {
@@ -1722,25 +1724,25 @@ describe('Mental Herb (メンタルハーブ)', () => {
       const spikeMove = statusMove('spikes', 'spikes');
       e.useMove(setter, target, spikeMove);
 
-      // 通常タイプはダメージ
+      // 通常タイプはダメージ（設置された側＝side 1 で受ける）
       const normal = makeMon('Normal', ['normal']);
-      e.setActivePokemon(0, normal);
+      e.setActivePokemon(1, normal);
       const hpBefore = normal.currentHP;
-      e.switchIn(normal, [], 0);
+      e.switchIn(normal, [], 1);
       expect(normal.currentHP).toBeLessThan(hpBefore);
 
       // 飛行タイプは無効
       const flying = makeMon('Bird', ['flying']);
-      e.setActivePokemon(0, flying);
+      e.setActivePokemon(1, flying);
       const hpFlyingBefore = flying.currentHP;
-      e.switchIn(flying, [], 0);
+      e.switchIn(flying, [], 1);
       expect(flying.currentHP).toBe(hpFlyingBefore);
 
       // ふゆう特性も無効
       const levitate = makeMon('Koffing', ['poison'], 'levitate');
-      e.setActivePokemon(0, levitate);
+      e.setActivePokemon(1, levitate);
       const hpLevBefore = levitate.currentHP;
-      e.switchIn(levitate, [], 0);
+      e.switchIn(levitate, [], 1);
       expect(levitate.currentHP).toBe(hpLevBefore);
     });
 
@@ -1753,14 +1755,14 @@ describe('Mental Herb (メンタルハーブ)', () => {
       const move = statusMove('toxic-spikes', 'toxic-spikes');
 
       e.useMove(a, d, move);
-      expect(e.field.toxicSpikes.playerA).toBe(1);
+      expect(e.field.toxicSpikes.playerB).toBe(1);
 
       e.useMove(a, d, move);
-      expect(e.field.toxicSpikes.playerA).toBe(2);
+      expect(e.field.toxicSpikes.playerB).toBe(2);
 
       // 3層目は無効
       e.useMove(a, d, move);
-      expect(e.field.toxicSpikes.playerA).toBe(2);
+      expect(e.field.toxicSpikes.playerB).toBe(2);
     });
 
     test('toxic-spikes: poison type absorbs, steel/flying/levitate immune', () => {
@@ -1772,11 +1774,11 @@ describe('Mental Herb (メンタルハーブ)', () => {
       const move = statusMove('toxic-spikes', 'toxic-spikes');
       e.useMove(a, d, move); // 1層設置
 
-      // 毒タイプは吸収して解除
+      // 毒タイプは吸収して解除（設置された側＝side 1 で出す）
       const poison = makeMon('Grimer', ['poison']);
-      e.setActivePokemon(0, poison);
-      e.switchIn(poison, [], 0);
-      expect(e.field.toxicSpikes.playerA).toBe(0);
+      e.setActivePokemon(1, poison);
+      e.switchIn(poison, [], 1);
+      expect(e.field.toxicSpikes.playerB).toBe(0);
       expect(poison.status).toBeNull();
 
       // もう一度設置
@@ -1785,19 +1787,19 @@ describe('Mental Herb (メンタルハーブ)', () => {
 
       // はがねタイプは無効（消えない）
       const steel = makeMon('Steelix', ['steel']);
-      e.setActivePokemon(0, steel);
-      e.switchIn(steel, [], 0);
+      e.setActivePokemon(1, steel);
+      e.switchIn(steel, [], 1);
       expect(steel.status).toBeNull();
-      expect(e.field.toxicSpikes.playerA).toBe(1);
+      expect(e.field.toxicSpikes.playerB).toBe(1);
 
       // ひこうタイプも無効
       e.setActivePokemon(0, a);
       e.useMove(a, d, move); // 2層
       const flying = makeMon('Bird', ['flying']);
-      e.setActivePokemon(0, flying);
-      e.switchIn(flying, [], 0);
+      e.setActivePokemon(1, flying);
+      e.switchIn(flying, [], 1);
       expect(flying.status).toBeNull();
-      expect(e.field.toxicSpikes.playerA).toBe(2);
+      expect(e.field.toxicSpikes.playerB).toBe(2);
     });
 
     test('toxic-spikes: switch-in applies poison status', () => {
@@ -1810,8 +1812,8 @@ describe('Mental Herb (メンタルハーブ)', () => {
       e.useMove(a, d, move); // 1層
 
       const victim = makeMon('Victim', ['normal']);
-      e.setActivePokemon(0, victim);
-      e.switchIn(victim, [], 0);
+      e.setActivePokemon(1, victim);
+      e.switchIn(victim, [], 1);
       expect(victim.status).toBe('poison');
     });
   });
