@@ -19,7 +19,7 @@ async function main(): Promise<void> {
       const oracle = new OracleBattleAgent(teamB, seed * 13 + 3);
       const heuristic = new HeuristicBattleAgent(new SeededRandom(seed * 31 + 2));
       const r = await runBattle(teamA, teamB, oracleIsSideA ? oracle : heuristic, oracleIsSideA ? heuristic : oracle, {
-        maxTurns: 300, rng: new SeededRandom(seed * 31 + 3), information: 'partial', leadA: teamA[0], leadB: teamB[0],
+        maxTurns: 50, rng: new SeededRandom(seed * 31 + 3), information: 'partial', leadA: teamA[0], leadB: teamB[0],
       });
       games++;
       if (r.winner === null) { draws++; continue; }
