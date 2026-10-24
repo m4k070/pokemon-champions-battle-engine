@@ -4,6 +4,8 @@ import { TYPE_CHART } from '../type-chart.js';
 import { SYSTEM_RANDOM } from '../rng.js';
 import type { RandomSource } from '../rng.js';
 import { getLegalActions } from './battle-agent.js';
+import { compatibleSets, defaultBelief, statusMoveProbability } from './opponent-belief.js';
+import type { Belief } from './opponent-belief.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './battle-agent.js';
 
 // ルールベースの方策エージェント。
@@ -139,6 +141,30 @@ function worstIncomingRatio(context: BattleContext, defender: Pokemon): number {
   );
 }
 
+// 相手の未公開枠を信念で平均した「受ける最大打点」。
+// 伏せられた技を「無い」と扱うと脅威を過小評価するため、候補セット全体で平均する。
+function expectedWorstIncomingRatio(
+  context: BattleContext,
+  defender: Pokemon,
+  belief: Belief = defaultBelief(),
+): number {
+  const sets = compatibleSets(context.opponent, belief);
+  if (sets.length === 0) return worstIncomingRatio(context, defender);
+  let total = 0;
+  for (const set of sets) {
+    const revealed = context.opponent.moves;
+    const moves = [...revealed];
+    for (const move of set.moves) {
+      if (moves.length >= 4) break;
+      if (moves.some((known) => known.name === move.name)) continue;
+      moves.push(move);
+    }
+    const worst = Math.max(0, ...moves.map((move) => damageRatio(context.opponent, defender, move, context.field)));
+    total += worst;
+  }
+  return total / sets.length;
+}
+
 function hpRatio(pokemon: Pokemon): number {
   return pokemon.currentHP / pokemon.maxHP;
 }
@@ -204,7 +230,12 @@ function isSetupMove(move: MoveData): boolean {
   return (move.selfStatChange ?? []).some((change) => change.delta > 0);
 }
 
-function statusMoveScore(move: MoveData, context: BattleContext): number {
+function statusMoveScore(
+  move: MoveData,
+  context: BattleContext,
+  belief: Belief = defaultBelief(),
+  substituteScoring: 'expectation' | 'legacy' | 'off' = 'expectation',
+): number {
   const self = context.self;
   const opponent = context.opponent;
   const selfHp = hpRatio(self);
@@ -267,15 +298,27 @@ function statusMoveScore(move: MoveData, context: BattleContext): number {
   // (a) 1発で壊れない（身代わりHPは最大HPの1/4）、(b) 相手が変化技を持っている、
   // (c) こちらに積み技があり、相手を脅かしている（＝相手が引く場面＝交代読みの代用）。
   if (move.createsSubstitute) {
+    // 'off': この形式ではみがわりがマイナス（アブレーションで削除が最善）。撃たない。
+    if (substituteScoring === 'off') return 0;
     if (selfHp <= 0.35) return 0;
     let score = selfHp > 0.5 ? 15 : 0;
-    const incoming = worstIncomingRatio(context, self);
-    if (incoming > 0 && incoming <= 0.25) score += 20;
-    const opponentStatusMoves = opponent.moves.filter(
-      (known) => known.inflictsDrowsy || known.inflictsEncore || (known.category === 'status' && known.status !== null),
-    ).length;
-    if (opponentStatusMoves > 0) score += 20;
     const hasSetup = self.moves.some((candidate) => isSetupMove(candidate));
+    if (substituteScoring === 'legacy') {
+      // 旧実装: 見えている技だけを見る（伏せられた変化技を「無い」と誤読する）。
+      const incoming = worstIncomingRatio(context, self);
+      if (incoming > 0 && incoming <= 0.25) score += 20;
+      const knownStatusMoves = opponent.moves.filter(
+        (known) => known.inflictsDrowsy || known.inflictsEncore || (known.category === 'status' && known.status !== null),
+      ).length;
+      if (knownStatusMoves > 0) score += 20;
+      if (hasSetup) score += 15;
+      if (bestDamageAgainst(self, opponent, context.field) >= 0.35) score += 10;
+      return score;
+    }
+    // 信念ベース: 未公開の枠を確率で扱う（見えていない＝無い、にしない）。
+    const incoming = expectedWorstIncomingRatio(context, self, belief);
+    if (incoming > 0 && incoming <= 0.25) score += 20;
+    score += Math.round(20 * statusMoveProbability(opponent, belief));
     if (hasSetup) score += 15;
     if (bestDamageAgainst(self, opponent, context.field) >= 0.35) score += 10;
     return score;
@@ -309,6 +352,11 @@ function matchupScore(candidate: Pokemon, context: BattleContext): number {
 }
 
 export interface HeuristicOptions {
+  // 相手の型に関する信念（省略時はメタの構築プールから作る）。
+  belief?: Belief;
+  // みがわりの評価式。'legacy' は旧実装（伏せ情報を「無い」と扱う）。A/B用。
+  substituteScoring?: 'expectation' | 'legacy' | 'off';
+
   // 自分から交代するか（アブレーション用。false にすると瀕死交代だけになる）。
   allowVoluntarySwitch?: boolean;
   // メガストーン持ちを先頭に出す（false にすると team[0] 固定。アブレーション用）。
@@ -325,7 +373,12 @@ export class HeuristicBattleAgent implements BattleAgent {
   // 直近の selectAction で各候補に付けたスコア（ハイブリッド方策の「迷い検出」用）。
   lastEvaluation: { label: string; score: number; kind: 'move' | 'switch' }[] = [];
 
+  private readonly belief: Belief;
+  private readonly substituteScoring: 'expectation' | 'legacy' | 'off';
+
   constructor(private readonly rng: RandomSource = SYSTEM_RANDOM, options: HeuristicOptions = {}) {
+    this.belief = options.belief ?? defaultBelief();
+    this.substituteScoring = options.substituteScoring ?? 'legacy';
     this.allowVoluntarySwitch = options.allowVoluntarySwitch ?? true;
     this.leadWithMega = options.leadWithMega ?? true;
     this.leadWithSetter = options.leadWithSetter ?? true;
@@ -375,7 +428,7 @@ export class HeuristicBattleAgent implements BattleAgent {
       // 相手の選択を予測しない方策では当てにできないので割り引く（実測: グソクムシャ構築の改善）。
       const conditionalPenalty = move.category !== 'status' && move.failsUnlessTargetAttacks ? 0.35 : 1;
       const damageScore = (ratio * 400 + lethal) * selfDropPenalty(move) * conditionalPenalty;
-      let utility = move.category === 'status' ? statusMoveScore(move, context) : 0;
+      let utility = move.category === 'status' ? statusMoveScore(move, context, this.belief, this.substituteScoring) : 0;
       if (hasPassMove) {
         // 渡す技そのもの: 積んだ段数が多いほど、かつ瀕死に近いほど（＝今渡す価値が高い）加点。
         if (move.passStats) {
