@@ -4,6 +4,7 @@ import { ValueSearchBattleAgent } from '../src/ai/value-search-agent.js';
 import { HeuristicV1BattleAgent } from '../src/ai/baselines/heuristic-v1.js';
 import { selectTeamWithPlan } from '../src/ai/team-selection.js';
 import { SeededRandom } from '../src/rng.js';
+import { splitSeeds } from '../src/ai/eval/seeds.js';
 
 // 1手先読み（学習した V）vs 凍結ベースライン v1。側と乱数の割当を入れ替えて相殺する。
 function wilson(wins: number, total: number): [number, number] {
@@ -17,7 +18,10 @@ function wilson(wins: number, total: number): [number, number] {
 }
 
 async function main(): Promise<void> {
-  const seeds = Number((process.argv.find((a) => a.startsWith('--seeds=')) ?? '--seeds=100').split('=')[1]);
+  // --split=tune|report|train を渡すと、その分割の seed を使う（調整と報告を混ぜない）。
+  const splitArg = (process.argv.find((a) => a.startsWith('--split=')) ?? '--split=').split('=')[1] ?? '';
+  const seedsFromSplit = splitArg === '' ? null : splitSeeds(splitArg as 'tune' | 'report' | 'train');
+  const seedList = seedsFromSplit ?? Array.from({ length: Number((process.argv.find((a) => a.startsWith('--seeds=')) ?? '--seeds=100').split('=')[1]) }, (_, i) => 101 + i);
   const builds = Number((process.argv.find((a) => a.startsWith('--builds=')) ?? '--builds=0').split('=')[1]);
   const margin = Number((process.argv.find((a) => a.startsWith('--margin=')) ?? '--margin=0').split('=')[1]);
   const mode = ((process.argv.find((a) => a.startsWith('--mode=')) ?? '--mode=belief').split('=')[1] ?? 'belief') as
@@ -33,7 +37,7 @@ async function main(): Promise<void> {
   entries = entries.slice(0, builds > 0 ? builds : undefined);
 
   for (const entry of entries) {
-    for (let seed = 101; seed < 101 + seeds; seed++) {
+    for (const seed of seedList) {
       for (const valueIsA of [true, false]) {
         // ポケモンは試合中に書き換わるので、毎試合作り直す（使い回すと2試合目が0ターンで終わる）。
         const teamA = selectTeamWithPlan(entry, teamToPokemons(entry)).members;
