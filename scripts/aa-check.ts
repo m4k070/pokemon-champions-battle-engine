@@ -25,11 +25,12 @@ async function main(): Promise<void> {
   for (const entry of META_TEAMS) {
     if (entry.name === 'メガジュペッタ構築') continue;
     for (let seed = 101; seed < 101 + seeds; seed++) {
-      const teamA = selectTeamWithPlan(entry, teamToPokemons(entry)).members;
-      const teamB = selectTeamWithPlan(entry, teamToPokemons(entry)).members;
       // 1 seed につき2試合、agent乱数の割当を入れ替える（側は固定なので「先攻側の偏り」は
       // 別途構築別に出る。ここでは agent乱数 の非対称だけを消す）。
       for (const swap of [false, true]) {
+        // ポケモンは試合中に書き換わるので毎試合作り直す。
+        const teamA = selectTeamWithPlan(entry, teamToPokemons(entry)).members;
+        const teamB = selectTeamWithPlan(entry, teamToPokemons(entry)).members;
         const agentA = new HeuristicBattleAgent(new SeededRandom(seed * 31 + (swap ? 2 : 1)));
         const agentB = new HeuristicBattleAgent(new SeededRandom(seed * 31 + (swap ? 1 : 2)));
         const result = await runBattle(teamA, teamB, agentA, agentB, {

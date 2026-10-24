@@ -1,5 +1,6 @@
 import type { Pokemon } from '../pokemon.js';
 import type { AgentAction, WeatherType } from '../types.js';
+import type { BattleSession } from '../battle-runner.js';
 import { SYSTEM_RANDOM } from '../rng.js';
 import type { RandomSource } from '../rng.js';
 
@@ -21,6 +22,9 @@ export interface BattleFieldView {
 
 export interface BattleContext {
   turn: number;
+  // 分岐探索用。エージェントが局面を複製して1手先を試すときに使う（runBattle 経由なら常に入る）。
+  side?: 0 | 1;
+  session?: BattleSession;
   self: Pokemon;
   selfTeam: Pokemon[];
   opponent: Pokemon;

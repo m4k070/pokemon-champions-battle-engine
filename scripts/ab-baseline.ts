@@ -25,11 +25,12 @@ async function main(): Promise<void> {
   for (const entry of META_TEAMS) {
     if (entry.name === 'メガジュペッタ構築') continue;
     for (let seed = 101; seed < 101 + seeds; seed++) {
-      const teamA = selectTeamWithPlan(entry, teamToPokemons(entry)).members;
-      const teamB = selectTeamWithPlan(entry, teamToPokemons(entry)).members;
       // 1 seed につき2試合、側と方策乱数の割当を両方入れ替えて偏りを相殺する。
       // （片方だけだと「先攻側」と「agent乱数」の非対称が数ptの系統誤差として残る）
       for (const currentIsA of [true, false]) {
+        // ポケモンは試合中に書き換わるので毎試合作り直す。
+        const teamA = selectTeamWithPlan(entry, teamToPokemons(entry)).members;
+        const teamB = selectTeamWithPlan(entry, teamToPokemons(entry)).members;
         const current = new HeuristicBattleAgent(new SeededRandom(seed * 31 + (currentIsA ? 1 : 2)));
         const baseline = new HeuristicV1BattleAgent(new SeededRandom(seed * 31 + (currentIsA ? 2 : 1)));
         const result = await runBattle(
@@ -37,7 +38,7 @@ async function main(): Promise<void> {
           currentIsA ? current : baseline,
           currentIsA ? baseline : current,
           {
-            maxTurns: 300, rng: new SeededRandom(seed * 31 + 3), information: 'partial', leadA: teamA[0], leadB: teamB[0],
+            maxTurns: 300, rng: new SeededRandom(seed * 31 + 3 + (currentIsA ? 0 : 500)), information: 'partial', leadA: teamA[0], leadB: teamB[0],
           },
         );
         const stat = perBuild.get(entry.name) ?? { wins: 0, total: 0 };
