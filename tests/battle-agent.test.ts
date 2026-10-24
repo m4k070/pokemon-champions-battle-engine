@@ -65,7 +65,9 @@ describe('RandomBattleAgent', () => {
     expect(decision.action).toEqual({ type: 'move', moveIndex: 1, target: 0 });
   });
 
-  test('switches to a healthy teammate when every move is out of PP', async () => {
+  // 2026-10-24: 技のPPが尽きたら わるあがき（moveIndex = -1）を選ぶ。
+  // 本編ではPP切れは交代や降参ではなく、わるあがきでの攻撃になる。
+  test('uses struggle when every move is out of PP (bench available)', async () => {
     const agent = new RandomBattleAgent();
     const self = makePokemon({
       moves: [
@@ -77,10 +79,10 @@ describe('RandomBattleAgent', () => {
 
     const decision = await agent.selectAction(makeContext({ self, selfTeam: [self, bench] }));
 
-    expect(decision.action).toEqual({ type: 'switch', pokemonIndex: 1 });
+    expect(decision.action).toEqual({ type: 'move', moveIndex: -1, target: 0 });
   });
 
-  test('forfeits when out of PP and no healthy teammate remains', async () => {
+  test('uses struggle (not forfeit) when out of PP and no healthy teammate remains', async () => {
     const agent = new RandomBattleAgent();
     const self = makePokemon({
       moves: [createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 0 })],
@@ -88,7 +90,7 @@ describe('RandomBattleAgent', () => {
 
     const decision = await agent.selectAction(makeContext({ self, selfTeam: [self] }));
 
-    expect(decision.action).toEqual({ type: 'forfeit' });
+    expect(decision.action).toEqual({ type: 'move', moveIndex: -1, target: 0 });
   });
 
   test('respects a choice-item move lock', async () => {

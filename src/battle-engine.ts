@@ -174,6 +174,62 @@ export class BattleEngine {
     return null;
   }
 
+  // ---- 特性の観測・共通判定 ----
+  // 特性の効果は持ち物と違い双方から観測できるので、viewer ごとではなく個体に記録する。
+
+  // 登録済みのチーム。フラワーヴェールやそうだいしょうのように味方の状態を見る特性で使う。
+  private registeredTeams: [Pokemon[], Pokemon[]] | null = null;
+
+  registerTeams(teamA: Pokemon[], teamB: Pokemon[]): void {
+    this.registeredTeams = [teamA, teamB];
+  }
+
+  // 特性の挙動が外から見えたことを記録する（不完全情報モードの赤化判定に使う）。
+  observeAbility(pokemon: Pokemon): void {
+    pokemon.abilityRevealed = true;
+  }
+
+  teamOf(pokemon: Pokemon): Pokemon[] {
+    if (!this.registeredTeams) return [pokemon];
+    const [teamA, teamB] = this.registeredTeams;
+    if (teamA.includes(pokemon)) return teamA;
+    if (teamB.includes(pokemon)) return teamB;
+    return [pokemon];
+  }
+
+  // フラワーヴェール: くさタイプの自分・味方は能力を下げられず、状態異常にもならない。
+  flowerVeilProtects(pokemon: Pokemon): boolean {
+    if (!pokemon.types.includes('grass')) return false;
+    return this.teamOf(pokemon).some((ally) => !ally.isFainted && ally.ability === 'flower-veil');
+  }
+
+  // 特性による状態異常の無効化（ふみん・じゅうなん・ねつこうかん・フラワーヴェール）。
+  blocksStatusByAbility(target: Pokemon, status: StatusCondition): boolean {
+    if (this.flowerVeilProtects(target)) return true;
+    if (status === 'sleep' && target.ability === 'insomnia') return true;
+    if (status === 'paralysis' && target.ability === 'limber') return true;
+    if (status === 'burn' && target.ability === 'thermal-exchange') return true;
+    return false;
+  }
+
+  // どくげしょう: 対象の陣営の場にどくびしを置く（最大2層）。
+  addToxicSpikes(pokemon: Pokemon, layers = 1): void {
+    const side = this.getSide(pokemon);
+    if (side === null) return;
+    const key = this.sideKey(side);
+    const before = this.field.toxicSpikes[key];
+    this.field.toxicSpikes[key] = Math.min(2, before + layers);
+    if (this.field.toxicSpikes[key] !== before) {
+      this.log.push(`${pokemon.name}側の場にどくびしが${this.field.toxicSpikes[key]}層設置された`);
+    }
+  }
+
+  // こぼれダネ等が地形を展開する。
+  setTerrainFromAbility(terrain: NonNullable<TerrainType>, turns = 5): void {
+    this.field.terrain = terrain;
+    this.field.terrainTurnsLeft = turns;
+  }
+
   private setupEventHandlers(): void {
     this.events.on('switch-in', (data) => {
       const pokemon = data.pokemon;
@@ -381,6 +437,8 @@ export class BattleEngine {
   // タイプ相性を求める。攻撃側の特性による補正（きもったま等）も反映する。
   // 変化技の無効判定とダメージ技の倍率計算の双方から使う。
   resolveTypeEffectiveness(attacker: Pokemon, defender: Pokemon, move: MoveData): number {
+    // わるあがきはタイプ相性を受けない（本編仕様。無タイプ扱い）。
+    if (move.ignoresTypeEffectiveness) return 1;
     const baseEffectiveness = this.getTypeEffectiveness(move.type, defender.types);
     // 攻撃側の特性によるタイプ相性補正（きもったま: Normal/Fighting→Ghost 有効化等）
     const attackerAbility = getAbilityDefinition(attacker.ability);
@@ -473,7 +531,11 @@ export class BattleEngine {
     if (attacker && move && attacker.ability !== 'mold-breaker') {
       const ability = getAbilityDefinition(defender.ability);
       const adjusted = ability?.onDamaged?.({ defender, attacker, move, damage, engine: this });
-      if (typeof adjusted === 'number') effectiveDamage = adjusted;
+      if (typeof adjusted === 'number') {
+        effectiveDamage = adjusted;
+        // 軽減・肩代わりが外から見えたので、特性を公開する。
+        this.observeAbility(defender);
+      }
     }
 
     // みがわり: 場に身代わりがあるときは、ダメージを身代わりが受ける（本編仕様）。
@@ -543,7 +605,15 @@ export class BattleEngine {
       return this.useMove(defender, attacker, move);
     }
 
-    move.pp -= 1;
+    // プレッシャー: 相手が持っていると、こちらのPP消費が2倍になる（かたやぶりは無視）。
+    // わるあがきはPPを持たないので消費しない（プレッシャーも乗らない）。
+    if (move.ignoresTypeEffectiveness && move.name === 'わるあがき') {
+      // no-op
+    } else {
+      const pressureTax = defender.ability === 'pressure' && attacker.ability !== 'mold-breaker' ? 2 : 1;
+      if (pressureTax > 1) this.observeAbility(defender);
+      move.pp = Math.max(0, move.pp - pressureTax);
+    }
 
     // まもる以外の技を出したら連続使用のカウントは切れる（本編仕様）。
     if (!move.protects) {
@@ -616,6 +686,12 @@ export class BattleEngine {
         defender.modifyStatStage('SPATK', 1);
         this.log.push(`${defender.name}のひらいしんで特攻が上がった`);
       }
+      // ちくでん: でんき技を無効化し、特攻を1段階上げる。
+      if (defender.ability === 'volt-absorb' && move.type === 'electric') {
+        defender.modifyStatStage('SPATK', 1);
+        this.log.push(`${defender.name}のちくでんで特攻が上がった`);
+      }
+      this.observeAbility(defender);
       this.log.push(`${defender.name}の${defender.ability}で効果がないようだ`);
       return { outcome: 'failed', reason: 'blocked-by-ability' };
     }
@@ -1202,9 +1278,15 @@ export class BattleEngine {
     } else {
       const mistyProtected = this.field.terrain === 'misty-terrain' && this.isGrounded(defender);
       if (move.secondaryEffect && !mistyProtected && this.rng.next() * 100 < move.secondaryEffect.chance) {
-        const applied = defender.applyStatus(move.secondaryEffect.status, this.rng);
-        if (applied) {
-          this.log.push(`${defender.name}は${move.secondaryEffect.status}状態になった`);
+        // 特性による無効化は追加効果でも効く。
+        if (this.blocksStatusByAbility(defender, move.secondaryEffect.status)) {
+          this.observeAbility(defender);
+          this.log.push(`${defender.name}の${defender.ability}で状態異常にならない`);
+        } else {
+          const applied = defender.applyStatus(move.secondaryEffect.status, this.rng);
+          if (applied) {
+            this.log.push(`${defender.name}は${move.secondaryEffect.status}状態になった`);
+          }
         }
       }
       if (move.targetStatChange) {
@@ -1265,6 +1347,12 @@ export class BattleEngine {
         this.log.push(`${pokemon.name}はしろいハーブで能力低下を防いだ`);
         continue;
       }
+      // クリアボディ / フラワーヴェール: 相手からの能力低下を防ぐ。
+      if (change.delta < 0 && (pokemon.ability === 'clear-body' || this.flowerVeilProtects(pokemon))) {
+        this.observeAbility(pokemon);
+        this.log.push(`${pokemon.name}の${pokemon.ability}で能力が下がらない`);
+        continue;
+      }
       const applied = pokemon.modifyStatStage(change.stat, change.delta);
       if (applied === 0) continue;
       const direction = applied > 0 ? '上がった' : '下がった';
@@ -1289,6 +1377,13 @@ export class BattleEngine {
     // ミストフィールド: 接地しているポケモンは状態異常にならない（本編仕様）。
     if (this.field.terrain === 'misty-terrain' && this.isGrounded(defender)) {
       this.log.push(`${defender.name}はミストフィールドに守られている`);
+      return { outcome: 'no-effect', reason: 'status-immune', pivot };
+    }
+
+    // 特性による無効化（ふみん・じゅなん・ねつこうかん・フラワーヴェール）。
+    if (this.blocksStatusByAbility(defender, status)) {
+      this.observeAbility(defender);
+      this.log.push(`${defender.name}の${defender.ability}で状態異常にならない`);
       return { outcome: 'no-effect', reason: 'status-immune', pivot };
     }
 
@@ -1473,7 +1568,10 @@ export class BattleEngine {
       if (dueTurn === null || this.turn < dueTurn) continue;
 
       // 既に別の状態異常なら眠れない（ねむけは消える）。本編仕様。
-      const applied = pokemon.applyStatus('sleep', this.rng);
+      // ふみん・フラワーヴェールも眠らない（ねむけ自体は消える）。
+      const blocked = this.blocksStatusByAbility(pokemon, 'sleep');
+      const applied = blocked ? false : pokemon.applyStatus('sleep', this.rng);
+      if (blocked) this.observeAbility(pokemon);
       pokemon.resetDrowsy();
       this.log.push(applied
         ? `${pokemon.name}はねむけの効果で眠ってしまった`
@@ -1588,7 +1686,11 @@ export class BattleEngine {
         // はがね/ひこう/ふゆうは無効（何もしない）
       } else if (!pokemon.isFainted && pokemon.status === null) {
         // 状態異常でなければ毒付与（1層= poison, 2層= badly-poisoned）
-        if (this.field.toxicSpikes[key] >= 2) {
+        const toxicStatus: StatusCondition = this.field.toxicSpikes[key] >= 2 ? 'badly-poisoned' : 'poison';
+        if (this.blocksStatusByAbility(pokemon, toxicStatus)) {
+          this.observeAbility(pokemon);
+          this.log.push(`${pokemon.name}の${pokemon.ability}でどくびしの毒を受けない`);
+        } else if (toxicStatus === 'badly-poisoned') {
           pokemon.applyStatus('badly-poisoned', this.rng);
           this.log.push(`${pokemon.name}はどくびしの猛毒を受けた`);
         } else {
@@ -1626,6 +1728,16 @@ export class BattleEngine {
 
     // すいすい: 雨のとき素早さが2倍になる
     if (pokemon.ability === 'swift-swim' && this.weather === 'rain') {
+      speed *= 2;
+    }
+
+    // ようりょくそ: 晴れのとき素早さが2倍になる
+    if (pokemon.ability === 'chlorophyll' && this.weather === 'sun') {
+      speed *= 2;
+    }
+
+    // かるわざ: 持ち物を失うと素早さが2倍になる（この実装では itemUsed を消費とみなす）。
+    if (pokemon.ability === 'unburden' && pokemon.itemUsed) {
       speed *= 2;
     }
 

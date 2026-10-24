@@ -392,6 +392,115 @@ export const POISON_POINT: AbilityDefinition = {
   },
 };
 
+// ---- 2026-10-24 追加: 名前だけだった特性の実装 ----
+// エンジン本体（battle-engine）から名前で参照するもの（プレッシャー・クリアボディ・
+// フラワーヴェール・ふみん・じゅなん・ようりょくそ・かるわざ）は、ここでは宣言だけ持つ。
+// 判定の一元化のため、状態異常・能力低下・素早さの計算は battle-engine 側に集約している。
+
+// プレッシャー: 相手のPP消費が2倍になる（battle-engine の技使用時に判定）。
+export const PRESSURE: AbilityDefinition = {
+  name: 'pressure',
+};
+
+// クリアボディ: 相手からの能力低下を防ぐ（applyTargetStatChange 側で判定）。
+export const CLEAR_BODY: AbilityDefinition = {
+  name: 'clear-body',
+};
+
+// フラワーヴェール: くさタイプの自分・味方を能力低下と状態異常から守る（engine.flowerVeilProtects）。
+export const FLOWER_VEIL: AbilityDefinition = {
+  name: 'flower-veil',
+};
+
+// じゅなん: まひにならない（blocksStatusByAbility）。
+export const LIMBER: AbilityDefinition = {
+  name: 'limber',
+};
+
+// ようりょくそ: 晴れのとき素早さ2倍（calculateSpeed）。
+export const CHLOROPHYLL: AbilityDefinition = {
+  name: 'chlorophyll',
+};
+
+// かるわざ: 持ち物を失うと素早さ2倍（calculateSpeed が itemUsed を見る）。
+export const UNBURDEN: AbilityDefinition = {
+  name: 'unburden',
+};
+
+// そうだいしょう: 場に出たとき、倒れた味方1体につき攻撃・特攻が1段階上がる。
+export const SUPREME_OVERLORD: AbilityDefinition = {
+  name: 'supreme-overlord',
+  onSwitchIn: ({ pokemon, engine }) => {
+    const faintedAllies = engine.teamOf(pokemon).filter((ally) => ally !== pokemon && ally.isFainted).length;
+    if (faintedAllies === 0) return;
+    const attack = pokemon.modifyStatStage('ATK', faintedAllies);
+    const spAtk = pokemon.modifyStatStage('SPATK', faintedAllies);
+    if (attack !== 0 || spAtk !== 0) {
+      engine.log.push(`${pokemon.name}のそうだいしょうで攻撃・特攻が上がった（倒れた味方 ${faintedAllies}体）`);
+      engine.observeAbility(pokemon);
+    }
+  },
+};
+
+// あめうけざら: 雨のときターン終了時に最大HPの1/16回復する。
+export const RAIN_DISH: AbilityDefinition = {
+  name: 'rain-dish',
+  onEndTurn: ({ pokemon, engine }) => {
+    if (engine.weather !== 'rain' || pokemon.isFainted) return;
+    const heal = Math.floor(pokemon.maxHP / 16);
+    if (heal <= 0 || pokemon.currentHP >= pokemon.maxHP) return;
+    pokemon.heal(heal);
+    engine.log.push(`${pokemon.name}はあめうけざらで${heal}回復した`);
+    engine.observeAbility(pokemon);
+  },
+};
+
+// どくげしょう: 物理技でダメージを受けると、相手の場にどくびしを1層置く。
+export const TOXIC_DEBRIS: AbilityDefinition = {
+  name: 'toxic-debris',
+  onDamaged: ({ defender, attacker, move, engine }) => {
+    if (!isPhysicalMove(move)) return;
+    engine.addToxicSpikes(attacker, 1);
+    engine.observeAbility(defender);
+  },
+};
+
+// ねつこうかん: ほのお技を受けると攻撃が1段階上がる（やけど無効は blocksStatusByAbility）。
+export const THERMAL_EXCHANGE: AbilityDefinition = {
+  name: 'thermal-exchange',
+  onDamaged: ({ defender, move, engine }) => {
+    if (move.type !== 'fire') return;
+    const changed = defender.modifyStatStage('ATK', 1);
+    engine.observeAbility(defender);
+    if (changed !== 0) {
+      engine.log.push(`${defender.name}はねつこうかんで攻撃が上がった`);
+    }
+  },
+};
+
+// こぼれダネ: くさ技を受けるとグラスフィールドを展開する。
+export const SEED_SOWER: AbilityDefinition = {
+  name: 'seed-sower',
+  onDamaged: ({ defender, move, engine }) => {
+    if (move.type !== 'grass') return;
+    if (engine.field.terrain === 'grassy-terrain') return;
+    engine.setTerrainFromAbility('grassy-terrain', 5);
+    engine.log.push(`${defender.name}のこぼれダネでグラスフィールドが広がった`);
+    engine.observeAbility(defender);
+  },
+};
+
+// ちくでん: でんき技を無効化し特攻を上げる（無効化は blocksMove、上昇は battle-engine 側）。
+export const VOLT_ABSORB: AbilityDefinition = {
+  name: 'volt-absorb',
+  blocksMove: (move) => move.type === 'electric',
+};
+
+// おみとおし: 場に出たとき相手の持ち物がわかる（battle-runner の switchTo 側で処理）。
+export const FRISK: AbilityDefinition = {
+  name: 'frisk',
+};
+
 export const META_ABILITIES: AbilityDefinition[] = [
   UNAWARE,
   REGENERATOR,
@@ -436,4 +545,17 @@ export const META_ABILITIES: AbilityDefinition[] = [
   WEAK_ARMOR,
   SCRAPPY,
   POISON_POINT,
+  PRESSURE,
+  CLEAR_BODY,
+  FLOWER_VEIL,
+  LIMBER,
+  CHLOROPHYLL,
+  UNBURDEN,
+  SUPREME_OVERLORD,
+  RAIN_DISH,
+  TOXIC_DEBRIS,
+  THERMAL_EXCHANGE,
+  SEED_SOWER,
+  VOLT_ABSORB,
+  FRISK,
 ];

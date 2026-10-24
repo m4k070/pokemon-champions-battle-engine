@@ -1,6 +1,7 @@
 import type { Pokemon } from '../pokemon.js';
 import type { AgentAction, WeatherType } from '../types.js';
 import type { BattleSession } from '../battle-runner.js';
+import { createStruggleMove } from '../move.js';
 import { SYSTEM_RANDOM } from '../rng.js';
 import type { RandomSource } from '../rng.js';
 
@@ -62,6 +63,12 @@ export function getLegalActions(context: BattleContext): LegalActions {
         .map((move, index) => ({ move, index }))
         .filter(({ move, index }) => move.pp > 0 && context.self.canUseMove(index))
         .map(({ move, index }) => ({ index, move }));
+
+  // わるあがき: 技のPPがすべて尽きたら、技の代わりにこれだけが選べる（本編仕様）。
+  // index = -1 がその印で、runner 側がわるあがきに差し替える。
+  if (!context.mustSwitch && moves.length === 0) {
+    moves.push({ index: -1, move: createStruggleMove() });
+  }
 
   const switches = context.selfTeam
     .map((pokemon, index) => ({ pokemon, index }))

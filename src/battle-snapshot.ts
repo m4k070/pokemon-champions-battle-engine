@@ -19,6 +19,7 @@ export interface PokemonSnapshot {
   ability: AbilityName;
   item: ItemName | null;
   itemUsed: boolean;
+  abilityRevealed?: boolean;
   lockedMove: number | null;
   baseStats: BaseStats;
   // メガシンカ時の実数値再計算に必要なため、statsとは別に配分の由来も保存する。
@@ -123,6 +124,7 @@ export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
     ability: pokemon.ability,
     item: pokemon.item,
     itemUsed: pokemon.itemUsed,
+    abilityRevealed: pokemon.abilityRevealed,
     lockedMove: pokemon.lockedMove,
     baseStats: { ...pokemon.baseStats },
     statPoints: { ...pokemon.statPoints },
@@ -158,6 +160,7 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
     ability: snapshot.ability,
     item: snapshot.item,
     itemUsed: snapshot.itemUsed,
+    abilityRevealed: snapshot.abilityRevealed ?? false,
     lockedMove: snapshot.lockedMove,
     baseStats: { ...snapshot.baseStats },
     statPoints: { ...snapshot.statPoints },

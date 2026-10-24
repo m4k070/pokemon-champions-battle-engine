@@ -39,6 +39,7 @@ export interface PokémonConstructorData {
   baseName?: string;
   isMega?: boolean;
   itemUsed?: boolean;
+  abilityRevealed?: boolean;
   lockedMove?: number | null;
   statStages?: StatStages;
   isSeeded?: boolean;
@@ -76,6 +77,10 @@ export class Pokemon {
   ability: AbilityName;
   item: ItemName | null;
   itemUsed: boolean;
+  // 特性が観測されたか（いかくの発動・技の無効化・軽減など、外から見える挙動があったか）。
+  // 不完全情報モードでは、これが false の間は相手の特性を 'none' として伏せる。
+  // 持ち物と違い、特性の効果は双方から観測できるので、viewer ごとではなく個体の属性として持つ。
+  abilityRevealed: boolean;
   lockedMove: number | null;
   baseStats: BaseStats;
   statPoints: StatPointsInput;
@@ -130,6 +135,7 @@ export class Pokemon {
     this.ability = data.ability;
     this.item = data.item ?? null;
     this.itemUsed = data.itemUsed ?? false;
+    this.abilityRevealed = data.abilityRevealed ?? false;
     this.lockedMove = data.lockedMove ?? null;
     this.baseStats = data.baseStats;
     this.moves = data.moves ?? [];
