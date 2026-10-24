@@ -10,6 +10,13 @@ export interface StealthRockView {
   opponent: boolean;
 }
 
+// まきびし・どくびしの層数（自分側・相手側の場）。
+// 設置技は「相手の場に置く」ので、self は自分が受ける側の層数になる。
+export interface HazardLayersView {
+  self: number;
+  opponent: number;
+}
+
 export interface BattleFieldView {
   weather: WeatherType | null;
   weatherTurnsLeft: number;
@@ -19,6 +26,8 @@ export interface BattleFieldView {
   trickRoom: boolean;
   trickRoomTurnsLeft: number;
   stealthRock: StealthRockView;
+  spikes: HazardLayersView;
+  toxicSpikes: HazardLayersView;
 }
 
 export interface BattleContext {

@@ -58,6 +58,14 @@ function buildContext(
         self: engine.field.stealthRock[sideKey(side)],
         opponent: engine.field.stealthRock[sideKey(side === 0 ? 1 : 0)],
       },
+      spikes: {
+        self: engine.field.spikes[sideKey(side)],
+        opponent: engine.field.spikes[sideKey(side === 0 ? 1 : 0)],
+      },
+      toxicSpikes: {
+        self: engine.field.toxicSpikes[sideKey(side)],
+        opponent: engine.field.toxicSpikes[sideKey(side === 0 ? 1 : 0)],
+      },
     },
     recentLog: engine.log,
   };
