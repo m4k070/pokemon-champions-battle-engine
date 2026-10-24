@@ -1,8 +1,11 @@
 import type { BattleAgent, BattleContext, AgentDecision } from './battle-agent.js';
+import type { Pokemon } from '../pokemon.js';
 import { getLegalActions } from './battle-agent.js';
 import type { BattleSession } from '../battle-runner.js';
 import type { AgentAction } from '../types.js';
 import { evaluateValue } from './value-function.js';
+import { compatibleSets, defaultBelief } from './opponent-belief.js';
+import type { Belief } from './opponent-belief.js';
 import { HeuristicV1BattleAgent } from './baselines/heuristic-v1.js';
 import { SeededRandom } from '../rng.js';
 
@@ -44,7 +47,10 @@ export interface ValueSearchOptions {
   //   'model'   相手方策の1手だけを想定（相手を知っている前提。実戦では使えない）
   //   'uniform' 相手の合法手すべてを等確率とみなして平均（相手の政策を知らない）
   //   'worst'   相手の合法手のうち自分にとって最悪の結果（maximin）
-  opponentMode?: 'model' | 'uniform' | 'worst';
+  //   'belief'  相手の型の信念（候補セット）から、ありうる手を列挙して平均（伏せ情報を使わない）
+  opponentMode?: 'model' | 'uniform' | 'worst' | 'belief';
+  // 信念。既定はメタ構築プールから作る。
+  belief?: Belief;
   // 探索する候補の上限（計算時間の制御）。0 なら全候補。
   maxCandidates?: number;
 }
@@ -99,6 +105,15 @@ export class ValueSearchBattleAgent implements BattleAgent {
 
   private async evaluate(session: BattleSession, side: 0 | 1, action: AgentAction): Promise<number> {
     const mode = this.options.opponentMode ?? 'model';
+    if (mode === 'belief') {
+      const scenarios = this.beliefScenarios(session.fork(), side);
+      if (scenarios.length === 0) return -Infinity;
+      let sum = 0;
+      for (const scenario of scenarios) {
+        sum += await this.simulateWith(session.fork(), side, action, scenario);
+      }
+      return sum / scenarios.length;
+    }
     if (mode === 'model') {
       const fork = session.fork();
       const other = (side === 0 ? 1 : 0) as 0 | 1;
@@ -119,6 +134,26 @@ export class ValueSearchBattleAgent implements BattleAgent {
       worst = Math.min(worst, value);
     }
     return mode === 'worst' ? worst : sum / opponentActions.length;
+  }
+
+  // 相手の型の信念から「ありうる手」の場面を作る。
+  // 候補セットごとに技4つ、加えて交代（ベンチに残っている全員）を1つずつ。
+  // 実際の技構成・PPは見ないので、不完全情報モードでも情報が漏れない。
+  private beliefScenarios(fork: BattleSession, side: 0 | 1): { moves: Pokemon['moves'] | null; action: AgentAction }[] {
+    return opponentScenarios(fork.getContext(side), this.options.belief ?? defaultBelief());
+  }
+
+  private async simulateWith(
+    fork: BattleSession,
+    side: 0 | 1,
+    action: AgentAction,
+    scenario: { moves: Pokemon['moves'] | null; action: AgentAction },
+  ): Promise<number> {
+    if (scenario.moves !== null) {
+      const opponent = side === 0 ? fork.activeB : fork.activeA;
+      opponent.moves = scenario.moves.map((move) => ({ ...move }));
+    }
+    return this.simulate(fork, side, action, scenario.action);
   }
 
   private enumerateActions(context: BattleContext): AgentAction[] {
@@ -145,4 +180,31 @@ export class ValueSearchBattleAgent implements BattleAgent {
     if (fork.isFinished()) return fork.winner() === side ? 1 : 0;
     return evaluateValue(fork.getContext(side));
   }
+}
+
+// 信念から相手の「ありうる手」を列挙する（純関数。テストで不変条件を固定する）。
+// 相手の実際の技構成・PPは見ない。開示済みの技と矛盾しない候補セットだけを使う。
+export function opponentScenarios(
+  context: BattleContext,
+  belief: Belief = defaultBelief(),
+): { moves: Pokemon['moves'] | null; action: AgentAction }[] {
+  const sets = compatibleSets(context.opponent, belief);
+  const scenarios: { moves: Pokemon['moves'] | null; action: AgentAction }[] = [];
+
+  for (const set of sets) {
+    for (let index = 0; index < set.moves.length; index++) {
+      scenarios.push({ moves: set.moves, action: { type: 'move', moveIndex: index, target: 0 } });
+    }
+  }
+  if (scenarios.length === 0) {
+    // 信念に候補が無い種族は、開示済みの技だけを対象にする。
+    for (let index = 0; index < context.opponent.moves.length; index++) {
+      scenarios.push({ moves: null, action: { type: 'move', moveIndex: index, target: 0 } });
+    }
+  }
+  context.opponentTeam.forEach((pokemon, index) => {
+    if (pokemon.isFainted || pokemon.name === context.opponent.name) return;
+    scenarios.push({ moves: null, action: { type: 'switch', pokemonIndex: index } });
+  });
+  return scenarios;
 }
