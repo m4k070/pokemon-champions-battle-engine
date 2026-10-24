@@ -19,8 +19,8 @@ function wilson(wins: number, total: number): [number, number] {
 async function main(): Promise<void> {
   const seeds = Number((process.argv.find((a) => a.startsWith('--seeds=')) ?? '--seeds=100').split('=')[1]);
   const builds = Number((process.argv.find((a) => a.startsWith('--builds=')) ?? '--builds=0').split('=')[1]);
-  const mode = ((process.argv.find((a) => a.startsWith('--mode=')) ?? '--mode=uniform').split('=')[1] ?? 'uniform') as
-    | 'model' | 'uniform' | 'worst';
+  const mode = ((process.argv.find((a) => a.startsWith('--mode=')) ?? '--mode=belief').split('=')[1] ?? 'belief') as
+    | 'model' | 'uniform' | 'worst' | 'belief';
   let valueWins = 0, baselineWins = 0, draws = 0;
   const perBuild = new Map<string, { wins: number; total: number }>();
   const started = Date.now();
