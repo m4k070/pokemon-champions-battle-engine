@@ -38,12 +38,12 @@ async function main(): Promise<void> {
           currentIsA ? current : baseline,
           currentIsA ? baseline : current,
           {
-            maxTurns: 300, rng: new SeededRandom(seed * 31 + 3 + (currentIsA ? 0 : 500)), information: 'partial', leadA: teamA[0], leadB: teamB[0],
+            maxTurns: 50, rng: new SeededRandom(seed * 31 + 3 + (currentIsA ? 0 : 500)), information: 'partial', leadA: teamA[0], leadB: teamB[0],
           },
         );
         const stat = perBuild.get(entry.name) ?? { wins: 0, total: 0 };
         stat.total++;
-        if (result.winner === null) draws++;
+        if (result.winner === null) { draws++; stat.wins += 0.5; }
         else if (result.winner === (currentIsA ? 0 : 1)) { currentWins++; stat.wins++; }
         else baselineWins++;
         perBuild.set(entry.name, stat);
@@ -51,12 +51,13 @@ async function main(): Promise<void> {
     }
   }
 
-  const decided = currentWins + baselineWins;
-  const [low, high] = wilson(currentWins, decided);
-  console.log(`現在 vs ベースラインv1: ${decided}試合（分 ${draws}）`);
-  console.log(`現在 ${(100 * currentWins / Math.max(1, decided)).toFixed(1)}%  95%CI [${low.toFixed(1)}, ${high.toFixed(1)}]`);
+  const total = currentWins + baselineWins + draws;
+  const score = currentWins + 0.5 * draws;
+  const [low, high] = wilson(score, total);
+  console.log(`現在 vs ベースラインv1: ${total}試合（分 ${draws} = ${(100 * draws / Math.max(1, total)).toFixed(1)}%）`);
+  console.log(`現在 ${(100 * score / Math.max(1, total)).toFixed(1)}%（引き分け0.5勝）  95%CI [${low.toFixed(1)}, ${high.toFixed(1)}]`);
   for (const [name, stat] of perBuild) {
-    console.log(`  ${name}: ${(100 * stat.wins / Math.max(1, stat.total)).toFixed(1)}% (${stat.wins}/${stat.total})`);
+    console.log(`  ${name}: ${(100 * stat.wins / Math.max(1, stat.total)).toFixed(1)}% (${stat.wins.toFixed(1)}/${stat.total})`);
   }
 }
 

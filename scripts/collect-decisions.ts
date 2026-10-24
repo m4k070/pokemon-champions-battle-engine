@@ -35,7 +35,7 @@ async function main(): Promise<void> {
         const logA = new LoggingBattleAgent(new HeuristicBattleAgent(new SeededRandom(seed * 31 + 1)), teamB, 0);
         const logB = new LoggingBattleAgent(new HeuristicBattleAgent(new SeededRandom(seed * 31 + 2)), teamA, 1);
         const result = await runBattle(teamA, teamB, logA, logB, {
-          maxTurns: 300,
+          maxTurns: 50,
           rng: new SeededRandom(seed * 31 + 3),
           information: 'partial',
           leadA: teamA[0],

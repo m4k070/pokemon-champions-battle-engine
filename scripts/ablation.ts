@@ -74,7 +74,7 @@ async function main() {
       const leadA = await agentA.selectLead(picked);
       const leadB = await agentB.selectLead(opp);
       const result = await runBattle(picked, opp, agentA, agentB, {
-        maxTurns: 300, rng: new SeededRandom(seed * 31 + 3), information: 'partial', leadA, leadB,
+        maxTurns: 50, rng: new SeededRandom(seed * 31 + 3), information: 'partial', leadA, leadB,
       });
       games++;
       if (result.winner === 0) wins++; else if (result.winner === null) draws++;

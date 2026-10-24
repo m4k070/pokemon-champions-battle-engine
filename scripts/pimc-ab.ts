@@ -45,7 +45,7 @@ async function main(): Promise<void> {
         teamA, teamB,
         pimcIsSideA ? pimc : heuristic,
         pimcIsSideA ? heuristic : pimc,
-        { maxTurns: 300, rng: new SeededRandom(seed * 31 + 3), information: 'partial', leadA: teamA[0], leadB: teamB[0] },
+        { maxTurns: 50, rng: new SeededRandom(seed * 31 + 3), information: 'partial', leadA: teamA[0], leadB: teamB[0] },
       );
       games++;
       const winner = result.winner;

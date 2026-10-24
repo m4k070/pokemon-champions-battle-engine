@@ -34,11 +34,11 @@ async function main(): Promise<void> {
         const agentA = new HeuristicBattleAgent(new SeededRandom(seed * 31 + (swap ? 2 : 1)));
         const agentB = new HeuristicBattleAgent(new SeededRandom(seed * 31 + (swap ? 1 : 2)));
         const result = await runBattle(teamA, teamB, agentA, agentB, {
-          maxTurns: 300, rng: new SeededRandom(seed * 31 + 3), information: 'partial', leadA: teamA[0], leadB: teamB[0],
+          maxTurns: 50, rng: new SeededRandom(seed * 31 + 3), information: 'partial', leadA: teamA[0], leadB: teamB[0],
         });
         const stat = perBuild.get(entry.name) ?? { wins: 0, total: 0 };
         stat.total++;
-        if (result.winner === null) draws++;
+        if (result.winner === null) { draws++; stat.wins += 0.5; }
         else if (result.winner === 0) { aWins++; stat.wins++; }
         else bWins++;
         perBuild.set(entry.name, stat);
@@ -46,13 +46,15 @@ async function main(): Promise<void> {
     }
   }
 
-  const decided = aWins + bWins;
-  const [low, high] = wilson(aWins, decided);
-  console.log(`A/A: ${decided}試合（分 ${draws}）  A勝ち ${aWins} / B勝ち ${bWins}`);
-  console.log(`A側勝率 ${(100 * aWins / Math.max(1, decided)).toFixed(1)}%  95%CI [${low.toFixed(1)}, ${high.toFixed(1)}]`);
+  // 引き分けは0.5勝として集計する（ターン上限で決着しなかった分を勝敗に均す）。
+  const total = aWins + bWins + draws;
+  const score = aWins + 0.5 * draws;
+  const [low, high] = wilson(score, total);
+  console.log(`A/A: ${total}試合（分 ${draws} = ${(100 * draws / Math.max(1, total)).toFixed(1)}%）  A勝ち ${aWins} / B勝ち ${bWins}`);
+  console.log(`A側勝率 ${(100 * score / Math.max(1, total)).toFixed(1)}%（引き分け0.5勝）  95%CI [${low.toFixed(1)}, ${high.toFixed(1)}]`);
   console.log('構築別（A側=先攻側の勝率）:');
   for (const [name, stat] of perBuild) {
-    console.log(`  ${name}: ${(100 * stat.wins / Math.max(1, stat.total)).toFixed(1)}% (${stat.wins}/${stat.total})`);
+    console.log(`  ${name}: ${(100 * stat.wins / Math.max(1, stat.total)).toFixed(1)}% (${stat.wins.toFixed(1)}/${stat.total})`);
   }
 }
 

@@ -40,12 +40,12 @@ async function main(): Promise<void> {
           teamA, teamB,
           valueIsA ? value : baseline,
           valueIsA ? baseline : value,
-          { maxTurns: 300, rng: new SeededRandom(seed * 31 + 3 + (valueIsA ? 0 : 500)), information: 'partial', leadA: teamA[0], leadB: teamB[0] },
+          { maxTurns: 50, rng: new SeededRandom(seed * 31 + 3 + (valueIsA ? 0 : 500)), information: 'partial', leadA: teamA[0], leadB: teamB[0] },
         );
         games++;
         const stat = perBuild.get(entry.name) ?? { wins: 0, total: 0 };
         stat.total++;
-        if (result.winner === null) draws++;
+        if (result.winner === null) { draws++; stat.wins += 0.5; }
         else if (result.winner === (valueIsA ? 0 : 1)) { valueWins++; stat.wins++; }
         else baselineWins++;
         perBuild.set(entry.name, stat);
@@ -54,12 +54,14 @@ async function main(): Promise<void> {
   }
 
   const decided = valueWins + baselineWins;
-  const [low, high] = wilson(valueWins, decided);
+  const total = decided + draws;
+  const score = valueWins + 0.5 * draws;
+  const [low, high] = wilson(score, total);
   const seconds = (Date.now() - started) / 1000;
-  console.log(`1手先読み(${mode}) vs ベースラインv1: ${decided}試合（分 ${draws}、${seconds.toFixed(0)}秒 / ${(seconds / Math.max(1, games)).toFixed(2)}秒毎試合）`);
-  console.log(`1手先読み ${(100 * valueWins / Math.max(1, decided)).toFixed(1)}%  95%CI [${low.toFixed(1)}, ${high.toFixed(1)}]`);
+  console.log(`1手先読み(${mode}) vs ベースラインv1: ${total}試合（分 ${draws} = ${(100 * draws / Math.max(1, total)).toFixed(1)}%、${seconds.toFixed(0)}秒 / ${(seconds / Math.max(1, games)).toFixed(2)}秒毎試合）`);
+  console.log(`1手先読み ${(100 * score / Math.max(1, total)).toFixed(1)}%（引き分け0.5勝）  95%CI [${low.toFixed(1)}, ${high.toFixed(1)}]`);
   for (const [name, stat] of perBuild) {
-    console.log(`  ${name}: ${(100 * stat.wins / Math.max(1, stat.total)).toFixed(1)}% (${stat.wins}/${stat.total})`);
+    console.log(`  ${name}: ${(100 * stat.wins / Math.max(1, stat.total)).toFixed(1)}% (${stat.wins.toFixed(1)}/${stat.total})`);
   }
 }
 
