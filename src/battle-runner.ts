@@ -236,7 +236,7 @@ export class BattleSession {
     const self = side === 0 ? this.activeA : this.activeB;
     const selfTeam = side === 0 ? this.teamA : this.teamB;
 
-    return buildContext(
+    const context = buildContext(
       this.engine,
       side,
       self,
@@ -246,6 +246,10 @@ export class BattleSession {
       canMegaEvolve,
       mustSwitch,
     );
+    // 分岐探索（1手先読み）用。局面の複製はエージェント側で行う。
+    context.side = side;
+    context.session = this;
+    return context;
   }
 
   // 相手の情報を「見えている分だけ」に絞る。full モードでは素通し。
