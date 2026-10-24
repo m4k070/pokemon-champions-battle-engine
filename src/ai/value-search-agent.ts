@@ -121,7 +121,9 @@ export class ValueSearchBattleAgent implements BattleAgent {
   }
 
   private async evaluate(session: BattleSession, side: 0 | 1, action: AgentAction): Promise<number> {
-    const mode = this.options.opponentMode ?? 'model';
+    // 既定は maximin。相手方策を読む 'model' は実戦では使えないので既定にしない
+    // （実測: 'worst' 84.5% / 'belief' 78.8% 対 凍結v1、プールでも 'worst' が 'belief' に59.1%）。
+    const mode = this.options.opponentMode ?? 'worst';
     if (mode === 'belief') {
       const scenarios = this.beliefScenarios(session.fork(), side);
       if (scenarios.length === 0) return -Infinity;
