@@ -638,6 +638,15 @@ export class BattleEngine {
         this.log.push('効果がなかった');
         return noEffect('type-immune');
       }
+
+      // みがわり: 身代わりがあるとき、相手に向けた変化技は身代わりに阻まれる（本編仕様）。
+      // 場に置く技（ステロ・まきびし等）と自分を対象にする技は防がない。
+      // あくび・アンコールは targetsOpponent に載っていないため個別に含める。
+      if (defender.substituteHP > 0 && !move.fieldEffect && !move.selfStatChange && !move.createsSubstitute) {
+        this.log.push(`${defender.name}は身代わりで${move.name}を防いだ`);
+        return noEffect('no-applicable-effect');
+      }
+
     }
 
     if (move.accuracy < 100) {
@@ -863,6 +872,12 @@ export class BattleEngine {
       attacker.heal(heal);
       this.log.push(`${attacker.name}は${move.name}で${heal}回復した`);
       return effectApplied();
+    }
+
+    // みがわり: あくび・アンコールは targetsOpponent に載らないため、ここでも防ぐ。
+    if (defender.substituteHP > 0 && isStatusMove(move) && (move.inflictsDrowsy || move.inflictsEncore)) {
+      this.log.push(`${defender.name}は身代わりで${move.name}を防いだ`);
+      return noEffect('no-applicable-effect');
     }
 
     // あくび: 相手をねむけにし、次のターンの終了時にねむりにする（交代で解除）。
