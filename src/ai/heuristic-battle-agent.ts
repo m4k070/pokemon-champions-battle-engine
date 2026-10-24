@@ -407,7 +407,10 @@ export class HeuristicBattleAgent implements BattleAgent {
   async selectAction(context: BattleContext): Promise<AgentDecision> {
     const { moves, switches, canMegaEvolve } = getLegalActions(context);
 
-    if (moves.length === 0) {
+    // わるあがきだけが合法手＝技のPPが尽きている（こだわり拘束で拘束技が切れた場合を含む）。
+    // 控えが残っているなら交代で解消する。PP切れの駒を場に居座らせると膠着する。
+    const onlyStruggle = moves.length === 1 && moves[0]!.index === -1;
+    if (moves.length === 0 || (onlyStruggle && switches.length > 0)) {
       if (switches.length === 0) return { action: { type: 'forfeit' } };
       const ranked = this.rankSwitches(context, switches);
       this.lastEvaluation = ranked.map(({ pokemon, index }) => ({

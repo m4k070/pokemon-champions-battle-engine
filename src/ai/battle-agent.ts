@@ -64,8 +64,9 @@ export function getLegalActions(context: BattleContext): LegalActions {
         .filter(({ move, index }) => move.pp > 0 && context.self.canUseMove(index))
         .map(({ move, index }) => ({ index, move }));
 
-  // わるあがき: 技のPPがすべて尽きたら、技の代わりにこれだけが選べる（本編仕様）。
+  // わるあがき: 技のPPがすべて尽きたときの最後の手段。
   // index = -1 がその印で、runner 側がわるあがきに差し替える。
+  // 交代できる場合にこれを選ぶかは方策の判断に任せる（ヒューリスティックは交代を優先する）。
   if (!context.mustSwitch && moves.length === 0) {
     moves.push({ index: -1, move: createStruggleMove() });
   }

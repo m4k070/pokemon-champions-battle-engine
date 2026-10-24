@@ -65,9 +65,9 @@ describe('RandomBattleAgent', () => {
     expect(decision.action).toEqual({ type: 'move', moveIndex: 1, target: 0 });
   });
 
-  // 2026-10-24: 技のPPが尽きたら わるあがき（moveIndex = -1）を選ぶ。
-  // 本編ではPP切れは交代や降参ではなく、わるあがきでの攻撃になる。
-  test('uses struggle when every move is out of PP (bench available)', async () => {
+  // 2026-10-24: PP切れのわるあがきは合法手に残る（交代できるかは方策の判断）。
+  // ヒューリスティックは控えがいれば交代を優先する（heuristic-battle-agent 側の分岐）。
+  test('keeps struggle legal even when a healthy teammate is available', async () => {
     const agent = new RandomBattleAgent();
     const self = makePokemon({
       moves: [
