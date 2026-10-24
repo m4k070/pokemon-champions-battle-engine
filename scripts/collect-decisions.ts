@@ -1,6 +1,7 @@
 import { META_TEAMS, teamToPokemons } from '../src/data/meta-teams.js';
 import { runBattle } from '../src/battle-runner.js';
 import type { BattleAgent } from '../src/ai/battle-agent.js';
+import { getLegalActions } from '../src/ai/battle-agent.js';
 import { HeuristicBattleAgent } from '../src/ai/heuristic-battle-agent.js';
 import { HeuristicV1BattleAgent } from '../src/ai/baselines/heuristic-v1.js';
 import { ValueSearchBattleAgent } from '../src/ai/value-search-agent.js';
@@ -20,6 +21,23 @@ const gamesArg = Number((process.argv.find((a) => a.startsWith('--games=')) ?? '
 const out = (process.argv.find((a) => a.startsWith('--out=')) ?? '--out=decisions.jsonl').split('=')[1]!;
 
 const round = (value: number): number => Math.round(value * 1000) / 1000;
+// どの V で学習したデータかを残す（expert iteration の世代管理）。
+const VERSION = (process.argv.find((a) => a.startsWith('--v=')) ?? '--v=v3').split('=')[1]!;
+
+// 一定確率でランダムな合法手を打つ摂動版（評価プールと同じ趣旨）。
+class EpsilonAgent implements BattleAgent {
+  constructor(private readonly inner: BattleAgent, private readonly rng: SeededRandom, private readonly epsilon: number) {}
+  async selectLead(team: Parameters<BattleAgent['selectLead']>[0]) { return this.inner.selectLead(team); }
+  async selectAction(context: Parameters<BattleAgent['selectAction']>[0]): Promise<Awaited<ReturnType<BattleAgent['selectAction']>>> {
+    if (this.rng.next() >= this.epsilon) return this.inner.selectAction(context);
+    const legal = getLegalActions(context);
+    const total = legal.moves.length + legal.switches.length;
+    if (total === 0) return { action: { type: 'forfeit' } };
+    const pick = Math.min(total - 1, Math.floor(this.rng.next() * total));
+    if (pick < legal.moves.length) return { action: { type: 'move', moveIndex: legal.moves[pick]!.index, target: 0 } };
+    return { action: { type: 'switch', pokemonIndex: legal.switches[pick - legal.moves.length]!.index } };
+  }
+}
 
 async function main(): Promise<void> {
   writeFileSync(out, '');
@@ -38,15 +56,29 @@ async function main(): Promise<void> {
         const teamB = selectTeamWithPlan(entryB, teamToPokemons(entryB)).members;
         // 方策を混ぜる。ベースライン同士だけだと V は「ベースラインの線」の上でしか
         // 較正されず、1手先読みが分布外に出た瞬間に過大評価する（実測で確認済み）。
-        const kind = seed % 3;
-        const make = (side: 0 | 1): BattleAgent => {
+        // どの方策の下での記録かを policy タグで残す（後から除外実験ができるように）。
+        const kind = seed % 4;
+        const make = (side: 0 | 1): { agent: BattleAgent; policy: string } => {
           const rng = new SeededRandom(seed * 31 + side + 1);
-          if (kind === 0) return new HeuristicV1BattleAgent(rng);
-          if (kind === 1) return (side === 0) === (seed % 2 === 0) ? new ValueSearchBattleAgent(rng, { trustMargin: 0.1 }) : new HeuristicV1BattleAgent(rng);
-          return side === 0 ? new RandomBattleAgent(rng) : new HeuristicV1BattleAgent(rng);
+          const isFirst = side === 0;
+          if (kind === 0) return { agent: new HeuristicV1BattleAgent(rng), policy: 'baseline' };
+          if (kind === 1) {
+            return isFirst === (seed % 2 === 0)
+              ? { agent: new ValueSearchBattleAgent(rng, { trustMargin: 0.05 }), policy: 'maximin' }
+              : { agent: new HeuristicV1BattleAgent(rng), policy: 'baseline' };
+          }
+          if (kind === 2) {
+            return isFirst
+              ? { agent: new EpsilonAgent(new HeuristicV1BattleAgent(rng), rng, 0.1), policy: 'baseline-eps' }
+              : { agent: new HeuristicV1BattleAgent(rng), policy: 'baseline' };
+          }
+          return isFirst ? { agent: new RandomBattleAgent(rng), policy: 'random' } : { agent: new HeuristicV1BattleAgent(rng), policy: 'baseline' };
         };
-        const logA = new LoggingBattleAgent(make(0), teamB, 0);
-        const logB = new LoggingBattleAgent(make(1), teamA, 1);
+        const madeA = make(0);
+        const madeB = make(1);
+        const logA = new LoggingBattleAgent(madeA.agent, teamB, 0);
+        const logB = new LoggingBattleAgent(madeB.agent, teamA, 1);
+        const policies: [string, string] = [madeA.policy, madeB.policy];
         const result = await runBattle(teamA, teamB, logA, logB, {
           maxTurns: 50,
           rng: new SeededRandom(seed * 31 + 3),
@@ -78,6 +110,8 @@ async function main(): Promise<void> {
               buildA: entryA.name,
               buildB: entryB.name,
               side: record.side,
+              policy: policies[record.side],
+              vVersion: VERSION,
               turn: record.turn,
               label: result.winner === null ? null : won,
               actionType: record.actionType,
