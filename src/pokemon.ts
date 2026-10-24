@@ -81,6 +81,8 @@ export class Pokemon {
   // 不完全情報モードでは、これが false の間は相手の特性を 'none' として伏せる。
   // 持ち物と違い、特性の効果は双方から観測できるので、viewer ごとではなく個体の属性として持つ。
   abilityRevealed: boolean;
+  // もらいび: ほのお技を吸収して発動中か（場を離れると解除される volatile）。
+  flashFireActive: boolean;
   lockedMove: number | null;
   baseStats: BaseStats;
   statPoints: StatPointsInput;
@@ -136,6 +138,7 @@ export class Pokemon {
     this.item = data.item ?? null;
     this.itemUsed = data.itemUsed ?? false;
     this.abilityRevealed = data.abilityRevealed ?? false;
+    this.flashFireActive = false;
     this.lockedMove = data.lockedMove ?? null;
     this.baseStats = data.baseStats;
     this.moves = data.moves ?? [];

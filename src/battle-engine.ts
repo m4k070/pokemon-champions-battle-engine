@@ -691,6 +691,11 @@ export class BattleEngine {
         defender.modifyStatStage('SPATK', 1);
         this.log.push(`${defender.name}のちくでんで特攻が上がった`);
       }
+      // もらいび: ほのお技を吸収し、以後じぶんのほのお技の威力が1.5倍になる。
+      if (defender.ability === 'flash-fire' && move.type === 'fire') {
+        defender.flashFireActive = true;
+        this.log.push(`${defender.name}のもらいびでほのお技を吸収した`);
+      }
       this.observeAbility(defender);
       this.log.push(`${defender.name}の${defender.ability}で効果がないようだ`);
       return { outcome: 'failed', reason: 'blocked-by-ability' };
@@ -1640,6 +1645,8 @@ export class BattleEngine {
 
   switchIn(pokemon: Pokemon, team: Pokemon[], side?: 0 | 1): Pokemon {
     this.log.push(`${pokemon.name}が場に出た！`);
+    // もらいびの吸収状態は場を離れると解除される（volatile）。
+    pokemon.flashFireActive = false;
     this.events.emit('switch-in', { pokemon, team, engine: this });
 
     if (side === undefined || pokemon.isFainted) return pokemon;

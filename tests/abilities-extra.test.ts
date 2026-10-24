@@ -226,3 +226,66 @@ describe('クリアボディと特性の公開', () => {
     expect(session.getContext(1).opponent.item).toBeNull(); // 逆向きは不明のまま
   });
 });
+
+describe('もらいび', () => {
+  const flamethrower = () =>
+    createMove({ name: 'かえんほうしゃ', type: 'fire', power: 90, accuracy: 100, pp: 10, category: 'special' });
+  const willOWisp = () =>
+    createMove({ name: 'おにび', type: 'fire', power: 0, accuracy: 100, pp: 10, category: 'status', status: 'burn' });
+
+  test('ほのお技を吸収して発動状態になる', () => {
+    const flash = mon('もらいび持ち', { ability: 'flash-fire' });
+    const attacker = mon('攻撃側');
+    const engine = makeEngine(attacker, flash);
+
+    const result = engine.useMove(attacker, flash, flamethrower());
+
+    expect(result.outcome).toBe('failed');
+    expect(flash.currentHP).toBe(flash.maxHP);
+    expect(flash.flashFireActive).toBe(true);
+    expect(flash.abilityRevealed).toBe(true);
+  });
+
+  test('変化技（おにび）も吸収する', () => {
+    const flash = mon('もらいび持ち', { ability: 'flash-fire' });
+    const attacker = mon('攻撃側');
+    const engine = makeEngine(attacker, flash);
+
+    const result = engine.useMove(attacker, flash, willOWisp());
+
+    expect(result.outcome).toBe('failed');
+    expect(flash.status).toBeNull();
+    expect(flash.flashFireActive).toBe(true);
+  });
+
+  test('発動後はじぶんのほのお技が1.5倍になる', () => {
+    const damage = (active: boolean): number => {
+      const attacker = mon('もらいび持ち', { ability: 'flash-fire' });
+      const defender = mon('相手');
+      const engine = new BattleEngine({ rng: new SeededRandom(42) });
+      engine.setActivePokemon(0, attacker);
+      engine.setActivePokemon(1, defender);
+      attacker.flashFireActive = active;
+      engine.useMove(attacker, defender, flamethrower());
+      return defender.maxHP - defender.currentHP;
+    };
+
+    const plain = damage(false);
+    const boosted = damage(true);
+
+    expect(plain).toBeGreaterThan(0);
+    expect(boosted).toBeGreaterThan(plain * 1.3);
+  });
+
+  test('場を離れると発動状態が解除される', () => {
+    const flash = mon('もらいび持ち', { ability: 'flash-fire' });
+    const attacker = mon('攻撃側');
+    const engine = makeEngine(attacker, flash);
+    engine.useMove(attacker, flash, flamethrower());
+    expect(flash.flashFireActive).toBe(true);
+
+    engine.switchIn(flash, [flash], 1);
+
+    expect(flash.flashFireActive).toBe(false);
+  });
+});

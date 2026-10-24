@@ -105,6 +105,7 @@ export const ABILITY_NAMES = [
   'torrent',
   'transistor',
   'volt-absorb',
+  'flash-fire',
   'wonder-guard',
 ] as const;
 
