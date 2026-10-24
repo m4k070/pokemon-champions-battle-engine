@@ -501,6 +501,15 @@ export const FRISK: AbilityDefinition = {
   name: 'frisk',
 };
 
+// もらいび: ほのお技を無効化し、以後じぶんのほのお技の威力が1.5倍になる。
+// 発動中のフラグは Pokemon.flashFireActive（場を離れると解除）。
+export const FLASH_FIRE: AbilityDefinition = {
+  name: 'flash-fire',
+  blocksMove: (move) => move.type === 'fire',
+  modifyMovePower: ({ pokemon, move, value }) =>
+    pokemon.flashFireActive && move.type === 'fire' ? Math.floor(value * 1.5) : value,
+};
+
 export const META_ABILITIES: AbilityDefinition[] = [
   UNAWARE,
   REGENERATOR,
@@ -557,5 +566,6 @@ export const META_ABILITIES: AbilityDefinition[] = [
   THERMAL_EXCHANGE,
   SEED_SOWER,
   VOLT_ABSORB,
+  FLASH_FIRE,
   FRISK,
 ];
