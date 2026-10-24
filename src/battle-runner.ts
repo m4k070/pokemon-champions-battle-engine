@@ -3,6 +3,7 @@ import type { RandomSource } from './rng.js';
 import { MegaEvolutionSystem } from './rules/mega-evolution.js';
 import { isDamageMove } from './move.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
+import { createStruggleMove } from './move.js';
 import type { Pokemon } from './pokemon.js';
 import type { AgentAction } from './types.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './ai/battle-agent.js';
@@ -120,12 +121,18 @@ export class BattleSession {
     this.activeA = activeA;
     this.activeB = activeB;
     this.megaEvolutionSystem = megaEvolutionSystem;
+
+    // おみとおしは先発でも発動する（相手の持ち物がわかる）。
+    if (activeA.ability === 'frisk' && activeB) this.knownItems[0]!.add(activeB);
+    if (activeB && activeB.ability === 'frisk') this.knownItems[1]!.add(activeA);
   }
 
   static async start(teamA: Pokemon[], teamB: Pokemon[], options: StartSessionOptions = {}): Promise<BattleSession> {
     const engine = options.engine
       ?? new BattleEngine(options.rng === undefined ? {} : { rng: options.rng });
     const megaEvolutionSystem = options.megaEvolutionSystem ?? new MegaEvolutionSystem();
+    // 味方の状態を見る特性（フラワーヴェール・そうだいしょう）のためにチームを登録する。
+    engine.registerTeams(teamA, teamB);
     const leadA = options.leadA ?? teamA[0];
     const leadB = options.leadB ?? teamB[0];
 
@@ -262,7 +269,10 @@ export class BattleSession {
     Object.assign(clone, pokemon);
     clone.moves = pokemon.moves.filter((_, index) => revealedMoves.has(index));
     clone.item = this.knownItems[viewer]!.has(pokemon) ? pokemon.item : null;
-    clone.ability = this.knownAbilities[viewer]!.has(pokemon) ? pokemon.ability : ('none' as Pokemon['ability']);
+    // 特性は「外から見えた挙動があったか」で公開する（いかくの発動・技の無効化・軽減など）。
+    clone.ability = this.knownAbilities[viewer]!.has(pokemon) || pokemon.abilityRevealed
+      ? pokemon.ability
+      : ('none' as Pokemon['ability']);
     return clone;
   }
 
@@ -276,7 +286,7 @@ export class BattleSession {
       revealed = new Set<number>();
       this.knownMoves[viewer]!.set(actor, revealed);
     }
-    revealed.add(action.moveIndex);
+    if (action.moveIndex >= 0) revealed.add(action.moveIndex);
     if (action.megaEvolve) {
       this.knownItems[viewer]!.add(actor);
       this.knownAbilities[viewer]!.add(actor);
@@ -384,6 +394,16 @@ export class BattleSession {
 
     if (side === 0) this.activeA = switched;
     else this.activeB = switched;
+
+    // おみとおし: 場に出たとき相手の持ち物がわかる（判明として記録する）。
+    if (switched.ability === 'frisk') {
+      const opponent = this.engine.getOpponent(switched);
+      if (opponent) {
+        this.knownItems[side]!.add(opponent);
+        this.engine.observeAbility(switched);
+        this.engine.log.push(`${switched.name}のおみとおしで${opponent.name}の持ち物がわかった`);
+      }
+    }
   }
 
   // 両陣営が同時に選んだ行動を適用する。交代は(switch-in効果の上書き順を除き)
@@ -465,7 +485,11 @@ export class BattleSession {
     // ふいうちの判定材料: そのターン攻撃技を選んでいるかを両者に記録する（本編仕様）。
     for (const [side, action] of [[0, actionA], [1, actionB]] as const) {
       const pokemon = side === 0 ? this.activeA : this.activeB;
-      const chosen = action.type === 'move' ? pokemon.moves[action.moveIndex] : undefined;
+      const chosen = action.type !== 'move'
+        ? undefined
+        : action.moveIndex === -1
+          ? createStruggleMove()
+          : pokemon.moves[action.moveIndex];
       pokemon.intendsToAttackThisTurn = chosen !== undefined && isDamageMove(chosen);
     }
 
@@ -512,13 +536,17 @@ export class BattleSession {
       const action = side === 0 ? pending.actionA : pending.actionB;
       if (action.type !== 'move') continue;
 
-      if (action.moveIndex < 0 || action.moveIndex >= attacker.moves.length) {
+      // moveIndex = -1 はわるあがき（技のPPが尽きたとき。battle-agent の getLegalActions が返す）。
+      const chosenMove = action.moveIndex === -1
+        ? createStruggleMove()
+        : attacker.moves[action.moveIndex];
+      if (!chosenMove) {
         this.engine.log.push(`${attacker.name}のmoveIndex ${action.moveIndex}は範囲外です`);
         continue;
       }
-      const result = this.engine.useMove(attacker, defender, attacker.moves[action.moveIndex]);
-      // こだわり系は「技を出した時点」で固定される（外した場合も固定される）。
-      attacker.lockMove(action.moveIndex);
+      const result = this.engine.useMove(attacker, defender, chosenMove);
+      // こだわり系は「技を出した時点」で固定される（外した場合も固定される）。わるあがきは固定しない。
+      if (action.moveIndex >= 0) attacker.lockMove(action.moveIndex);
 
       // ほえる・ドラゴンテール: 相手を控えと強制交代させる（本編仕様）。
       // 控えが全員瀕死なら何も起きない。

@@ -65,6 +65,8 @@ interface MoveIdentity {
 // カテゴリによらず指定しうる効果（あさのひざしの回復・とんぼがえりの pivot 等）。
 // ダメージ技にも変化技にも付随しうるため、両カテゴリで共有する。
 export interface CommonMoveEffects {
+  // わるあがき専用: タイプ相性を無視する（本編のわるあがきは無タイプ）。
+  ignoresTypeEffectiveness?: boolean;
   fieldEffect?: FieldEffect | null;
   selfStatChange?: SelfStatChange[] | null;
   targetStatChange?: TargetStatChange[] | null;

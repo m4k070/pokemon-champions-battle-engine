@@ -107,6 +107,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   wishes: boolean;
   forcesSwitch: boolean;
   drainPercent: number | null;
+  ignoresTypeEffectiveness: boolean;
   recoilPercent: number | null;
   recoilMaxHpPercent: number | null;
   usesTargetAttack: boolean;
@@ -157,6 +158,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.wishes = data.wishes ?? false;
     this.forcesSwitch = data.forcesSwitch ?? false;
     this.drainPercent = data.drainPercent ?? null;
+    this.ignoresTypeEffectiveness = data.ignoresTypeEffectiveness ?? false;
     this.recoilPercent = data.recoilPercent ?? null;
     this.recoilMaxHpPercent = data.recoilMaxHpPercent ?? null;
     this.usesTargetAttack = data.usesTargetAttack ?? false;
@@ -339,4 +341,22 @@ export function cloneDamageMove(
     return { ...move, ...overrides, category: 'physical' };
   }
   return { ...move, ...overrides, category: 'special' };
+}
+
+
+// わるあがき: 技のPPがすべて尽きたときだけ使える無タイプの攻撃。
+// タイプ相性を受けず、与えたダメージの1/4を反動で受ける（本編仕様）。
+export const STRUGGLE_MOVE_NAME = 'わるあがき';
+
+export function createStruggleMove(): DamageMove {
+  return createMove({
+    name: STRUGGLE_MOVE_NAME,
+    type: 'normal',
+    power: 50,
+    accuracy: 100,
+    pp: 1,
+    category: 'physical',
+    ignoresTypeEffectiveness: true,
+    recoilPercent: 0.25,
+  });
 }
