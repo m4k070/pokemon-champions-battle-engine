@@ -1,12 +1,14 @@
 // 学習済みの勝率予測。
 //
 // 線形（ロジスティック回帰）は log-loss 0.530 / AUC 0.805 だったが、LightGBM は
-// 0.444 / 0.876 まで上がる（同じデータ・同じ試合単位の交差検証）。差のほとんどは
+// 0.443 / 0.877 まで上がる（試合単位の交差検証）。差のほとんどは
 // 交互作用で、手で設計した交互作用を足しても 0.004 しか詰まらなかった。
 // そこで木を JSON に書き出し、TS 側で走査する（外部依存なし）。
 //
 // 生成元: ~/data/pokemon-decisions/export_trees.py
-//   学習データ: 10,956試合 / 395,368意思決定（baseline / maximin / baseline-eps / random）
+//   学習データ: run4.jsonl（11,000試合 / 338,234意思決定、77特徴量。
+//              baseline / maximin / baseline-eps / random を混ぜた自己対戦）
+//   交差検証（試合単位 GroupKFold 5）: log-loss 0.4429 / AUC 0.8772
 //   200本 × 31葉、学習率0.05。
 import type { BattleContext } from './battle-agent.js';
 import { extractFeatures } from './features.js';
