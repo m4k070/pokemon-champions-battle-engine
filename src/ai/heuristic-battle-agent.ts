@@ -300,6 +300,9 @@ function statusMoveScore(
   if (move.createsSubstitute) {
     // 'off': この形式ではみがわりがマイナス（アブレーションで削除が最善）。撃たない。
     if (substituteScoring === 'off') return 0;
+    // 既に身代わりがいる場合は必ず失敗する（エンジンが「うまくきまらなかった」を返す）。
+    // 実測: 身代わり中の意思決定96件のうち74件がみがわりの再選択だった。
+    if (self.substituteHP > 0) return 0;
     if (selfHp <= 0.35) return 0;
     let score = selfHp > 0.5 ? 15 : 0;
     const hasSetup = self.moves.some((candidate) => isSetupMove(candidate));
