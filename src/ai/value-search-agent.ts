@@ -56,7 +56,7 @@ export interface ValueSearchOptions {
   // 信頼領域: ベースライン方策の手より V が margin 以上良くない限り、ベースラインの手を選ぶ。
   // 学習した V は「ベースラインが訪れる状態」でしか較正されていないため、貪欲に最大化すると
   // 分布外の状態に踏み込み、過大評価された手を選び続ける（クエスピクシー構築で実測）。
-  trustMargin?: number; // 既定 0.10（実測で最も良い）
+  trustMargin?: number; // 既定 0.05（学習分布を広げた V での実測最良）
 }
 
 export class ValueSearchBattleAgent implements BattleAgent {
@@ -105,7 +105,7 @@ export class ValueSearchBattleAgent implements BattleAgent {
       }
     }
 
-    const margin = this.options.trustMargin ?? 0.1;
+    const margin = this.options.trustMargin ?? 0.05;
     if (margin > 0) {
       const fallback = await this.opponentModel.selectAction(context);
       const fallbackValue = await this.evaluate(session, side, fallback.action);
