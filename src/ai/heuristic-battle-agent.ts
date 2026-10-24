@@ -263,7 +263,23 @@ function statusMoveScore(move: MoveData, context: BattleContext): number {
 
   if (move.inflictsEncore) return 30;
   if (move.resetsStatStages) return boostTotal(opponent) > 0 ? 60 : 0;
-  if (move.createsSubstitute) return selfHp > 0.35 ? 35 : 0;
+  // みがわり: 置くだけで満足せず、次の3条件で価値を決める。
+  // (a) 1発で壊れない（身代わりHPは最大HPの1/4）、(b) 相手が変化技を持っている、
+  // (c) こちらに積み技があり、相手を脅かしている（＝相手が引く場面＝交代読みの代用）。
+  if (move.createsSubstitute) {
+    if (selfHp <= 0.35) return 0;
+    let score = selfHp > 0.5 ? 15 : 0;
+    const incoming = worstIncomingRatio(context, self);
+    if (incoming > 0 && incoming <= 0.25) score += 20;
+    const opponentStatusMoves = opponent.moves.filter(
+      (known) => known.inflictsDrowsy || known.inflictsEncore || (known.category === 'status' && known.status !== null),
+    ).length;
+    if (opponentStatusMoves > 0) score += 20;
+    const hasSetup = self.moves.some((candidate) => isSetupMove(candidate));
+    if (hasSetup) score += 15;
+    if (bestDamageAgainst(self, opponent, context.field) >= 0.35) score += 10;
+    return score;
+  }
   if (move.forcesSwitch) return boostTotal(opponent) > 0 ? 45 : 20;
   if (move.wishes) return selfHp < 0.6 ? 35 : 10;
   if (move.weather) return 25;
