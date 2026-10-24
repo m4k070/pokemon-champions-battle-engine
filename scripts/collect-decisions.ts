@@ -1,6 +1,10 @@
 import { META_TEAMS, teamToPokemons } from '../src/data/meta-teams.js';
 import { runBattle } from '../src/battle-runner.js';
+import type { BattleAgent } from '../src/ai/battle-agent.js';
 import { HeuristicBattleAgent } from '../src/ai/heuristic-battle-agent.js';
+import { HeuristicV1BattleAgent } from '../src/ai/baselines/heuristic-v1.js';
+import { ValueSearchBattleAgent } from '../src/ai/value-search-agent.js';
+import { RandomBattleAgent } from '../src/ai/random-battle-agent.js';
 import { LoggingBattleAgent } from '../src/ai/logging-agent.js';
 import { selectTeamWithPlan } from '../src/ai/team-selection.js';
 import { SeededRandom } from '../src/rng.js';
@@ -32,8 +36,17 @@ async function main(): Promise<void> {
       for (let seed = 101; seed < 101 + gamesArg; seed++) {
         const teamA = selectTeamWithPlan(entryA, teamToPokemons(entryA)).members;
         const teamB = selectTeamWithPlan(entryB, teamToPokemons(entryB)).members;
-        const logA = new LoggingBattleAgent(new HeuristicBattleAgent(new SeededRandom(seed * 31 + 1)), teamB, 0);
-        const logB = new LoggingBattleAgent(new HeuristicBattleAgent(new SeededRandom(seed * 31 + 2)), teamA, 1);
+        // 方策を混ぜる。ベースライン同士だけだと V は「ベースラインの線」の上でしか
+        // 較正されず、1手先読みが分布外に出た瞬間に過大評価する（実測で確認済み）。
+        const kind = seed % 3;
+        const make = (side: 0 | 1): BattleAgent => {
+          const rng = new SeededRandom(seed * 31 + side + 1);
+          if (kind === 0) return new HeuristicV1BattleAgent(rng);
+          if (kind === 1) return (side === 0) === (seed % 2 === 0) ? new ValueSearchBattleAgent(rng, { trustMargin: 0.1 }) : new HeuristicV1BattleAgent(rng);
+          return side === 0 ? new RandomBattleAgent(rng) : new HeuristicV1BattleAgent(rng);
+        };
+        const logA = new LoggingBattleAgent(make(0), teamB, 0);
+        const logB = new LoggingBattleAgent(make(1), teamA, 1);
         const result = await runBattle(teamA, teamB, logA, logB, {
           maxTurns: 50,
           rng: new SeededRandom(seed * 31 + 3),

@@ -1,44 +1,44 @@
 // 学習済みの勝率予測（ロジスティック回帰）。
 //
-// 生成元: ~/data/pokemon-decisions/train_value.py（自己対戦1100試合・33,639意思決定）。
-// 交差検証（試合単位で分割）: log-loss 0.5755 / AUC 0.758 / キャリブレーション最大誤差 0.052。
-// 伏せ情報を埋めた「真の状態」で学んでも log-loss は 0.0093 しか改善しない。
-// つまり勝敗は伏せ情報にほとんど依存しておらず、弱さは情報不足ではなく方策の反応の問題。
+// 生成元: ~/data/pokemon-decisions/train_value.py（自己対戦2,188試合・65,313意思決定）。
+// 方策を混ぜた（ベースライン同士 / 1手先読み vs ベースライン / ランダム vs ベースライン）。
+// 交差検証（試合単位で分割）: log-loss 0.5025 / AUC 0.830 / キャリブレーション最大誤差 0.022。
+// 伏せ情報を埋めた「真の状態」でも改善は log-loss 0.0031。勝敗は伏せ情報にほとんど依存しない。
 import type { BattleContext } from './battle-agent.js';
 import { extractFeatures } from './features.js';
 
-const INTERCEPT = -0.37262826564601376;
+const INTERCEPT = -0.31239582667753046;
 
 const WEIGHTS: Record<string, number> = {
-  turn: 0.0039142558107962,
-  hp_self: -0.0761515557990416,
-  hp_opp: -0.36354421222970024,
-  hp_self_team: 2.9825415166038223,
-  hp_opp_team: -2.359839694046591,
-  alive_self: -0.27572953360471725,
-  alive_opp: 0.13897207770828462,
-  damage_out: 1.8730071026024164,
-  damage_in: -0.44627697168897174,
-  matchup: 2.2943022743295294,
-  ohko_out: 0.2244773178335372,
-  ohko_in: -0.35300978420049167,
-  speed_first: -0.0500345070222186,
-  stages_self: 0.026557522707974724,
-  stages_opp: -0.03573125496807093,
-  status_self: -1.023387069726968,
-  status_opp: 1.0174540518879793,
-  sleep_left_self: 0.22376669926104026,
-  sleep_left_opp: -0.16850915219948037,
-  sub_self: 1.554217500423743,
-  sub_opp: -1.7880241552120664,
-  mega_self: 0.033550978189841874,
-  revealed_opp_moves: 0.05446150180970548,
-  weather: 0.039303281683864086,
-  terrain: -0.026419640545317213,
+  turn: 0.0035579693841798336,
+  hp_self: -0.023522437088306876,
+  hp_opp: -0.150083842519695,
+  hp_self_team: 4.492666604791464,
+  hp_opp_team: -4.169859374907657,
+  alive_self: -0.1768393575502018,
+  alive_opp: 0.11067018207451965,
+  damage_out: 1.0374242035393433,
+  damage_in: -0.21820492301509006,
+  matchup: 1.2708874062088829,
+  ohko_out: 0.08155526637734421,
+  ohko_in: -0.20261205632196322,
+  speed_first: 0.032345205797272604,
+  stages_self: 0.08880289296263792,
+  stages_opp: -0.0993532434685324,
+  status_self: -1.0965431554913465,
+  status_opp: 1.0981701163841902,
+  sleep_left_self: 0.30891223904918913,
+  sleep_left_opp: -0.26719790534440213,
+  sub_self: 1.2418776635963527,
+  sub_opp: -1.4129234272623454,
+  mega_self: 0.007221378284351879,
+  revealed_opp_moves: 0.03854937431758413,
+  weather: 0.023192091477868326,
+  terrain: 0.010554725709638368,
   trick_room: 0.0,
-  rock_self: 0.25136870469129574,
-  rock_opp: -0.2257465927771667,
-  type_advantage: 0.14116670345391694,
+  rock_self: -0.1013663320004652,
+  rock_opp: 0.133786411344132,
+  type_advantage: 0.07675874225651393,
 };
 
 export function evaluateValue(context: BattleContext): number {
