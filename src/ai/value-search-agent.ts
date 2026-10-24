@@ -53,6 +53,10 @@ export interface ValueSearchOptions {
   belief?: Belief;
   // 探索する候補の上限（計算時間の制御）。0 なら全候補。
   maxCandidates?: number;
+  // 信頼領域: ベースライン方策の手より V が margin 以上良くない限り、ベースラインの手を選ぶ。
+  // 学習した V は「ベースラインが訪れる状態」でしか較正されていないため、貪欲に最大化すると
+  // 分布外の状態に踏み込み、過大評価された手を選び続ける（クエスピクシー構築で実測）。
+  trustMargin?: number; // 既定 0.10（実測で最も良い）
 }
 
 export class ValueSearchBattleAgent implements BattleAgent {
@@ -100,6 +104,19 @@ export class ValueSearchBattleAgent implements BattleAgent {
         bestLabel = candidate.label;
       }
     }
+
+    const margin = this.options.trustMargin ?? 0.1;
+    if (margin > 0) {
+      const fallback = await this.opponentModel.selectAction(context);
+      const fallbackValue = await this.evaluate(session, side, fallback.action);
+      if (bestValue - fallbackValue < margin) {
+        return {
+          action: fallback.action,
+          reasoning: `1手先読み: ベースライン採用 (差 ${((bestValue - fallbackValue) * 100).toFixed(1)}pt < ${(margin * 100).toFixed(0)}pt)`,
+        };
+      }
+    }
+
     return { action: bestAction, reasoning: `1手先読み: ${bestLabel} (勝率 ${(bestValue * 100).toFixed(1)}%)` };
   }
 

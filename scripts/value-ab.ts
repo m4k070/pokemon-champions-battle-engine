@@ -19,6 +19,7 @@ function wilson(wins: number, total: number): [number, number] {
 async function main(): Promise<void> {
   const seeds = Number((process.argv.find((a) => a.startsWith('--seeds=')) ?? '--seeds=100').split('=')[1]);
   const builds = Number((process.argv.find((a) => a.startsWith('--builds=')) ?? '--builds=0').split('=')[1]);
+  const margin = Number((process.argv.find((a) => a.startsWith('--margin=')) ?? '--margin=0').split('=')[1]);
   const mode = ((process.argv.find((a) => a.startsWith('--mode=')) ?? '--mode=belief').split('=')[1] ?? 'belief') as
     | 'model' | 'uniform' | 'worst' | 'belief';
   let valueWins = 0, baselineWins = 0, draws = 0;
@@ -26,7 +27,10 @@ async function main(): Promise<void> {
   const started = Date.now();
   let games = 0;
 
-  const entries = META_TEAMS.filter((entry) => entry.name !== 'メガジュペッタ構築').slice(0, builds > 0 ? builds : undefined);
+  const only = (process.argv.find((a) => a.startsWith('--build=')) ?? '--build=').split('=')[1] ?? '';
+  let entries = META_TEAMS.filter((entry) => entry.name !== 'メガジュペッタ構築');
+  if (only !== '') entries = entries.filter((entry) => entry.name.includes(only));
+  entries = entries.slice(0, builds > 0 ? builds : undefined);
 
   for (const entry of entries) {
     for (let seed = 101; seed < 101 + seeds; seed++) {
@@ -34,7 +38,7 @@ async function main(): Promise<void> {
         // ポケモンは試合中に書き換わるので、毎試合作り直す（使い回すと2試合目が0ターンで終わる）。
         const teamA = selectTeamWithPlan(entry, teamToPokemons(entry)).members;
         const teamB = selectTeamWithPlan(entry, teamToPokemons(entry)).members;
-        const value = new ValueSearchBattleAgent(new SeededRandom(seed * 31 + (valueIsA ? 1 : 2)), { opponentMode: mode });
+        const value = new ValueSearchBattleAgent(new SeededRandom(seed * 31 + (valueIsA ? 1 : 2)), { opponentMode: mode, trustMargin: margin });
         const baseline = new HeuristicV1BattleAgent(new SeededRandom(seed * 31 + (valueIsA ? 2 : 1)));
         const result = await runBattle(
           teamA, teamB,
