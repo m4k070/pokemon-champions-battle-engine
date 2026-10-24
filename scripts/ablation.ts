@@ -25,6 +25,11 @@ function buildVariant(): Pokemon[] {
     if (!mega) throw new Error('メガストーン持ちが見つかりません');
     mega.item = 'life-orb';
   }
+  if (mode === 'sub-cut') {
+    for (const pokemon of team) {
+      pokemon.moves = pokemon.moves.filter((m) => m.name !== 'みがわり');
+    }
+  }
   if (mode === 'rock-swap' || mode === 'rock-cut') {
     const chomp = team.find((p) => p.name === 'garchomp');
     if (!chomp) throw new Error('garchomp がいません');
