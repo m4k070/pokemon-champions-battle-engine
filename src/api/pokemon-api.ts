@@ -77,6 +77,36 @@ const rawMoveSchema = z.object({
 
 type RawPokemon = z.infer<typeof rawPokemonSchema>;
 
+// キャッシュに置く変換後の形。fromJSON で外部ファイルから戻ることがあるので、読み出し時にも検証する。
+const pokemonDataSchema: z.ZodType<PokeApiPokemonData> = z.object({
+  id: z.number(),
+  name: z.string(),
+  baseStats: z.object({
+    HP: z.number(),
+    ATK: z.number(),
+    DEF: z.number(),
+    SPATK: z.number(),
+    SPDEF: z.number(),
+    SPEED: z.number(),
+  }),
+  types: z.array(z.string()),
+  abilities: z.array(z.object({ name: z.string(), isHidden: z.boolean() })),
+  moves: z.array(z.string()),
+  weight: z.number(),
+  height: z.number(),
+});
+
+const moveDataSchema: z.ZodType<PokeApiMoveData> = z.object({
+  name: z.string(),
+  accuracy: z.number().nullable(),
+  power: z.number().nullable(),
+  pp: z.number(),
+  type: z.string(),
+  category: z.string(),
+  priority: z.number(),
+  effectChance: z.number().nullable(),
+});
+
 const STAT_NAMES = {
   HP: 'hp',
   ATK: 'attack',
@@ -113,11 +143,13 @@ async function fetchJson<T>(url: string, schema: z.ZodType<T>, what: string): Pr
 export class PokemonDataCache {
   private cache = new Map<string, unknown>();
 
-  get<T>(key: string): T | undefined {
-    return this.cache.get(key) as T | undefined;
+  // 値の型は呼び出し側が schema で示す。形が合わない値 (古い形式のキャッシュ等) は無いものとして扱う。
+  get<T>(key: string, schema: z.ZodType<T>): T | undefined {
+    const result = schema.safeParse(this.cache.get(key));
+    return result.success ? result.data : undefined;
   }
 
-  set<T>(key: string, value: T): void {
+  set(key: string, value: unknown): void {
     this.cache.set(key, value);
   }
 
@@ -156,8 +188,9 @@ export class PokemonAPI {
   async fetchPokemonData(pokemonId: string | number): Promise<PokeApiPokemonData> {
     const cacheKey = `pokemon_${pokemonId}`;
 
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get<PokeApiPokemonData>(cacheKey)!;
+    const cached = this.cache.get(cacheKey, pokemonDataSchema);
+    if (cached !== undefined) {
+      return cached;
     }
 
     const data = await fetchJson(`${POKE_API_BASE}/pokemon/${pokemonId}`, rawPokemonSchema, `Pokemon ${pokemonId}`);
@@ -191,8 +224,9 @@ export class PokemonAPI {
   async fetchMoveData(moveName: string): Promise<PokeApiMoveData> {
     const cacheKey = `move_${moveName}`;
 
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get<PokeApiMoveData>(cacheKey)!;
+    const cached = this.cache.get(cacheKey, moveDataSchema);
+    if (cached !== undefined) {
+      return cached;
     }
 
     const data = await fetchJson(`${POKE_API_BASE}/move/${moveName}`, rawMoveSchema, `move ${moveName}`);
