@@ -22,9 +22,12 @@ import { appendFileSync, writeFileSync } from 'node:fs';
 //                     eps / random を半分ずつにする）
 //   --vMode=<mode>    V サイドの相手モデル（既定 worst = run3〜run6 と同じ）
 //   --vMargin=<x>     V サイドの trustMargin（既定 0.05。0 で v1 への委譲を無くす）
+//   --seedStart=<n>   試合の seed の開始値（既定 101）
 
 const gamesArg = Number((process.argv.find((a) => a.startsWith('--games=')) ?? '--games=10').split('=')[1]);
 const out = (process.argv.find((a) => a.startsWith('--out=')) ?? '--out=decisions.jsonl').split('=')[1]!;
+// 試合の seed の開始値（既定 101 = train 分割の先頭）。同じ設定でデータだけ取り直すときに変える。
+const seedStart = Number((process.argv.find((a) => a.startsWith('--seedStart=')) ?? '--seedStart=101').split('=')[1]);
 
 const round = (value: number): number => Math.round(value * 1000) / 1000;
 // どの V で学習したデータかを残す（expert iteration の世代管理）。
@@ -80,7 +83,7 @@ async function main(): Promise<void> {
       if (i === j) continue;
       const entryA = builds[i]!;
       const entryB = builds[j]!;
-      for (let seed = 101; seed < 101 + gamesArg; seed++) {
+      for (let seed = seedStart; seed < seedStart + gamesArg; seed++) {
         const teamA = selectTeamWithPlan(entryA, teamToPokemons(entryA)).members;
         const teamB = selectTeamWithPlan(entryB, teamToPokemons(entryB)).members;
         // 方策を混ぜる。ベースライン同士だけだと V は「ベースラインの線」の上でしか
