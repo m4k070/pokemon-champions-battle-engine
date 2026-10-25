@@ -29,6 +29,9 @@ import { appendFileSync, writeFileSync } from 'node:fs';
 //             --mode=worst|maximin|uniform|belief --maxTurns=50 --out=<jsonl>
 //             --continuation=v1|value（2ターン目以降の自分側。v1 は両者ベースライン、
 //               value は自分側を V（同じ mode/margin）・相手側を v1 にして、実戦と同じ構図で打つ）
+//             --second-step（各診断点で V の手／v1 の手を1ターン打った後の局面で、もう一度
+//               V の最善手と v1 の手を打ち比べる。V が「自分では打たない手の後」の局面でも
+//               判断と局面価値を保てているかを見る）
 
 const arg = (name: string, fallback: string): string =>
   (process.argv.find((a) => a.startsWith(`--${name}=`)) ?? `--${name}=${fallback}`).split('=')[1] ?? fallback;
@@ -42,6 +45,7 @@ const maxTurns = Number(arg('maxTurns', '50'));
 const mode = arg('mode', 'maximin') as 'model' | 'uniform' | 'worst' | 'maximin' | 'belief';
 const continuation = arg('continuation', 'v1');
 if (continuation !== 'v1' && continuation !== 'value') throw new Error(`未知の --continuation=${continuation}`);
+const secondStep = process.argv.includes('--second-step');
 const out = arg('out', `${process.env.HOME}/.local/state/pokemon-champions/rollout-diagnostic.jsonl`);
 
 interface Candidate {
@@ -71,6 +75,16 @@ interface Point {
   drawBaseline: number;
   weather: number;
   rollouts: number;
+  second?: { chosen: SecondSample[]; baseline: SecondSample[] };
+}
+
+// 1ターン目の後の局面で取った1標本。agree は V と v1 が同じ手を選んだ（ΔQ̂ = 0）。
+interface SecondSample {
+  agree: boolean;
+  deltaV: number;
+  deltaQ: number;
+  vState: number; // V の最善手の値（＝その局面の V の価値予測）
+  outcome: number; // V の最善手から打った結果（0 / 0.5 / 1）
 }
 
 const sameAction = (a: AgentAction, b: AgentAction): boolean => {
@@ -174,6 +188,84 @@ function spearman(xs: number[], ys: number[]): number {
   return dx === 0 || dy === 0 ? Number.NaN : num / Math.sqrt(dx * dy);
 }
 
+function candidatesOf(context: BattleContext): Candidate[] {
+  const legal = getLegalActions(context);
+  const candidates: Candidate[] = [];
+  for (const move of legal.moves) {
+    candidates.push({
+      action: { type: 'move', moveIndex: move.index, target: 0, megaEvolve: legal.canMegaEvolve || undefined },
+      label: move.move.name,
+      kind: 'move',
+      category: move.move.category,
+      value: Number.NaN,
+    });
+  }
+  for (const target of legal.switches) {
+    candidates.push({
+      action: { type: 'switch', pokemonIndex: target.index },
+      label: `交代:${target.pokemon.name}`,
+      kind: 'switch',
+      category: null,
+      value: Number.NaN,
+    });
+  }
+  return candidates;
+}
+
+function argmax(candidates: Candidate[]): number {
+  let bestIndex = 0;
+  for (let i = 1; i < candidates.length; i++) {
+    if (candidates[i]!.value > candidates[bestIndex]!.value) bestIndex = i;
+  }
+  return bestIndex;
+}
+
+// 1ターン目に action を打った後の局面で、V の最善手と v1 の手を共通乱数で1本ずつ打ち比べる。
+// 決着した・強制交代・V に意見が無い局面は null。
+async function sampleSecond(
+  session: BattleSession,
+  side: 0 | 1,
+  action: AgentAction,
+  value: ValueSearchBattleAgent,
+  seed: number,
+): Promise<SecondSample | null> {
+  const fork = session.fork();
+  fork.engine.rng = new SeededRandom(seed);
+  const mine = new ScriptedAgent(action);
+  const theirs = new HeuristicV1BattleAgent(new SeededRandom(seed * 31 + 7));
+  try {
+    if (side === 0) await fork.playTurn(mine, theirs);
+    else await fork.playTurn(theirs, mine);
+  } catch {
+    return null;
+  }
+  if (fork.isFinished()) return null;
+  const context = fork.getContext(side);
+  if (context.mustSwitch) return null;
+  const candidates = candidatesOf(context);
+  if (candidates.length === 0) return null;
+  for (const candidate of candidates) candidate.value = await value.valueOf(context, candidate.action);
+  const bestIndex = argmax(candidates);
+  const best = candidates[bestIndex]!;
+  if (!Number.isFinite(best.value)) return null;
+  const decision = await new HeuristicV1BattleAgent(new SeededRandom(seed * 31 + 17)).selectAction(context);
+  const baselineIndex = candidates.findIndex((candidate) => sameAction(candidate.action, decision.action));
+  const outcome = await rollout(fork, side, best.action, seed + 500);
+  if (outcome === null) return null;
+  if (baselineIndex < 0 || baselineIndex === bestIndex) {
+    return { agree: true, deltaV: 0, deltaQ: 0, vState: best.value, outcome };
+  }
+  const other = await rollout(fork, side, candidates[baselineIndex]!.action, seed + 500);
+  if (other === null) return null;
+  return {
+    agree: false,
+    deltaV: best.value - candidates[baselineIndex]!.value,
+    deltaQ: outcome - other,
+    vState: best.value,
+    outcome,
+  };
+}
+
 class ProbeAgent implements BattleAgent {
   readonly records: Point[] = [];
   private readonly baseline = new HeuristicV1BattleAgent(new SeededRandom(17));
@@ -195,33 +287,11 @@ class ProbeAgent implements BattleAgent {
     if (session === undefined || side === undefined || context.mustSwitch) {
       return this.value.selectAction(context);
     }
-    const legal = getLegalActions(context);
-    const candidates: Candidate[] = [];
-    for (const move of legal.moves) {
-      candidates.push({
-        action: { type: 'move', moveIndex: move.index, target: 0, megaEvolve: legal.canMegaEvolve || undefined },
-        label: move.move.name,
-        kind: 'move',
-        category: move.move.category,
-        value: Number.NaN,
-      });
-    }
-    for (const target of legal.switches) {
-      candidates.push({
-        action: { type: 'switch', pokemonIndex: target.index },
-        label: `交代:${target.pokemon.name}`,
-        kind: 'switch',
-        category: null,
-        value: Number.NaN,
-      });
-    }
+    const candidates = candidatesOf(context);
     if (candidates.length < 2) return this.value.selectAction(context);
 
     for (const candidate of candidates) candidate.value = await this.value.valueOf(context, candidate.action);
-    let bestIndex = 0;
-    for (let i = 1; i < candidates.length; i++) {
-      if (candidates[i]!.value > candidates[bestIndex]!.value) bestIndex = i;
-    }
+    const bestIndex = argmax(candidates);
     const best = candidates[bestIndex]!;
     // 相手の合法手が列挙できず V が -Infinity を返した場合は診断しない（V に意見が無い）。
     if (!Number.isFinite(best.value)) return this.value.selectAction(context);
@@ -269,6 +339,16 @@ class ProbeAgent implements BattleAgent {
       weather: context.field.weather !== null ? 1 : 0,
       rollouts: qChosen.length,
     };
+    if (secondStep) {
+      const second: { chosen: SecondSample[]; baseline: SecondSample[] } = { chosen: [], baseline: [] };
+      for (let k = 0; k < rollouts; k++) {
+        const a = await sampleSecond(session, side, best.action, this.value, seedBase + k);
+        const b = await sampleSecond(session, side, base.action, this.value, seedBase + k);
+        if (a !== null) second.chosen.push(a);
+        if (b !== null) second.baseline.push(b);
+      }
+      point.second = second;
+    }
     this.records.push(point);
     this.onPoint(point);
     return { action: best.action };
@@ -358,6 +438,23 @@ async function main(): Promise<void> {
   const wet = results.filter((point) => point.weather === 1);
   if (wet.length > 0) {
     console.log(`  天候下: ΔQ̂ ${(100 * mean(wet.map((p) => p.deltaQ))).toFixed(2)}pt (${wet.length}点)`);
+  }
+  if (secondStep) {
+    // 1ターン目に V の手／v1 の手を打った後の局面で、V の判断（2手目の ΔQ̂）と局面価値の較正を比べる。
+    console.log('\n2手目（1ターン目の後の局面）');
+    for (const branch of ['chosen', 'baseline'] as const) {
+      const samples = results.flatMap((point) => point.second?.[branch] ?? []);
+      const split = samples.filter((sample) => !sample.agree);
+      const bias = mean(samples.map((sample) => sample.outcome - sample.vState));
+      const brier = mean(samples.map((sample) => (sample.outcome - sample.vState) ** 2));
+      console.log(
+        `  ${branch === 'chosen' ? 'V の手の後' : 'v1 の手の後'}: 標本 ${samples.length} / 手が割れた ${((100 * split.length) / Math.max(1, samples.length)).toFixed(1)}%` +
+          ` / 割れた所の ΔQ̂ ${(100 * mean(split.map((sample) => sample.deltaQ))).toFixed(2)}pt` +
+          ` / Spearman(ΔV, ΔQ̂) ${spearman(split.map((sample) => sample.deltaV), split.map((sample) => sample.deltaQ)).toFixed(3)}` +
+          ` / V 予測 ${(100 * mean(samples.map((sample) => sample.vState))).toFixed(1)}% → 実績 ${(100 * mean(samples.map((sample) => sample.outcome))).toFixed(1)}%` +
+          `（偏り ${(100 * bias).toFixed(2)}pt, Brier ${brier.toFixed(4)}）`,
+      );
+    }
   }
   console.log(`\n生データ: ${out}`);
 }
