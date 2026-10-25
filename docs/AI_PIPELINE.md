@@ -45,6 +45,8 @@ value-ab.ts / eval-pool.ts                           （対戦での強さを測
 
 ## 現行 V の状態（2026-10-25）
 
+> 2026-10-26 に ens-29norun3 へ替えた（「ens-29norun3 を昇格」の節）。この節の「現行」は run3 の1本のこと。
+
 コミット済みの V は run3 学習版（29列の木）。凍結ベースラインv1 相手・report seed 3001–3200・4,400試合:
 
 | V（学習データ／maximin の入力） | margin 0.05 | margin 0 | 引き分け |
@@ -371,6 +373,38 @@ TS 側は変更不要。列の並びが違うモデルはつなげない。
   29列・葉31 の1本の勝率は 75〜83% の幅で動く。個々の設定の工夫より、ばらつきそのものを減らす
   （データを増やす・複数の木を平均する）ほうが効く可能性が高い。
 
+## ens-29norun3 を昇格（2026-10-26）
+
+`src/ai/value-trees.json` を run3 の1本から ens-29norun3（29列・葉31 × 7 の logit 平均）に替えた。
+旧 V は `~/data/pokemon-decisions/value-trees-v3-run3.json`。
+
+v1 相手（`value-ab.ts --split=report`、各 4,400試合）:
+
+| 相手モデル × margin | 旧 V（run3 × 1） | ens-29norun3 | 差 |
+|---|---|---|---|
+| worst × 0.05（**エージェントの既定**） | 79.4% [78.2, 80.6] | **82.7%** [81.6, 83.8] | +3.3 |
+| worst × 0 | 79.0% [77.8, 80.2] | 74.6% [73.3, 75.8] | −4.4 |
+| uniform × 0.05 | 83.7% [82.6, 84.8] | 82.3% [81.1, 83.4] | −1.4 |
+| uniform × 0 | 82.6% [81.5, 83.7] | 83.2% [82.0, 84.2] | +0.6 |
+
+直接対戦（`scripts/value-h2h.ts`、探索の設定は両者同じで木だけ違う、4,400試合）:
+
+| 相手モデル × margin | ens-29norun3 の勝率 |
+|---|---|
+| worst × 0.05（既定） | **55.0%** [53.5, 56.4] |
+| uniform × 0.05 | 53.6% [52.2, 55.1] |
+| uniform × 0 | 61.6% [60.2, 63.1] |
+
+- **直接対戦は3条件すべてで 50% を上回る。** v1 相手の勝率は条件によって上下するが、既定の条件では +3.3pt。
+- v1 相手の勝率と直接対戦の勝率は一致しない（uniform × 0.05 は v1 相手で −1.4pt なのに直接対戦は 53.6%）。
+  v1 相手の勝率だけでは V の強さを測りきれない。
+- worst × 0 は大きく下がる（−4.4pt）。margin 0 の worst は既定ではないので昇格の妨げにはしなかった。
+- 推論は旧 V の約2.5倍の時間がかかる（uniform × 0 で 0.10 → 0.25秒/試合）。
+- 同じ木どうしの直接対戦（200試合）は 50.5% で、スクリプトの側の偏りは見えない。
+- parity: 構成要素の7本を同じコマンドで学習し直すと、木の JSON がバイト単位で一致した。
+  その7本の LightGBM の生スコアを `tests/fixtures/value-parity.json` の200行で出し、平均してシグモイドを通した値を
+  期待値にした（旧 V の木ではこのテストが 0.129 ずれて落ちることを確認）。
+
 ## 2026-10-25 に見つけて直した測定系のバグ
 
 - **`--mode=maximin` が黙って `uniform` になっていた。** `ValueSearchOptions` の型に `'maximin'` が無く、
@@ -396,6 +430,10 @@ TS 側は変更不要。列の並びが違うモデルはつなげない。
 2. `~/data/pokemon-decisions/value-trees-vN.json` を `src/ai/value-trees.json` にコピー。
 3. **`parity-check.json` を `tests/fixtures/value-parity.json` にコピーする**（学習時の 200行サンプル）。
    忘れると `tests/value-trees.test.ts` が旧い列数で落ちる（＝昇格の検出になる）。
+   アンサンブルの場合は、構成要素ごとに `PARITY_ROWS=<fixture> PARITY_OUT=<raw.json>` を付けて学習し直し
+   （`export_trees.py` / `export_trees_subset.py` がその行の生スコアを書く）、生スコアの平均をシグモイドに通して期待値にする。
 4. `value-ab.ts --split=report` を margin 0.05 / 0 の2本。昇格条件は「v1 相手に現行を下回らない」
-   「（可能なら）現行 V との直接対戦で 50% 以上」。log-loss は補助指標。
+   「現行 V との直接対戦で 50% 以上」。log-loss は補助指標。
+   直接対戦: `npx tsx scripts/value-h2h.ts --challenger=<新しい木> --incumbent=<旧い木> --mode=worst --margin=0.05`
+   （`--incumbent` 省略時は `src/ai/value-trees.json`）。
 
