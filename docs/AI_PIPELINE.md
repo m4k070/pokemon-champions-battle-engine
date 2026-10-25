@@ -195,6 +195,26 @@ v1 62% / V（uniform・margin 0）24% / random 7% / eps 6%。学習は log-loss 
 - run7 は「V の行を増やす」と「eps / random を半分にする」の2つを同時に変えたので、どちらが効いたかは切り分けていない。
   収集コードのコメントにあるとおり、摂動した方策の行は1手先読みが分布の外に出たときの過大評価を抑える役割があった。
 
+### run8（混ぜ方は従来どおり、V サイドだけ uniform・margin 0）— 昇格せず
+
+```bash
+npx tsx scripts/collect-decisions.ts --games=100 --mix=legacy --vMode=uniform --vMargin=0 --v=v8 \
+  --out=$HOME/data/pokemon-decisions/run8.jsonl   # 11,000試合 / 339,992行
+```
+
+学習は log-loss 0.4323 / AUC 0.8843。v1 相手（report、各 4,400試合）:
+
+| V | uniform 0.05 | uniform 0 |
+|---|---|---|
+| 現行（run3） | 83.7% [82.6, 84.8] | 82.6% [81.5, 83.7] |
+| v7（run7: V 行を倍増、eps/random 半減） | 81.7% [80.6, 82.8] | 78.0% [76.8, 79.2] |
+| v8（run8: 混ぜ方は従来、V は uniform・m0） | 82.1% [80.9, 83.2] | 76.0% [74.7, 77.3] |
+
+- v7 と v8 はほぼ同じ。**eps / random を減らしたことは原因ではない。** V サイドの設定（worst・0.05 / uniform・0）や
+  V の行の割合を変えても、新しいデータで学習した V はどれも「margin 0.05 で 1.6〜2pt、margin 0 で 5〜7pt」現行を下回る。
+- run4〜run8 に共通し、run3 と違うのは**新エンジンで集めたデータ**であること（run3 は特性・わるあがき・方策修正の前の旧エンジン）。
+  列を旧28列に絞っても改善しなかった（HANDOFF の run4 / 28列）ので、列の違いでもない。方策の混ぜ方は今回の2本で否定された。
+
 ## 2026-10-25 に見つけて直した測定系のバグ
 
 - **`--mode=maximin` が黙って `uniform` になっていた。** `ValueSearchOptions` の型に `'maximin'` が無く、
