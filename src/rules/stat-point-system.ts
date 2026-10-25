@@ -83,8 +83,6 @@ export function natureMultiplier(nature: NatureInput, stat: StatKey): number {
   return NATURE_NEUTRAL_MULTIPLIER;
 }
 
-const NON_HP_STATS: StatStageKey[] = ['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED'];
-
 // Champions では個体値が廃止され、全能力が最大値（31相当）に固定されている。
 const FIXED_INDIVIDUAL_VALUE = 31;
 
@@ -137,19 +135,21 @@ export class StatPointSystem {
     const points = normalizeStatPoints(statPoints);
     this.validateStatPoints(points);
 
-    const stats = {} as Stats;
-
-    // HP のみ計算式が異なり、性格補正も掛からない。
-    stats.HP =
-      Math.floor(((baseStats.HP * 2 + FIXED_INDIVIDUAL_VALUE) * level) / 100) + level + 10 + points.HP;
-
-    for (const stat of NON_HP_STATS) {
+    const nonHp = (stat: StatStageKey): number => {
       const beforeNature =
         Math.floor(((baseStats[stat] * 2 + FIXED_INDIVIDUAL_VALUE) * level) / 100) + 5 + points[stat];
-      stats[stat] = Math.floor(beforeNature * natureMultiplier(nature, stat));
-    }
+      return Math.floor(beforeNature * natureMultiplier(nature, stat));
+    };
 
-    return stats;
+    return {
+      // HP のみ計算式が異なり、性格補正も掛からない。
+      HP: Math.floor(((baseStats.HP * 2 + FIXED_INDIVIDUAL_VALUE) * level) / 100) + level + 10 + points.HP,
+      ATK: nonHp('ATK'),
+      DEF: nonHp('DEF'),
+      SPATK: nonHp('SPATK'),
+      SPDEF: nonHp('SPDEF'),
+      SPEED: nonHp('SPEED'),
+    };
   }
 }
 

@@ -3,6 +3,7 @@ import type { TypeName } from '../types.js';
 import type { PokeApiPokemonData } from '../api/pokemon-api.js';
 import { StatPointSystem } from './stat-point-system.js';
 import { isAbilityName } from '../ability-names.js';
+import { isTypeName } from '../type-names.js';
 import { isItemName } from '../item-names.js';
 import type { AbilityName } from '../ability-names.js';
 import type { ItemName } from '../item-names.js';
@@ -293,9 +294,20 @@ export class MegaEvolutionSystem {
         );
       }
 
-      const statBoosts = Object.fromEntries(
-        MEGA_STAT_KEYS.map((stat) => [stat, mega.baseStats[stat] - base.baseStats[stat]])
-      ) as MegaStatBoosts;
+      const boost = (stat: MegaStatKey): number => mega.baseStats[stat] - base.baseStats[stat];
+      const statBoosts: MegaStatBoosts = {
+        ATK: boost('ATK'),
+        DEF: boost('DEF'),
+        SPATK: boost('SPATK'),
+        SPDEF: boost('SPDEF'),
+        SPEED: boost('SPEED'),
+      };
+
+      // タイプ名も Poke API の任意の文字列なので、特性名と同じく既知のものかを検証する。
+      const typeChange = mega.types.filter(isTypeName);
+      if (typeChange.length !== mega.types.length) {
+        throw new Error(`未知のタイプ名を検出しました: ${item} のメガ形態のタイプ「${mega.types.join(', ')}」`);
+      }
 
       // Poke API が返す特性名は任意の文字列なので、既知の特性名かをここで検証する。
       // 未知の名前をそのまま通すと、メガシンカ後に特性が効かないまま静かに進んでしまう。
@@ -309,7 +321,7 @@ export class MegaEvolutionSystem {
       megaStones[item] = {
         pokemon: seed.pokemon,
         megaName: seed.megaName,
-        typeChange: mega.types as TypeName[],
+        typeChange,
         abilityChange,
         statBoosts,
       };

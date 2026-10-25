@@ -130,6 +130,19 @@ describe('OpenCodeBattleAgent', () => {
     }
   });
 
+  test('falls back when the tool arguments have the wrong shape', async () => {
+    // moveIndex が文字列。以前の検査 (actionType と reasoning の有無だけ) はこれを通していた
+    const fetchFn = jest.fn().mockResolvedValue(
+      mockToolResponse({ reasoning: '型が違う', actionType: 'move', moveIndex: '1' })
+    );
+    const agent = new OpenCodeBattleAgent({ apiKey: 'test-key', fetchFn, maxRetries: 0 });
+
+    const decision = await agent.selectAction(makeContext());
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(decision.reasoning).toContain('フォールバック');
+  });
+
   test('falls back when the HTTP call itself fails', async () => {
     const fetchFn = jest.fn().mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error' } as Response);
     const agent = new OpenCodeBattleAgent({ apiKey: 'test-key', fetchFn, maxRetries: 0 });

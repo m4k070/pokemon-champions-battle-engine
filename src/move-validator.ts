@@ -44,11 +44,15 @@ export interface MoveDataFetcher {
 export type MoveCache = Record<string, MoveCacheEntry>;
 export type LearnsetCache = Record<string, LearnsetCacheEntry>;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 // キャッシュファイルは外部データ（過去の形式や手書きの内容もありうる）なので、
 // 読み込み時に形式を検証する。判別できないエントリは捨てて検証し直す。
 function parseMoveCacheEntry(raw: unknown): MoveCacheEntry | null {
-  if (typeof raw !== 'object' || raw === null) return null;
-  const entry = raw as Record<string, unknown>;
+  if (!isRecord(raw)) return null;
+  const entry = raw;
 
   if (entry.status === 'valid') {
     const { type, power, category } = entry;
@@ -83,8 +87,8 @@ function parseLearnsetCache(raw: unknown): LearnsetCache {
 
   const cache: LearnsetCache = {};
   for (const [key, rawEntry] of Object.entries(raw)) {
-    if (typeof rawEntry !== 'object' || rawEntry === null) continue;
-    const { pokemonName, moves } = rawEntry as Record<string, unknown>;
+    if (!isRecord(rawEntry)) continue;
+    const { pokemonName, moves } = rawEntry;
     if (typeof pokemonName !== 'string' || !Array.isArray(moves)) continue;
     if (!moves.every((move): move is string => typeof move === 'string')) continue;
     cache[key] = { pokemonName, moves };
