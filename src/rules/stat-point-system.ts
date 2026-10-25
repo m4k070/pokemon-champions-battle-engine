@@ -97,7 +97,8 @@ export class StatPointSystem {
   readonly maxTotalPoints = 66;
 
   validateStatPoints(points: StatPointsData): boolean {
-    const total = Object.values(points).reduce((sum, val) => sum + val, 0);
+    // interface には index signature が無いので Object.values は any[] になる。キーを列挙して足す。
+    const total = points.HP + points.ATK + points.DEF + points.SPATK + points.SPDEF + points.SPEED;
 
     if (total > this.maxTotalPoints) {
       throw new Error(`能力ポイント合計が上限を超えています: ${total}/${this.maxTotalPoints}`);
