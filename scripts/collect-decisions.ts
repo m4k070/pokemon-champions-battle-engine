@@ -18,6 +18,10 @@ import { appendFileSync, writeFileSync } from 'node:fs';
 // 訓練と検証に混ざるとリークする）。
 //
 // 使い方: npx tsx scripts/collect-decisions.ts --games=10 --out=/path/to/decisions.jsonl
+//   --mix=legacy|v7   方策の組み合わせ（legacy は run3〜run6 と同じ。v7 は V 対 v1 の試合を 1/4 → 1/2 にし、
+//                     eps / random を半分ずつにする）
+//   --vMode=<mode>    V サイドの相手モデル（既定 worst = run3〜run6 と同じ）
+//   --vMargin=<x>     V サイドの trustMargin（既定 0.05。0 で v1 への委譲を無くす）
 
 const gamesArg = Number((process.argv.find((a) => a.startsWith('--games=')) ?? '--games=10').split('=')[1]);
 const out = (process.argv.find((a) => a.startsWith('--out=')) ?? '--out=decisions.jsonl').split('=')[1]!;
@@ -25,6 +29,13 @@ const out = (process.argv.find((a) => a.startsWith('--out=')) ?? '--out=decision
 const round = (value: number): number => Math.round(value * 1000) / 1000;
 // どの V で学習したデータかを残す（expert iteration の世代管理）。
 const VERSION = (process.argv.find((a) => a.startsWith('--v=')) ?? '--v=v3').split('=')[1]!;
+const argOf = (name: string, fallback: string): string =>
+  (process.argv.find((a) => a.startsWith(`--${name}=`)) ?? `--${name}=${fallback}`).split('=')[1]!;
+const MIX = argOf('mix', 'legacy');
+if (MIX !== 'legacy' && MIX !== 'v7') throw new Error(`未知の --mix=${MIX}`);
+const V_MODE = argOf('vMode', 'worst');
+if (!['model', 'uniform', 'worst', 'maximin', 'belief'].includes(V_MODE)) throw new Error(`未知の --vMode=${V_MODE}`);
+const V_MARGIN = Number(argOf('vMargin', '0.05'));
 
 // 一定確率でランダムな合法手を打つ摂動版（評価プールと同じ趣旨）。
 class EpsilonAgent implements BattleAgent {
@@ -48,7 +59,15 @@ async function main(): Promise<void> {
   const schemaPath = out.replace(/\.jsonl$/i, '') + '.schema.json';
   writeFileSync(
     schemaPath,
-    JSON.stringify({ hash: FEATURE_SCHEMA_HASH, columns: FEATURE_NAMES.length, names: FEATURE_NAMES, v: VERSION }) + '\n',
+    JSON.stringify({
+      hash: FEATURE_SCHEMA_HASH,
+      columns: FEATURE_NAMES.length,
+      names: FEATURE_NAMES,
+      v: VERSION,
+      mix: MIX,
+      vMode: V_MODE,
+      vMargin: V_MARGIN,
+    }) + '\n',
   );
   let schemaChecked = false;
   const builds = META_TEAMS.filter((entry) => entry.name !== 'メガジュペッタ構築');
@@ -67,14 +86,22 @@ async function main(): Promise<void> {
         // 方策を混ぜる。ベースライン同士だけだと V は「ベースラインの線」の上でしか
         // 較正されず、1手先読みが分布外に出た瞬間に過大評価する（実測で確認済み）。
         // どの方策の下での記録かを policy タグで残す（後から除外実験ができるように）。
-        const kind = seed % 4;
+        // v7: 0 = 両者 v1、1・2 = V 対 v1（V の側は seed で交互）、3 = eps / random 対 v1（seed で交互）。
+        const kind =
+          MIX === 'legacy' ? seed % 4 : [0, 1, 1, seed % 8 < 4 ? 2 : 3][seed % 4]!;
         const make = (side: 0 | 1): { agent: BattleAgent; policy: string } => {
           const rng = new SeededRandom(seed * 31 + side + 1);
           const isFirst = side === 0;
           if (kind === 0) return { agent: new HeuristicV1BattleAgent(rng), policy: 'baseline' };
           if (kind === 1) {
-            return isFirst === (seed % 2 === 0)
-              ? { agent: new ValueSearchBattleAgent(rng, { trustMargin: 0.05 }), policy: 'maximin' }
+            return isFirst === (MIX === 'legacy' ? seed % 2 === 0 : seed % 8 < 4)
+              ? {
+                  agent: new ValueSearchBattleAgent(rng, {
+                    opponentMode: V_MODE as 'model' | 'uniform' | 'worst' | 'maximin' | 'belief',
+                    trustMargin: V_MARGIN,
+                  }),
+                  policy: MIX === 'legacy' && V_MODE === 'worst' && V_MARGIN === 0.05 ? 'maximin' : `value-${V_MODE}-m${V_MARGIN}`,
+                }
               : { agent: new HeuristicV1BattleAgent(rng), policy: 'baseline' };
           }
           if (kind === 2) {
