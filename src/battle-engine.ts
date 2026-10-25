@@ -3,7 +3,7 @@ import { TYPE_CHART } from './type-chart.js';
 import { BattleField } from './battle-field.js';
 import type { TerrainType } from './battle-field.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
-import type { Pokemon } from './pokemon.js';
+import { Pokemon } from './pokemon.js';
 import type { MoveData, StatusCondition, StatStageKey, TypeName, WeatherType, TypeChart } from './types.js';
 import { isDamageMove, isPhysicalMove, isSpecialMove, isStatusMove, cloneDamageMove, targetsOpponent } from './move.js';
 import type { UseMoveResult, NoEffectReason } from './use-move-result.js';
@@ -232,9 +232,8 @@ export class BattleEngine {
 
   private setupEventHandlers(): void {
     this.events.on('switch-in', (data) => {
-      const pokemon = data.pokemon;
-      if (!pokemon || typeof pokemon !== 'object') return;
-      const p = pokemon as Pokemon;
+      const p = data.pokemon;
+      if (!(p instanceof Pokemon)) return;
 
       const ability = getAbilityDefinition(p.ability);
       ability?.onSwitchIn?.({ pokemon: p, engine: this });
@@ -253,9 +252,8 @@ export class BattleEngine {
       );
       const targets = actives.length > 0 ? actives : team;
 
-      for (const pokemon of targets) {
-        if (!pokemon || typeof pokemon !== 'object') continue;
-        const p = pokemon as Pokemon;
+      for (const p of targets) {
+        if (!(p instanceof Pokemon)) continue;
         if (p.isFainted) continue;
 
         if (p.item === 'leftovers') {
@@ -323,10 +321,9 @@ export class BattleEngine {
     });
 
     this.events.on('apply-damage', (data) => {
-      const defender = data.defender;
-      if (!defender || typeof defender !== 'object') return;
-      const d = defender as Pokemon;
-      const damage = data.damage as number;
+      const d = data.defender;
+      const damage = data.damage;
+      if (!(d instanceof Pokemon) || typeof damage !== 'number') return;
 
       if (d.item === 'focus-sash' && !d.itemUsed && d.currentHP === d.maxHP && damage >= d.currentHP) {
         data.damage = d.currentHP - 1;
@@ -428,7 +425,7 @@ export class BattleEngine {
     for (const type of defenderTypes) {
       const chart = this.typeChart[attackType];
       if (chart) {
-        effectiveness *= chart[type] !== undefined ? chart[type]! : 1.0;
+        effectiveness *= chart[type] ?? 1.0;
       }
     }
     return effectiveness;

@@ -202,7 +202,21 @@ npm run test:coverage
 
 # 特定テスト
 npm test -- --testNamePattern="ダメージ計算"
+
+# 静的検査
+npm run check                          # tsc (src)
+npx tsc --noEmit -p tsconfig.test.json # tsc (src + tests)
+npm run lint                           # oxlint --type-aware (設定は .oxlintrc.json)
 ```
+
+同じ検査とビルドを `.github/workflows/check.yml` が push / PR ごとに走らせます。
+外部から来る JSON (Poke API・LLM の応答・キャッシュファイル) は `any` で読まず、
+`as` で決めつけもせず、zod か型ガードで検証してから型を付けてください
+(`no-unsafe-*` / `no-unsafe-type-assertion` ルールで検出されます)。
+
+lint は oxlint の型情報付きモード (tsgolint、typescript-go ベース) で動きます。
+tsconfig に TypeScript 7 で廃止された設定 (`baseUrl` など) を足すと
+`tsconfig-error` になり型を使うルールが止まるので、その場合は設定の側を直してください。
 
 ## ドキュメント
 

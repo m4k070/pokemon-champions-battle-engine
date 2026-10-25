@@ -2,7 +2,7 @@ import { BattleEngine } from './battle-engine.js';
 import { SeededRandom } from './rng.js';
 import { Pokemon } from './pokemon.js';
 import type { BattleField, SideFlags, SideHazards } from './battle-field.js';
-import type { AgentAction, BaseStats, FormDefinition, FormName, MoveData, Stats, StatStages, StatusCondition, TypeName, WeatherType } from './types.js';
+import type { AgentAction, BaseStats, FormDefinition, FormName, MoveData, Stats, StatStages, TypeName, WeatherType } from './types.js';
 import type { NatureInput, StatPointsInput } from './rules/stat-point-system.js';
 import { cloneStatusState } from './status-state.js';
 import type { StatusState } from './status-state.js';

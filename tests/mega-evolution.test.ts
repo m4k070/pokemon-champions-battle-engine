@@ -497,6 +497,26 @@ describe('MegaEvolutionSystem.fromPokeApi', () => {
     await expect(MegaEvolutionSystem.fromPokeApi(fetcher, seeds)).rejects.toThrow('HPが変化する');
   });
 
+  test('throws on an unknown type name instead of passing it through', async () => {
+    const fetcher: PokemonDataFetcher = {
+      async fetchPokemonData(id) {
+        if (id === 'charizard') {
+          return fakePokemonData({ baseStats: { HP: 78, ATK: 84, DEF: 78, SPATK: 109, SPDEF: 85, SPEED: 100 } });
+        }
+        return fakePokemonData({
+          types: ['fire', 'not-a-type'],
+          abilities: [{ name: 'tough-claws', isHidden: false }],
+          baseStats: { HP: 78, ATK: 130, DEF: 111, SPATK: 130, SPDEF: 85, SPEED: 100 },
+        });
+      },
+    };
+    const seeds: Record<string, MegaStoneSeed> = {
+      'charizardite-x': { pokemon: 'charizard', megaApiName: 'charizard-mega-x', megaName: 'mega-charizard-x' },
+    };
+
+    await expect(MegaEvolutionSystem.fromPokeApi(fetcher, seeds)).rejects.toThrow('未知のタイプ名');
+  });
+
   test('throws if the derived stat boosts do not sum to 100', async () => {
     const fetcher: PokemonDataFetcher = {
       async fetchPokemonData(id) {
