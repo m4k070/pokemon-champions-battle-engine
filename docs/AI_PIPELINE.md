@@ -32,6 +32,7 @@ value-ab.ts / eval-pool.ts                           （対戦での強さを測
 | `export_trees.py` / `_subset.py` | `schema_guard.check_sidecar()` で JSONL の列と収集時ハッシュを突き合わせ、`schema` を木のJSONに記録 |
 
 - 現行ハッシュ: `eddabac7da9ae012`（77列）。run4.jsonl もこの値（TS 側と Python 側で一致を確認）。
+  run4.jsonl は sidecar 無し（ガード導入前）なので `verified: False` と記録されるが、列名ハッシュは現行と一致する。
 - run3.jsonl は 29列（`2990ffc39193d0a5`）で sidecar 無し。学習時に「警告して続行」になる。
 - 抽出に無い旧列は `DECLARED_FEATURE_DEFAULTS` で理由付きで宣言する。現在は `weather: 0` のみ
   （run3 の木が参照。0 を供給した状態で 82.4% / 83.1% を実測済みで、29列時代と同等）。
