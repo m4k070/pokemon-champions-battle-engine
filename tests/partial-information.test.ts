@@ -53,4 +53,19 @@ describe('不完全情報モード', () => {
     expect(context.opponent.moves).toHaveLength(2);
     expect(context.opponent.item).toBe('leftovers');
   });
+
+  test('fork は情報レベルを引き継ぐ（探索が相手の伏せ情報を見ない）', async () => {
+    const a = makePokemon('A', ['たいあたり', 'ずつき']);
+    const b = makePokemon('B', ['たいあたり', 'ずつき'], 'leftovers');
+    const session = await BattleSession.start([a], [b], { information: 'partial' });
+
+    const fork = session.fork();
+    expect(fork.information).toBe('partial');
+    expect(fork.getContext(0).opponent.moves).toHaveLength(0);
+    expect(fork.getContext(0).opponent.item).toBeNull();
+
+    // 'full' のセッションから作った fork は 'full' のまま（従来の挙動を壊さない）
+    const fullSession = await BattleSession.start([makePokemon('A', ['たいあたり'])], [makePokemon('B', ['たいあたり'])]);
+    expect(fullSession.fork().information).toBe('full');
+  });
 });

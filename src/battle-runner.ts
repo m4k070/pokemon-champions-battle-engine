@@ -160,9 +160,13 @@ export class BattleSession {
     return new BattleSession(engine, teamA, teamB, leadA, leadB, megaEvolutionSystem, options.information ?? 'full');
   }
 
-  static fromSnapshot(snapshot: BattleSnapshot, megaEvolutionSystem: MegaEvolutionSystem = new MegaEvolutionSystem()): BattleSession {
+  static fromSnapshot(
+    snapshot: BattleSnapshot,
+    megaEvolutionSystem: MegaEvolutionSystem = new MegaEvolutionSystem(),
+    information: InformationLevel = 'full',
+  ): BattleSession {
     const { engine, teamA, teamB, activeA, activeB } = restoreBattle(snapshot);
-    const session = new BattleSession(engine, teamA, teamB, activeA, activeB, megaEvolutionSystem);
+    const session = new BattleSession(engine, teamA, teamB, activeA, activeB, megaEvolutionSystem, information);
     session.restoreSessionState(snapshot);
     return session;
   }
@@ -198,8 +202,14 @@ export class BattleSession {
 
   // 現在の状態から独立した別セッションを作る（分岐探索用）。
   // structuredCloneでスナップショットを複製してから復元するため、参照を共有しない。
+  // 情報レベルは引き継ぐ（'partial' の対戦で fork が 'full' になると、探索が相手の
+  // 伏せ情報を見てしまう＝実戦ではできない推論になる）。
   fork(): BattleSession {
-    const session = BattleSession.fromSnapshot(structuredClone(this.snapshot()), this.megaEvolutionSystem);
+    const session = BattleSession.fromSnapshot(
+      structuredClone(this.snapshot()),
+      this.megaEvolutionSystem,
+      this.information,
+    );
     session.reasoningLog = [...this.reasoningLog];
     return session;
   }
