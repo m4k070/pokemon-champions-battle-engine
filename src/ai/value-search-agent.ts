@@ -58,6 +58,8 @@ export interface ValueSearchOptions {
   // 学習した V は「ベースラインが訪れる状態」でしか較正されていないため、貪欲に最大化すると
   // 分布外の状態に踏み込み、過大評価された手を選び続ける（クエスピクシー構築で実測）。
   trustMargin?: number; // 既定 0.05（学習分布を広げた V での実測最良）
+  // 局面の勝率関数。既定は value-trees.json の V（別の木との直接対戦で差し替える）。
+  evaluate?: (context: BattleContext) => number;
 }
 
 export class ValueSearchBattleAgent implements BattleAgent {
@@ -205,7 +207,7 @@ export class ValueSearchBattleAgent implements BattleAgent {
       return -Infinity; // 不正な手は選ばない
     }
     if (fork.isFinished()) return fork.winner() === side ? 1 : 0;
-    return evaluateValue(fork.getContext(side));
+    return (this.options.evaluate ?? evaluateValue)(fork.getContext(side));
   }
 }
 
