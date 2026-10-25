@@ -13,6 +13,7 @@
 import type { BattleContext } from './battle-agent.js';
 import { extractFeatures } from './features.js';
 import type { FeatureVector } from './features.js';
+import { assertTreeSchema, DECLARED_FEATURE_DEFAULTS, FEATURE_SCHEMA_HASH } from './feature-schema.js';
 import treeData from './value-trees.json' with { type: 'json' };
 
 type TreeNode = { f: number; t: number; l: number; r: number } | { v: number };
@@ -20,9 +21,22 @@ type TreeNode = { f: number; t: number; l: number; r: number } | { v: number };
 const FEATURES: string[] = treeData.features;
 const TREES = treeData.trees as unknown as TreeNode[][];
 
+// 木が参照する列は、抽出に存在するか DECLARED_FEATURE_DEFAULTS に宣言されていること。
+// ここで落ちるのは「列名を変えたのに木を学習し直していない」状態（黙って0で埋めない）。
+assertTreeSchema(FEATURES, 'src/ai/value-trees.json');
+
 // 特徴量のベクトルから勝率を出す（木の走査）。evaluateValue の本体。
 export function evaluateVector(features: FeatureVector): number {
-  const values = FEATURES.map((name) => features[name] ?? 0);
+  const values = FEATURES.map((name) => {
+    const value = features[name] ?? DECLARED_FEATURE_DEFAULTS[name];
+    if (value === undefined) {
+      throw new Error(
+        `特徴量 ${name} が抽出結果に無い（抽出スキーマ ${FEATURE_SCHEMA_HASH} と V の参照列が不一致）`,
+      );
+    }
+    return value;
+  });
+
   let raw = 0;
   for (const nodes of TREES) {
     let index = 0;
