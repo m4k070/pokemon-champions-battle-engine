@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { BattleContext } from './battle-agent.js';
 import { FEATURE_NAMES } from './features.js';
 
 // 特徴量スキーマの突き合わせ。
@@ -22,10 +23,17 @@ export const FEATURE_SCHEMA_HASH = schemaHash(FEATURE_NAMES);
 // 抽出に存在しないが、旧 V が参照する列。ここに書いたものだけ 0 を供給する。
 // weather: run3 の木（src/ai/value-trees.json）は 0/1 の weather を使うが、77列の抽出では
 //   種類別 one-hot（weather_rain/sun/sand/hail）+ 残りターンに置換済み。
-//   0 を供給した状態での実測は margin0.05 で 82.4%、margin0 で 83.1% で、
-//   29列時代（82.5% / 82.6%）と同等。よって 0 のままで害は無い。
-//   実天候を供給する形に変えるなら、対戦評価を測り直すこと。
+//   現在は LEGACY_FEATURE_COMPUTERS が実値を供給するので、この 0 は
+//   「ベクトルに列が無いときの最終フォールバック」としてのみ働く。
 export const DECLARED_FEATURE_DEFAULTS: Readonly<Record<string, number>> = { weather: 0 };
+
+// 抽出には無いが木が参照する旧列の供給。context から計算する（0固定ではない）。
+// weather: 旧29列の weather は「何かの天候が発生中なら1」。run3 のデータでは
+//   意思決定の 34.0% で立っていた（= 0固定にすると3分の1の局面で V の入力が変わる）。
+//   これを 0 に潰したまま収集した run4/run5 の maximin は、天候下で劣化した専門家だった。
+export const LEGACY_FEATURE_COMPUTERS: Readonly<Record<string, (context: BattleContext) => number>> = {
+  weather: (context) => (context.field.weather === null ? 0 : 1),
+};
 
 // 抽出でも宣言済みデフォルトでも解決できない列名を返す（空なら健全）。
 export function unresolvedFeatures(names: readonly string[]): string[] {
