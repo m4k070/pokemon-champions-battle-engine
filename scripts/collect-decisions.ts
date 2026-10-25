@@ -9,6 +9,8 @@ import { RandomBattleAgent } from '../src/ai/random-battle-agent.js';
 import { LoggingBattleAgent } from '../src/ai/logging-agent.js';
 import { selectTeamWithPlan } from '../src/ai/team-selection.js';
 import { SeededRandom } from '../src/rng.js';
+import { FEATURE_NAMES } from '../src/ai/features.js';
+import { assertVectorSchema, FEATURE_SCHEMA_HASH } from '../src/ai/feature-schema.js';
 import { appendFileSync, writeFileSync } from 'node:fs';
 
 // 自己対戦ログの収集。1行 = 1意思決定。
@@ -41,6 +43,14 @@ class EpsilonAgent implements BattleAgent {
 
 async function main(): Promise<void> {
   writeFileSync(out, '');
+  // 収集時のスキーマを残す。学習側（export_trees.py）が列ハッシュを突き合わせるので、
+  // 「どの列で集めたデータか」を取り違えたまま学習することがなくなる。
+  const schemaPath = out.replace(/\.jsonl$/i, '') + '.schema.json';
+  writeFileSync(
+    schemaPath,
+    JSON.stringify({ hash: FEATURE_SCHEMA_HASH, columns: FEATURE_NAMES.length, names: FEATURE_NAMES, v: VERSION }) + '\n',
+  );
+  let schemaChecked = false;
   const builds = META_TEAMS.filter((entry) => entry.name !== 'メガジュペッタ構築');
   let games = 0, rows = 0, turnsTotal = 0, noDamageTurns = 0, allTurns = 0;
   const subActions = new Map<string, number>();
@@ -100,6 +110,11 @@ async function main(): Promise<void> {
         for (const agent of [logA, logB]) {
           const won = result.winner === agent.records[0]?.side ? 1 : 0;
           for (const record of agent.records) {
+            if (!schemaChecked) {
+              // 抽出列がスキーマからずれていたら、その場で止める（数千試合を回した後の精度低下より安い）。
+              assertVectorSchema(record.featuresInfo, 'collect-decisions');
+              schemaChecked = true;
+            }
             if (record.hasSubstitute) {
               subDecisions++;
               const key = record.actionType === 'move' ? (record.moveName ?? '?') : '交代';
