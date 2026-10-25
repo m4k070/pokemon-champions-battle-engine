@@ -24,8 +24,14 @@ async function main(): Promise<void> {
   const seedList = seedsFromSplit ?? Array.from({ length: Number((process.argv.find((a) => a.startsWith('--seeds=')) ?? '--seeds=100').split('=')[1]) }, (_, i) => 101 + i);
   const builds = Number((process.argv.find((a) => a.startsWith('--builds=')) ?? '--builds=0').split('=')[1]);
   const margin = Number((process.argv.find((a) => a.startsWith('--margin=')) ?? '--margin=0').split('=')[1]);
-  const mode = ((process.argv.find((a) => a.startsWith('--mode=')) ?? '--mode=belief').split('=')[1] ?? 'belief') as
-    | 'model' | 'uniform' | 'worst' | 'belief';
+  const rawMode = ((process.argv.find((a) => a.startsWith('--mode=')) ?? '--mode=belief').split('=')[1] ?? 'belief');
+  const MODES = ['model', 'uniform', 'worst', 'maximin', 'belief'] as const;
+  if (!MODES.includes(rawMode as (typeof MODES)[number])) {
+    // 'maximin' 以外の未知の値が黙って 'uniform' 扱いになっていた（2026-10-25 に発見）。
+    console.error(`--mode は ${MODES.join(' | ')} のいずれか: ${rawMode}`);
+    process.exit(1);
+  }
+  const mode = rawMode as (typeof MODES)[number];
   let valueWins = 0, baselineWins = 0, draws = 0;
   const perBuild = new Map<string, { wins: number; total: number }>();
   const started = Date.now();

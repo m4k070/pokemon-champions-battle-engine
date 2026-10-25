@@ -46,9 +46,10 @@ export interface ValueSearchOptions {
   // 相手の手の扱い。
   //   'model'   相手方策の1手だけを想定（相手を知っている前提。実戦では使えない）
   //   'uniform' 相手の合法手すべてを等確率とみなして平均（相手の政策を知らない）
-  //   'worst'   相手の合法手のうち自分にとって最悪の結果（maximin）
+  //   'worst'   相手の合法手のうち自分にとって最悪の結果
+  //   'maximin' 'worst' の別名（CLI で --mode=maximin と書けるように）
   //   'belief'  相手の型の信念（候補セット）から、ありうる手を列挙して平均（伏せ情報を使わない）
-  opponentMode?: 'model' | 'uniform' | 'worst' | 'belief';
+  opponentMode?: 'model' | 'uniform' | 'worst' | 'maximin' | 'belief';
   // 信念。既定はメタ構築プールから作る。
   belief?: Belief;
   // 探索する候補の上限（計算時間の制御）。0 なら全候補。
@@ -152,7 +153,14 @@ export class ValueSearchBattleAgent implements BattleAgent {
       sum += value;
       worst = Math.min(worst, value);
     }
-    return mode === 'worst' ? worst : sum / opponentActions.length;
+    return mode === 'worst' || mode === 'maximin' ? worst : sum / opponentActions.length;
+  }
+
+  // 診断用: 指定した手を打ったときの V 値（相手モデルは options.opponentMode に従う）。
+  // selectAction と違い「選ばなかった手」の値も取れるので、ΔV と実際の Δ勝率を比べられる。
+  async valueOf(context: BattleContext, action: AgentAction): Promise<number> {
+    if (context.session === undefined || context.side === undefined) return Number.NaN;
+    return this.evaluate(context.session, context.side, action);
   }
 
   // 相手の型の信念から「ありうる手」の場面を作る。
