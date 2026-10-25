@@ -1,4 +1,4 @@
-import { PokemonAPI, PokeApiError } from '../src/api/pokemon-api.js';
+import { PokemonAPI, PokemonDataCache, PokeApiError } from '../src/api/pokemon-api.js';
 
 function mockJsonResponse(body: unknown, status = 200) {
   return {
@@ -103,6 +103,34 @@ describe('PokemonAPI', () => {
       priority: 0,
       effectChance: null,
     });
+  });
+
+  test('キャッシュにあれば fetch しない', async () => {
+    // Arrange
+    fetchSpy.mockResolvedValue(mockJsonResponse(GARCHOMP));
+    const api = new PokemonAPI();
+    await api.fetchPokemonData('garchomp');
+
+    // Act
+    const again = await api.fetchPokemonData('garchomp');
+
+    // Assert
+    expect(again.name).toBe('garchomp');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('形の合わないキャッシュ (古い形式のファイル等) は使わずに取り直す', async () => {
+    // Arrange: baseStats が無いエントリを fromJSON で読み込ませる
+    const cache = new PokemonDataCache();
+    cache.fromJSON(JSON.stringify({ pokemon_garchomp: { id: 445, name: 'garchomp' } }));
+    fetchSpy.mockResolvedValue(mockJsonResponse(GARCHOMP));
+
+    // Act
+    const data = await new PokemonAPI(cache).fetchPokemonData('garchomp');
+
+    // Assert
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(data.baseStats.SPEED).toBe(102);
   });
 
   test('404 は isNotFound の PokeApiError になる', async () => {

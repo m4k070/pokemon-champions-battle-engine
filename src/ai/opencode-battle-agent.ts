@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { AgentAction } from '../types.js';
+import type { AgentAction, WeatherType } from '../types.js';
 import type { Pokemon } from '../pokemon.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './battle-agent.js';
 import { getLegalActions, RandomBattleAgent } from './battle-agent.js';
@@ -7,12 +7,12 @@ import { getLegalActions, RandomBattleAgent } from './battle-agent.js';
 const DEFAULT_BASE_URL = 'https://opencode.ai/zen/go/v1';
 const DEFAULT_MODEL = 'deepseek-v4-pro';
 
-const WEATHER_NAMES = {
+const WEATHER_NAMES: Record<WeatherType, string> = {
   sand: '砂嵐',
   rain: '雨',
   sun: '晴れ',
   hail: 'あられ',
-} as const;
+};
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -68,7 +68,7 @@ function describePokemon(pokemon: Pokemon, legalMoveIndices: Set<number> | null)
 export function buildBattlePrompt(context: BattleContext): string {
   const legal = getLegalActions(context);
   const legalMoveIndices = new Set(legal.moves.map((m) => m.index));
-  const weatherName = WEATHER_NAMES[context.field.weather as keyof typeof WEATHER_NAMES] ?? context.field.weather;
+  const weatherName = context.field.weather ? WEATHER_NAMES[context.field.weather] : null;
 
   const fieldLines = [
     `天候: ${weatherName ?? 'なし'}${context.field.weather ? `（残り${context.field.weatherTurnsLeft}ターン）` : ''}`,
@@ -107,13 +107,16 @@ export function buildBattlePrompt(context: BattleContext): string {
   ].join('\n');
 }
 
-interface ChosenAction {
-  reasoning: string;
-  actionType: 'move' | 'switch' | 'forfeit';
-  moveIndex?: number;
-  pokemonIndex?: number;
-  megaEvolve?: boolean;
-}
+// LLM が choose_action に渡す引数。JSON 文字列で届くので、形を検証してから使う。
+const chosenActionSchema = z.object({
+  reasoning: z.string().min(1),
+  actionType: z.enum(['move', 'switch', 'forfeit']),
+  moveIndex: z.number().optional(),
+  pokemonIndex: z.number().optional(),
+  megaEvolve: z.boolean().optional(),
+});
+
+type ChosenAction = z.infer<typeof chosenActionSchema>;
 
 const CHOOSE_ACTION_TOOL = {
   type: 'function' as const,
@@ -249,11 +252,11 @@ export class OpenCodeBattleAgent implements BattleAgent {
       throw new Error('LLMの応答にtool_callが含まれていません');
     }
 
-    const parsed = JSON.parse(toolCall.function.arguments) as ChosenAction;
-    if (!parsed.actionType || !parsed.reasoning) {
+    const parsed = chosenActionSchema.safeParse(JSON.parse(toolCall.function.arguments));
+    if (!parsed.success) {
       throw new Error(`LLMの応答が不正です: ${toolCall.function.arguments}`);
     }
 
-    return parsed;
+    return parsed.data;
   }
 }
