@@ -1,7 +1,7 @@
 import type { Pokemon } from '../pokemon.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './battle-agent.js';
 import { getLegalActions } from './battle-agent.js';
-import { damageRatio, typeMultiplier } from './heuristic-battle-agent.js';
+import { damageRatio } from './heuristic-battle-agent.js';
 import { SYSTEM_RANDOM } from '../rng.js';
 import type { RandomSource } from '../rng.js';
 
@@ -41,7 +41,7 @@ export class ScriptedComboAgent implements BattleAgent {
   async selectLead(team: Pokemon[]): Promise<Pokemon> {
     // 積み役を先頭に出す。
     const setter = team.find((pokemon) => pokemon.moves.some((move) => this.setupMoves.includes(move.name)));
-    return setter ?? team[0]!;
+    return setter ?? team[0];
   }
 
   async selectAction(context: BattleContext): Promise<AgentDecision> {
@@ -57,7 +57,7 @@ export class ScriptedComboAgent implements BattleAgent {
         return { action: { type: 'switch', pokemonIndex: designated.index }, reasoning: `コンボ: ${this.passTo}へバトン` };
       }
       const candidates = legal.switches.filter(({ pokemon }) => !pokemon.moves.some((move) => this.setupMoves.includes(move.name)));
-      const pick = (candidates[0] ?? legal.switches[0])!;
+      const pick = candidates[0] ?? legal.switches[0];
       return { action: { type: 'switch', pokemonIndex: pick.index }, reasoning: 'コンボ: 引き継ぎ先へ' };
     }
 
@@ -86,7 +86,7 @@ export class ScriptedComboAgent implements BattleAgent {
       return { action: { type: 'move', moveIndex: setupIndex, target: 0, megaEvolve: legal.canMegaEvolve || undefined }, reasoning: `コンボ: 積み(${boost}段)` };
     }
     // 積み役でなければ最大打点。
-    let best = legal.moves[0]!;
+    let best = legal.moves[0];
     let bestRatio = -1;
     for (const candidate of legal.moves) {
       if (candidate.move.category === 'status') continue;

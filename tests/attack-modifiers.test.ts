@@ -108,7 +108,7 @@ describe('イカサマ', () => {
     if (foul.outcome !== 'damaged') throw new Error(`damaged を期待: ${foul.outcome}`);
     const engine2 = setup(makePokemon({ name: 'Weak', attack: 10 }), makePokemon({ name: 'Strong', attack: 200 }));
     const normal = engine2.useMove(
-      engine2.activePokemon0!, engine2.activePokemon1!, tackle(),
+      engine2['activePokemon0']!, engine2['activePokemon1']!, tackle(),
     );
     if (normal.outcome !== 'damaged') throw new Error(`damaged を期待: ${normal.outcome}`);
     expect(foul.damage).toBeGreaterThan(normal.damage);

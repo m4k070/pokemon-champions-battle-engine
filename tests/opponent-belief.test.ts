@@ -17,7 +17,7 @@ const belief: Belief = new Map([
 ]);
 
 function redacted(revealed: ReturnType<typeof createMove>[]): Pokemon {
-  return new Pokemon({ name: 'mon-a', types: ['normal'], ability: 'none', baseStats: stats, moves: revealed });
+  return new Pokemon({ name: 'mon-a', types: ['normal'], ability: 'none', item: null, baseStats: stats, moves: revealed });
 }
 
 describe('相手の型の信念', () => {
@@ -38,7 +38,7 @@ describe('相手の型の信念', () => {
   });
 
   test('未知の種族はメタ全体の base rate で代用する', () => {
-    const unknown = new Pokemon({ name: 'unknownmon', types: ['normal'], ability: 'none', baseStats: stats, moves: [attack('たいあたり')] });
+    const unknown = new Pokemon({ name: 'unknownmon', types: ['normal'], ability: 'none', item: null, baseStats: stats, moves: [attack('たいあたり')] });
     const rate = statusMoveProbability(unknown, belief);
     expect(rate).toBe(baseStatusRate(belief));
     expect(rate).toBeGreaterThan(0);

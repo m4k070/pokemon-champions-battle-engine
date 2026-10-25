@@ -27,8 +27,8 @@ class EpsilonRandomAgent implements BattleAgent {
     const total = legal.moves.length + legal.switches.length;
     if (total === 0) return { action: { type: 'forfeit' } };
     const pick = Math.min(total - 1, Math.floor(this.rng.next() * total));
-    if (pick < legal.moves.length) return { action: { type: 'move', moveIndex: legal.moves[pick]!.index, target: 0 } };
-    return { action: { type: 'switch', pokemonIndex: legal.switches[pick - legal.moves.length]!.index } };
+    if (pick < legal.moves.length) return { action: { type: 'move', moveIndex: legal.moves[pick].index, target: 0 } };
+    return { action: { type: 'switch', pokemonIndex: legal.switches[pick - legal.moves.length].index } };
   }
 }
 

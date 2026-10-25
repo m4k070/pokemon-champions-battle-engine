@@ -9,7 +9,7 @@ import type { BattleAgent, BattleContext } from '../src/ai/battle-agent.js';
 
 const stats = { HP: 200, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
 const mon = (n: string, m: ReturnType<typeof createMove>[], speed = 100) =>
-  new Pokemon({ name: n, types: ['normal'], ability: 'none', baseStats: { ...stats, SPEED: speed }, moves: m });
+  new Pokemon({ name: n, types: ['normal'], ability: 'none', item: null, baseStats: { ...stats, SPEED: speed }, moves: m });
 
 class Plan implements BattleAgent {
   constructor(private readonly steps: string[]) {}

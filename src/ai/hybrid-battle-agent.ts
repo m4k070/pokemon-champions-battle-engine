@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import type { AgentAction } from '../types.js';
 import type { Pokemon } from '../pokemon.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './battle-agent.js';
@@ -56,6 +57,11 @@ export interface HybridOptions {
 }
 
 const DEFAULT_MODEL = 'deepseek-v4.1-flash';
+
+// chat completions の応答のうち、使う部分だけを検証する。
+const completionSchema = z.object({
+  choices: z.array(z.object({ message: z.object({ content: z.string().nullish() }).optional() })).optional(),
+});
 
 export class HybridBattleAgent implements BattleAgent {
   private readonly inner: HeuristicBattleAgent;
@@ -155,7 +161,7 @@ export class HybridBattleAgent implements BattleAgent {
 
     // 相手の見えている技が1つだけで、こちらの相性が極端（無効・半減 or 抜群）→ 交代読みが要る。
     if (context.opponent.moves.length === 1 && hasSwitch && context.turn >= 2) {
-      const revealed = context.opponent.moves[0]!;
+      const revealed = context.opponent.moves[0];
       const effectiveness = typeMultiplier(revealed.type, context.self.types);
       if (effectiveness === 0 || effectiveness >= 2) yield '単一技の読み';
     }
@@ -191,9 +197,9 @@ export class HybridBattleAgent implements BattleAgent {
   private margin(): number | null {
     const scores = this.inner.lastEvaluation.map((entry) => entry.score).sort((a, b) => b - a);
     if (scores.length < 2) return null;
-    const top = scores[0]!;
+    const top = scores[0];
     const scale = Math.abs(top) > 1e-6 ? Math.abs(top) : 1;
-    return (top - scores[1]!) / scale;
+    return (top - scores[1]) / scale;
   }
 
   // 相手の最大打点をHP割合でざっくり見積もる（タイプ相性・一致・威力から。乱数と急所は無視）。
@@ -263,8 +269,9 @@ export class HybridBattleAgent implements BattleAgent {
       }),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
-    const content = body.choices?.[0]?.message?.content ?? '';
+    const body = completionSchema.safeParse(await response.json());
+    if (!body.success) throw new Error(`応答の形式が不正: ${body.error.message}`);
+    const content = body.data.choices?.[0]?.message?.content ?? '';
     // 空応答は「同意」ではなく失敗として扱う（同意と誤認すると上書き率を過小評価する）。
     if (content.trim() === '') throw new Error('空応答（content が空）');
     return content;

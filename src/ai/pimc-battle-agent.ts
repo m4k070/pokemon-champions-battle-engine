@@ -1,6 +1,6 @@
 import type { BattleAgent, BattleContext, AgentDecision } from './battle-agent.js';
 import { HeuristicBattleAgent } from './heuristic-battle-agent.js';
-import { Pokemon } from '../pokemon.js';
+import { Pokemon, shallowClonePokemon } from '../pokemon.js';
 import { SeededRandom } from '../rng.js';
 
 // PIMC（determinization）: 相手の伏せられた技・持ち物・特性を、メタの構築プールから
@@ -14,12 +14,6 @@ export interface SpeciesSet {
 }
 
 export type Belief = Map<string, SpeciesSet[]>;
-
-function clonePokemon(pokemon: Pokemon): Pokemon {
-  const clone = Object.create(Object.getPrototypeOf(pokemon)) as Pokemon;
-  Object.assign(clone, pokemon);
-  return clone;
-}
 
 export class PimcBattleAgent implements BattleAgent {
   private readonly rng: SeededRandom;
@@ -41,10 +35,10 @@ export class PimcBattleAgent implements BattleAgent {
   // 相手の未公開情報を、種族ごとの候補セットからランダムに埋める。
   // テストから直接叩けるように public にしている（決定的な副作用はない）。
   determinize(pokemon: Pokemon): Pokemon {
-    const clone = clonePokemon(pokemon);
+    const clone = shallowClonePokemon(pokemon);
     const candidates = this.belief.get(clone.name);
     if (!candidates || candidates.length === 0) return clone;
-    const candidate = candidates[Math.floor(this.rng.next() * candidates.length)]!;
+    const candidate = candidates[Math.floor(this.rng.next() * candidates.length)];
 
     const revealed = clone.moves;
     const filled: Pokemon['moves'] = [...revealed];

@@ -35,17 +35,17 @@ function damageOf(ability: AbilityName, moveName: string, moveType: TypeName, po
 describe('波動技のフラグ', () => {
   test('波動技は名前から自動で pulse になる', () => {
     const auraSphere = createMove({ name: 'はどうだん', type: 'fighting', power: 80, accuracy: 100, category: 'special' });
-    expect(auraSphere.category === 'status' || auraSphere.pulse).toBe(true);
+    expect(auraSphere.pulse).toBe(true);
   });
 
   test('非波動技は pulse にならない', () => {
     const thunderbolt = createMove({ name: '10まんボルト', type: 'electric', power: 90, accuracy: 100, category: 'special' });
-    expect(thunderbolt.category === 'status' || thunderbolt.pulse).toBe(false);
+    expect(thunderbolt.pulse).toBe(false);
   });
 
   test('明示指定は名前の既定より優先される', () => {
     const move = createMove({ name: 'はどうだん', type: 'fighting', power: 80, accuracy: 100, category: 'special', pulse: false });
-    expect(move.category === 'status' || move.pulse).toBe(false);
+    expect(move.pulse).toBe(false);
   });
 });
 

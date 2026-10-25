@@ -9,7 +9,7 @@ import type { BattleAgent, BattleContext } from '../src/ai/battle-agent.js';
 
 const stats = { HP: 200, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
 const mon = (name: string, moves: ReturnType<typeof createMove>[]) =>
-  new Pokemon({ name, types: ['normal'], ability: 'none', baseStats: stats, moves });
+  new Pokemon({ name, types: ['normal'], ability: 'none', item: null, baseStats: stats, moves });
 
 class Fixed implements BattleAgent {
   constructor(private readonly plan: Array<'hazard' | 'switch' | 'attack' | 'idle'>) {}

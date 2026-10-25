@@ -17,6 +17,8 @@ export type Stats = Record<StatKey, number>;
 // 能力ランクの対象はHPを除く5ステータス（-6〜+6）。
 export type StatStageKey = Exclude<StatKey, 'HP'>;
 export type StatStages = Record<StatStageKey, number>;
+// 能力ランクのキーの一覧（Object.keys は string[] になるので、走査にはこちらを使う）。
+export const STAT_STAGE_KEYS: readonly StatStageKey[] = ['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED'];
 
 // 天候・フィールドではなく「陣営の場」に対して発動する効果技（おいかぜ・リフレクター）と、
 // 盤面全体に対して発動する効果技（トリックルーム）。

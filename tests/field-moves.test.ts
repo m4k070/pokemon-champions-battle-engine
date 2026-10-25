@@ -152,7 +152,7 @@ describe('ミストフィールド', () => {
     // Act
     engine1.useMove(user1, dragon, mistyTerrain());
     const weakened = engine1.useMove(user1, dragon, dragonClaw());
-    const plain = engine2.useMove(engine2.activePokemon0!, engine2.activePokemon1!, dragonClaw());
+    const plain = engine2.useMove(engine2['activePokemon0']!, engine2['activePokemon1']!, dragonClaw());
 
     // Assert
     if (weakened.outcome !== 'damaged' || plain.outcome !== 'damaged') throw new Error('damaged を期待');

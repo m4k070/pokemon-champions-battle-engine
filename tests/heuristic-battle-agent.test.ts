@@ -48,7 +48,7 @@ function makeContext(self: Pokemon, opponent: Pokemon, overrides: Partial<Battle
       terrainTurnsLeft: 0,
       trickRoom: false,
       trickRoomTurnsLeft: 0,
-      stealthRock: { self: false, opponent: false },
+      stealthRock: { self: false, opponent: false }, spikes: { self: 0, opponent: 0 }, toxicSpikes: { self: 0, opponent: 0 },
     },
     recentLog: [],
     ...overrides,
@@ -159,7 +159,7 @@ describe('フィールドを考慮した技の評価', () => {
     const withoutField = damageRatio(user, target, terrainPulse());
     const withTerrain = damageRatio(user, target, terrainPulse(), {
       weather: null, weatherTurnsLeft: 0, terrain: 'psychic-terrain', terrainTurnsLeft: 5,
-      trickRoom: false, trickRoomTurnsLeft: 0, stealthRock: { self: false, opponent: false },
+      trickRoom: false, trickRoomTurnsLeft: 0, stealthRock: { self: false, opponent: false }, spikes: { self: 0, opponent: 0 }, toxicSpikes: { self: 0, opponent: 0 },
     });
     expect(withTerrain).toBeGreaterThan(withoutField * 3);
   });
@@ -170,7 +170,7 @@ describe('フィールドを考慮した技の評価', () => {
     const withoutField = damageRatio(user, target, wideForce());
     const withTerrain = damageRatio(user, target, wideForce(), {
       weather: null, weatherTurnsLeft: 0, terrain: 'psychic-terrain', terrainTurnsLeft: 5,
-      trickRoom: false, trickRoomTurnsLeft: 0, stealthRock: { self: false, opponent: false },
+      trickRoom: false, trickRoomTurnsLeft: 0, stealthRock: { self: false, opponent: false }, spikes: { self: 0, opponent: 0 }, toxicSpikes: { self: 0, opponent: 0 },
     });
     expect(withTerrain / withoutField).toBeCloseTo(1.5, 1);
   });

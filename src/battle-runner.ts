@@ -5,7 +5,9 @@ import { isDamageMove } from './move.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
 import { createStruggleMove } from './move.js';
 import type { Pokemon } from './pokemon.js';
+import { shallowClonePokemon } from './pokemon.js';
 import type { AgentAction } from './types.js';
+import { STAT_STAGE_KEYS } from './types.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './ai/battle-agent.js';
 import { snapshotBattle, restoreBattle } from './battle-snapshot.js';
 import type { BattleSnapshot, PendingTurn } from './battle-snapshot.js';
@@ -104,7 +106,7 @@ export class BattleSession {
   private megaUsed: [boolean, boolean] = [false, false];
   // 不完全情報モード用の「見えた情報」。viewer → (相手ポケモン → 見えた技index / 持ち物 / 特性)。
   readonly information: InformationLevel;
-  private knownMoves: [Map<Pokemon, Set<number>>, Map<Pokemon, Set<number>>] = [new Map(), new Map()];
+  private knownMoves: [Map<Pokemon, Set<number>>, Map<Pokemon, Set<number>>] = [new Map<Pokemon, Set<number>>(), new Map<Pokemon, Set<number>>()];
   private knownItems: [Set<Pokemon>, Set<Pokemon>] = [new Set(), new Set()];
   private knownAbilities: [Set<Pokemon>, Set<Pokemon>] = [new Set(), new Set()];
   reasoningLog: TurnReasoning[] = [];
@@ -131,8 +133,8 @@ export class BattleSession {
     this.megaEvolutionSystem = megaEvolutionSystem;
 
     // おみとおしは先発でも発動する（相手の持ち物がわかる）。
-    if (activeA.ability === 'frisk' && activeB) this.knownItems[0]!.add(activeB);
-    if (activeB && activeB.ability === 'frisk') this.knownItems[1]!.add(activeA);
+    if (activeA.ability === 'frisk' && activeB) this.knownItems[0].add(activeB);
+    if (activeB && activeB.ability === 'frisk') this.knownItems[1].add(activeA);
   }
 
   static async start(teamA: Pokemon[], teamB: Pokemon[], options: StartSessionOptions = {}): Promise<BattleSession> {
@@ -282,15 +284,14 @@ export class BattleSession {
   private redact(viewer: 0 | 1, pokemon: Pokemon): Pokemon {
     if (this.information === 'full') return pokemon;
 
-    const revealedMoves = this.knownMoves[viewer]!.get(pokemon) ?? new Set<number>();
-    const clone = Object.create(Object.getPrototypeOf(pokemon)) as Pokemon;
-    Object.assign(clone, pokemon);
+    const revealedMoves = this.knownMoves[viewer].get(pokemon) ?? new Set<number>();
+    const clone = shallowClonePokemon(pokemon);
     clone.moves = pokemon.moves.filter((_, index) => revealedMoves.has(index));
-    clone.item = this.knownItems[viewer]!.has(pokemon) ? pokemon.item : null;
+    clone.item = this.knownItems[viewer].has(pokemon) ? pokemon.item : null;
     // 特性は「外から見えた挙動があったか」で公開する（いかくの発動・技の無効化・軽減など）。
-    clone.ability = this.knownAbilities[viewer]!.has(pokemon) || pokemon.abilityRevealed
+    clone.ability = this.knownAbilities[viewer].has(pokemon) || pokemon.abilityRevealed
       ? pokemon.ability
-      : ('none' as Pokemon['ability']);
+      : 'none';
     return clone;
   }
 
@@ -299,15 +300,15 @@ export class BattleSession {
     if (this.information === 'full') return;
     if (action.type !== 'move') return;
 
-    let revealed = this.knownMoves[viewer]!.get(actor);
+    let revealed = this.knownMoves[viewer].get(actor);
     if (!revealed) {
       revealed = new Set<number>();
-      this.knownMoves[viewer]!.set(actor, revealed);
+      this.knownMoves[viewer].set(actor, revealed);
     }
     if (action.moveIndex >= 0) revealed.add(action.moveIndex);
     if (action.megaEvolve) {
-      this.knownItems[viewer]!.add(actor);
-      this.knownAbilities[viewer]!.add(actor);
+      this.knownItems[viewer].add(actor);
+      this.knownAbilities[viewer].add(actor);
     }
   }
 
@@ -417,7 +418,7 @@ export class BattleSession {
     if (switched.ability === 'frisk') {
       const opponent = this.engine.getOpponent(switched);
       if (opponent) {
-        this.knownItems[side]!.add(opponent);
+        this.knownItems[side].add(opponent);
         this.engine.observeAbility(switched);
         this.engine.log.push(`${switched.name}のおみとおしで${opponent.name}の持ち物がわかった`);
       }
@@ -604,7 +605,7 @@ export class BattleSession {
     const active = side === 0 ? this.activeA : this.activeB;
     const bench = team.filter((pokemon) => pokemon !== active && !pokemon.isFainted);
     if (bench.length === 0) return;
-    const picked = bench[Math.floor(this.engine.rng.next() * bench.length)]!;
+    const picked = bench[Math.floor(this.engine.rng.next() * bench.length)];
     this.switchTo(side, picked, team);
   }
 
@@ -634,8 +635,8 @@ export class BattleSession {
 
     if (carriedStages !== null) {
       const incoming = side === 0 ? this.activeA : this.activeB;
-      for (const [key, value] of Object.entries(carriedStages)) {
-        incoming.statStages[key as keyof typeof incoming.statStages] = value;
+      for (const key of STAT_STAGE_KEYS) {
+        incoming.statStages[key] = carriedStages[key];
       }
       this.engine.log.push(`${incoming.name}は能力変化を引き継いだ`);
     }

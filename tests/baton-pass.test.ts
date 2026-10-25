@@ -10,7 +10,7 @@ import type { BattleAgent, BattleContext } from '../src/ai/battle-agent.js';
 const stats = { HP: 150, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
 
 function makePokemon(name: string, moves: ReturnType<typeof createMove>[]): Pokemon {
-  return new Pokemon({ name, types: ['normal'], ability: 'none', baseStats: stats, moves });
+  return new Pokemon({ name, types: ['normal'], ability: 'none', item: null, baseStats: stats, moves });
 }
 
 class Scripted implements BattleAgent {

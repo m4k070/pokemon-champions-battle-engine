@@ -9,7 +9,7 @@ import { SeededRandom } from '../src/rng.js';
 
 const stats = { HP: 200, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
 const mon = (name: string, moves: ReturnType<typeof createMove>[], over: Partial<typeof stats> = {}) =>
-  new Pokemon({ name, types: ['normal'], ability: 'none', baseStats: { ...stats, ...over }, moves });
+  new Pokemon({ name, types: ['normal'], ability: 'none', item: null, baseStats: { ...stats, ...over }, moves });
 
 const subMove = () => createMove({ name: 'みがわり', type: 'normal', power: 0, accuracy: 100, pp: 10, category: 'status', createsSubstitute: true });
 const weakAttack = () => createMove({ name: 'でんこうせっか', type: 'normal', power: 40, accuracy: 100, pp: 20, category: 'physical' });
@@ -21,7 +21,7 @@ function context(self: Pokemon, opponent: Pokemon): BattleContext {
   return {
     turn: 2, self, selfTeam: [self], opponent, opponentTeam: [opponent],
     canMegaEvolve: false, mustSwitch: false,
-    field: { weather: null, weatherTurnsLeft: 0, terrain: null, terrainTurnsLeft: 0, trickRoom: false, trickRoomTurnsLeft: 0, stealthRock: { self: false, opponent: false } },
+    field: { weather: null, weatherTurnsLeft: 0, terrain: null, terrainTurnsLeft: 0, trickRoom: false, trickRoomTurnsLeft: 0, stealthRock: { self: false, opponent: false }, spikes: { self: 0, opponent: 0 }, toxicSpikes: { self: 0, opponent: 0 } },
     recentLog: [],
   };
 }

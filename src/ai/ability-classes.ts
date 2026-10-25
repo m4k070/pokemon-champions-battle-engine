@@ -90,10 +90,11 @@ const CLASS_TABLE: Record<AbilityClass, ReadonlySet<string>> = {
 };
 
 // 特性名 → クラスのフラグ（0/1）。未知・'none' はすべて0。
-export function abilityClassFlags(ability: AbilityName | string): Record<AbilityClass, number> {
+// AbilityName 以外の文字列（未知の特性）も受け取る。
+export function abilityClassFlags(ability: string): Record<AbilityClass, number> {
   const flags = { weather: 0, denial: 0, stat: 0, contact: 0, recovery: 0 } as Record<AbilityClass, number>;
   for (const cls of ABILITY_CLASSES) {
-    if (CLASS_TABLE[cls].has(ability as string)) flags[cls] = 1;
+    if (CLASS_TABLE[cls].has(ability)) flags[cls] = 1;
   }
   return flags;
 }
