@@ -294,7 +294,7 @@ export class BattleEngine {
     for (const type of defenderTypes) {
       const chart = this.typeChart[attackType];
       if (chart) {
-        effectiveness *= chart[type] !== undefined ? chart[type]! : 1.0;
+        effectiveness *= chart[type] ?? 1.0;
       }
     }
     return effectiveness;

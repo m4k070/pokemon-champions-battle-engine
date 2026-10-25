@@ -1,0 +1,23 @@
+# 型検査・lint・テストを push / PR ごとに走らせる。
+name: check
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts  # prepare (= build) は下で明示的に走らせる
+      - run: npm run check
+      - run: npx tsc --noEmit -p tsconfig.test.json
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

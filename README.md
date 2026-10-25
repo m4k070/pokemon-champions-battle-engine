@@ -202,7 +202,16 @@ npm run test:coverage
 
 # 特定テスト
 npm test -- --testNamePattern="ダメージ計算"
+
+# 静的検査
+npm run check                          # tsc (src)
+npx tsc --noEmit -p tsconfig.test.json # tsc (src + tests)
+npm run lint                           # eslint (型情報を使うルール、設定は eslint.config.js)
 ```
+
+同じ検査とビルドを `.github/workflows/check.yml` が push / PR ごとに走らせます。
+外部から来る JSON (Poke API・LLM の応答・キャッシュファイル) は `any` で読まず、
+zod か型ガードで検証してから型を付けてください (`no-unsafe-*` ルールで検出されます)。
 
 ## ドキュメント
 

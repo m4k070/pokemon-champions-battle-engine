@@ -78,6 +78,20 @@ function parseMoveCache(raw: unknown): MoveCache {
   return cache;
 }
 
+function parseLearnsetCache(raw: unknown): LearnsetCache {
+  if (typeof raw !== 'object' || raw === null) return {};
+
+  const cache: LearnsetCache = {};
+  for (const [key, rawEntry] of Object.entries(raw)) {
+    if (typeof rawEntry !== 'object' || rawEntry === null) continue;
+    const { pokemonName, moves } = rawEntry as Record<string, unknown>;
+    if (typeof pokemonName !== 'string' || !Array.isArray(moves)) continue;
+    if (!moves.every((move): move is string => typeof move === 'string')) continue;
+    cache[key] = { pokemonName, moves };
+  }
+  return cache;
+}
+
 // Poke API の技名は英語の kebab-case（例: 'u-turn'）。
 // 日本語名などこの形でない技名は、対訳表がないため照合できない。
 const POKE_API_MOVE_NAME = /^[a-z][a-z0-9-]*$/;
@@ -131,7 +145,7 @@ export class MoveValidator {
     try {
       if (fs.existsSync(this.learnsetPath)) {
         const data = fs.readFileSync(this.learnsetPath, 'utf-8');
-        this.learnsetCache = JSON.parse(data);
+        this.learnsetCache = parseLearnsetCache(JSON.parse(data));
       }
     } catch {
       this.learnsetCache = {};
