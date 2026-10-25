@@ -186,7 +186,7 @@ function getEffectivenessLabel(attackType: TypeName, defenderTypes: TypeName[]):
   for (const type of defenderTypes) {
     const chart = TYPE_CHART[attackType];
     if (chart) {
-      effectiveness *= chart[type] !== undefined ? chart[type]! : 1.0;
+      effectiveness *= chart[type] ?? 1.0;
     }
   }
   if (effectiveness === 0) return '無効';
@@ -366,7 +366,7 @@ function errorResult(error: unknown): CallToolResult {
   };
 }
 
-async function handle(fn: () => Promise<unknown> | unknown): Promise<CallToolResult> {
+async function handle(fn: () => unknown): Promise<CallToolResult> {
   try {
     return jsonResult(await fn());
   } catch (error) {

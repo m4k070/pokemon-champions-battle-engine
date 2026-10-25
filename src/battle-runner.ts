@@ -2,7 +2,6 @@ import { BattleEngine } from './battle-engine.js';
 import { MegaEvolutionSystem } from './rules/mega-evolution.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
 import type { Pokemon } from './pokemon.js';
-import type { AgentAction } from './types.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './ai/battle-agent.js';
 import { snapshotBattle, restoreBattle } from './battle-snapshot.js';
 import type { BattleSnapshot, PendingTurn } from './battle-snapshot.js';
