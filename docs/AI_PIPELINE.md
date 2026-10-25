@@ -288,6 +288,41 @@ log-loss は葉を増やすほど良くなるが、勝率は付いてこない�
 - run3・29列では葉63（78.6%、1本）が葉31 の平均より 4pt 低い。**最適な葉の数は列の数とデータで変わる。**
 - それでも run3・葉31（82.6%）は run8・葉63（80.5%）より +2.1pt（標準誤差 0.7pt）。データ側の差は残っている。
 
+## 兄弟手ベンチマーク（`scripts/sibling-benchmark.ts` + `~/data/pokemon-decisions/score_benchmark.py`）
+
+木を差し替えて対戦し直さずに、V の「手を選ぶ力」を数秒で測るための物差し。
+
+```bash
+# 作成（tune 分割の seed、6並列で約35分、1,948点・83MB）
+for k in 0 1 2 3 4 5; do npx tsx scripts/sibling-benchmark.ts --points=334 --shard=$k --shards=6 \
+  --out=$HOME/data/pokemon-decisions/bench-part$k.jsonl & done; wait
+# 採点（木20本で約3秒）
+python score_benchmark.py bench-tune.jsonl --check value-trees-v3-run3.json      # エージェントの値と一致するか
+python score_benchmark.py bench-tune.jsonl --winrates winrates-uniform-m0.tsv    # 指標と勝率の相関
+```
+
+- 局面は現行 V（uniform・margin 0）対 v1 の対戦から取る。候補手ごとに「相手の各合法手で1ターン進めた後の特徴量」を
+  保存するので、どの木でも V の1手先読み（uniform）を再計算できる（エージェント自身の値と差 2e-16 で一致）。
+- 正解は候補手ごとの rollout 勝率（共通乱数）。`qV1` = 続きを v1（32本）、`qV` = 続きを現行 V（8本）。相手は v1。
+- 指標: V の最善手の regret（最善の Q̂ との差）、最善手を当てた割合、局面内の Spearman。
+
+### 勝率との相関（木20本、uniform・margin 0 の勝率に対して）
+
+| 指標 | Pearson | Spearman |
+|---|---|---|
+| qV の局面内 Spearman | **+0.608** | **+0.523** |
+| qV の regret | −0.470 | −0.406 |
+| qV1 の regret | +0.467（逆向き） | +0.445 |
+| qV1 の局面内 Spearman | −0.342（逆向き） | −0.368 |
+
+- **続きを V にしたラベル（qV）だけが勝率と正しい向きに連動する。** v1 継続のラベルで順位付けが良い木ほど、実戦では弱い
+  （「v1 の続きに合う手」を選ぶ木は、自分で打ち継ぐと損をする。前節の計画の一貫性と同じ現象）。
+- ただし相関は中程度で、**勝率評価の代わりにはならない**。木ごとの勝率には評価の誤差（±1.2pt）と学習のばらつきが乗るので、
+  20本では上限も低い。加えて qV の続きは run3 の V なので、**run3 に似た木ほど有利に出る偏り**がある
+  （run3 系4本の Spearman は −0.017〜+0.004、run8 系は −0.049〜−0.011）。
+- 使い道は粗い足切り（明らかに悪い設定を対戦評価の前に落とす）まで。どの木も qV の局面内 Spearman は 0 付近で、
+  V 継続での兄弟手の順位付けは今のところどの木も弱い。
+
 ## 2026-10-25 に見つけて直した測定系のバグ
 
 - **`--mode=maximin` が黙って `uniform` になっていた。** `ValueSearchOptions` の型に `'maximin'` が無く、
