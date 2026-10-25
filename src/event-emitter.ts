@@ -1,10 +1,10 @@
 import type { BattleEventName, EventData, EventHandler } from './types.js';
 
 export class EventEmitter {
-  private handlers: Map<string, EventHandler[]> = new Map();
+  private handlers: Map<BattleEventName, EventHandler[]> = new Map();
   private handlerCount = 0;
 
-  on(event: BattleEventName | string, handler: EventHandler): void {
+  on(event: BattleEventName, handler: EventHandler): void {
     if (!this.handlers.has(event)) {
       this.handlers.set(event, []);
     }
@@ -12,7 +12,7 @@ export class EventEmitter {
     this.handlerCount++;
   }
 
-  emit(event: BattleEventName | string, data: EventData): unknown[] {
+  emit(event: BattleEventName, data: EventData): unknown[] {
     if (this.handlers.has(event)) {
       const results: unknown[] = [];
       for (const handler of this.handlers.get(event)!) {
@@ -23,7 +23,7 @@ export class EventEmitter {
     return [];
   }
 
-  off(event: BattleEventName | string, handler: EventHandler): void {
+  off(event: BattleEventName, handler: EventHandler): void {
     if (this.handlers.has(event)) {
       const handlers = this.handlers.get(event)!;
       const index = handlers.indexOf(handler);

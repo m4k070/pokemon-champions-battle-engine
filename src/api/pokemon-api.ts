@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 const POKE_API_BASE = 'https://pokeapi.co/api/v2';
 
 // Poke API がエラー応答を返したことを、HTTPステータス付きで伝える。
@@ -47,14 +49,107 @@ export interface PokeApiMoveData {
   effectChance: number | null;
 }
 
+// Poke API の応答のうち、このモジュールが読むフィールドだけを検証する。
+// 応答を any のまま読むと、形が変わったときに undefined が黙って種族値などへ流れ込む。
+const namedResource = z.object({ name: z.string() });
+
+const rawPokemonSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  stats: z.array(z.object({ base_stat: z.number(), stat: namedResource })),
+  types: z.array(z.object({ type: namedResource })),
+  abilities: z.array(z.object({ ability: namedResource, is_hidden: z.boolean() })),
+  moves: z.array(z.object({ move: namedResource })),
+  weight: z.number(),
+  height: z.number(),
+});
+
+const rawMoveSchema = z.object({
+  name: z.string(),
+  accuracy: z.number().nullable(),
+  power: z.number().nullable(),
+  pp: z.number(),
+  type: namedResource,
+  damage_class: namedResource,
+  priority: z.number(),
+  meta: z.object({ stat_chance: z.number().nullable() }).nullish(),
+});
+
+type RawPokemon = z.infer<typeof rawPokemonSchema>;
+
+// キャッシュに置く変換後の形。fromJSON で外部ファイルから戻ることがあるので、読み出し時にも検証する。
+const pokemonDataSchema: z.ZodType<PokeApiPokemonData> = z.object({
+  id: z.number(),
+  name: z.string(),
+  baseStats: z.object({
+    HP: z.number(),
+    ATK: z.number(),
+    DEF: z.number(),
+    SPATK: z.number(),
+    SPDEF: z.number(),
+    SPEED: z.number(),
+  }),
+  types: z.array(z.string()),
+  abilities: z.array(z.object({ name: z.string(), isHidden: z.boolean() })),
+  moves: z.array(z.string()),
+  weight: z.number(),
+  height: z.number(),
+});
+
+const moveDataSchema: z.ZodType<PokeApiMoveData> = z.object({
+  name: z.string(),
+  accuracy: z.number().nullable(),
+  power: z.number().nullable(),
+  pp: z.number(),
+  type: z.string(),
+  category: z.string(),
+  priority: z.number(),
+  effectChance: z.number().nullable(),
+});
+
+const STAT_NAMES = {
+  HP: 'hp',
+  ATK: 'attack',
+  DEF: 'defense',
+  SPATK: 'special-attack',
+  SPDEF: 'special-defense',
+  SPEED: 'speed',
+} as const satisfies Record<keyof PokeApiPokemonData['baseStats'], string>;
+
+function baseStat(raw: RawPokemon, statName: string): number {
+  const stat = raw.stats.find((s) => s.stat.name === statName);
+  if (stat === undefined) {
+    throw new Error(`Poke API response for ${raw.name} has no '${statName}' stat`);
+  }
+  return stat.base_stat;
+}
+
+// fetch → ステータス確認 → JSON → スキーマ検証 までを共通化する。
+// 形の合わない応答は PokeApiError (status は実際の HTTP ステータス) として投げ、原因を cause に残す。
+async function fetchJson<T>(url: string, schema: z.ZodType<T>, what: string): Promise<T> {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new PokeApiError(`Failed to fetch ${what}: ${response.statusText}`, response.status);
+  }
+
+  const result = schema.safeParse(await response.json());
+  if (!result.success) {
+    throw new PokeApiError(`Unexpected response shape for ${what}`, response.status, { cause: result.error });
+  }
+  return result.data;
+}
+
 export class PokemonDataCache {
   private cache = new Map<string, unknown>();
 
-  get<T>(key: string): T | undefined {
-    return this.cache.get(key) as T | undefined;
+  // 値の型は呼び出し側が schema で示す。形が合わない値 (古い形式のキャッシュ等) は無いものとして扱う。
+  get<T>(key: string, schema: z.ZodType<T>): T | undefined {
+    const result = schema.safeParse(this.cache.get(key));
+    return result.success ? result.data : undefined;
   }
 
-  set<T>(key: string, value: T): void {
+  set(key: string, value: unknown): void {
     this.cache.set(key, value);
   }
 
@@ -67,7 +162,10 @@ export class PokemonDataCache {
   }
 
   fromJSON(jsonString: string): void {
-    const data = JSON.parse(jsonString);
+    const data: unknown = JSON.parse(jsonString);
+    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+      throw new Error('PokemonDataCache.fromJSON: expected a JSON object');
+    }
     this.cache = new Map(Object.entries(data));
   }
 
@@ -90,36 +188,30 @@ export class PokemonAPI {
   async fetchPokemonData(pokemonId: string | number): Promise<PokeApiPokemonData> {
     const cacheKey = `pokemon_${pokemonId}`;
 
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get<PokeApiPokemonData>(cacheKey)!;
+    const cached = this.cache.get(cacheKey, pokemonDataSchema);
+    if (cached !== undefined) {
+      return cached;
     }
 
-    const url = `${POKE_API_BASE}/pokemon/${pokemonId}`;
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new PokeApiError(`Failed to fetch Pokemon ${pokemonId}: ${response.statusText}`, response.status);
-    }
-
-    const data = await response.json() as any;
+    const data = await fetchJson(`${POKE_API_BASE}/pokemon/${pokemonId}`, rawPokemonSchema, `Pokemon ${pokemonId}`);
 
     const formatted: PokeApiPokemonData = {
       id: data.id,
       name: data.name,
       baseStats: {
-        HP: data.stats.find((s: any) => s.stat.name === 'hp').base_stat,
-        ATK: data.stats.find((s: any) => s.stat.name === 'attack').base_stat,
-        DEF: data.stats.find((s: any) => s.stat.name === 'defense').base_stat,
-        SPATK: data.stats.find((s: any) => s.stat.name === 'special-attack').base_stat,
-        SPDEF: data.stats.find((s: any) => s.stat.name === 'special-defense').base_stat,
-        SPEED: data.stats.find((s: any) => s.stat.name === 'speed').base_stat,
+        HP: baseStat(data, STAT_NAMES.HP),
+        ATK: baseStat(data, STAT_NAMES.ATK),
+        DEF: baseStat(data, STAT_NAMES.DEF),
+        SPATK: baseStat(data, STAT_NAMES.SPATK),
+        SPDEF: baseStat(data, STAT_NAMES.SPDEF),
+        SPEED: baseStat(data, STAT_NAMES.SPEED),
       },
-      types: data.types.map((t: any) => t.type.name),
-      abilities: data.abilities.map((a: any) => ({
+      types: data.types.map((t) => t.type.name),
+      abilities: data.abilities.map((a) => ({
         name: a.ability.name,
         isHidden: a.is_hidden,
       })),
-      moves: data.moves.map((m: any) => m.move.name),
+      moves: data.moves.map((m) => m.move.name),
       weight: data.weight,
       height: data.height,
     };
@@ -132,18 +224,12 @@ export class PokemonAPI {
   async fetchMoveData(moveName: string): Promise<PokeApiMoveData> {
     const cacheKey = `move_${moveName}`;
 
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get<PokeApiMoveData>(cacheKey)!;
+    const cached = this.cache.get(cacheKey, moveDataSchema);
+    if (cached !== undefined) {
+      return cached;
     }
 
-    const url = `${POKE_API_BASE}/move/${moveName}`;
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new PokeApiError(`Failed to fetch move ${moveName}: ${response.statusText}`, response.status);
-    }
-
-    const data = await response.json() as any;
+    const data = await fetchJson(`${POKE_API_BASE}/move/${moveName}`, rawMoveSchema, `move ${moveName}`);
 
     const formatted: PokeApiMoveData = {
       name: data.name,

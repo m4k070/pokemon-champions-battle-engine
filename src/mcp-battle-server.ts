@@ -212,7 +212,7 @@ function getEffectivenessLabel(attackType: TypeName, defenderTypes: TypeName[]):
   for (const type of defenderTypes) {
     const chart = TYPE_CHART[attackType];
     if (chart) {
-      effectiveness *= chart[type] !== undefined ? chart[type]! : 1.0;
+      effectiveness *= chart[type] ?? 1.0;
     }
   }
   if (effectiveness === 0) return '無効';
@@ -392,7 +392,7 @@ function errorResult(error: unknown): CallToolResult {
   };
 }
 
-async function handle(fn: () => Promise<unknown> | unknown): Promise<CallToolResult> {
+async function handle(fn: () => unknown): Promise<CallToolResult> {
   try {
     return jsonResult(await fn());
   } catch (error) {
@@ -415,6 +415,11 @@ export function createBattleServer(): McpServer {
     return stored;
   }
 
+  // シングルバトルなので技の対象は常に 0 (BattleAgent の実装と同じ)。
+  function toAgentAction(input: z.infer<typeof ConcreteActionSchema>): AgentAction {
+    return input.type === 'move' ? { ...input, target: 0 } : input;
+  }
+
   async function resolveDecision(
     input: ActionInput,
     side: 0 | 1,
@@ -424,7 +429,7 @@ export function createBattleServer(): McpServer {
     if (input === 'auto') {
       return randomAgent.selectAction(session.getContext(side));
     }
-    return { action: input as AgentAction, reasoning };
+    return { action: toAgentAction(input), reasoning };
   }
 
   const server = new McpServer({ name: 'pokemon-champions-battle-engine', version: '1.0.0' });
