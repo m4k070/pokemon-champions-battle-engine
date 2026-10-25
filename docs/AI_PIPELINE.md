@@ -174,6 +174,27 @@ npx tsx scripts/rollout-diagnostic.ts --points=3000 --rollouts=32 --builds=6 --s
 - 注意: mode で V の手が変わるので、行どうしは同じ決定点の比較ではない。実戦の強さは uniform が上
   （v1 相手 margin 0.05 で 83.7% 対 79.4%、前節）。uniform の引き分け率は v1 継続で 21.1%（maximin 3.9%）と高い。
 
+### run7（V が打ち継ぐ行を増やしたデータ）— 昇格せず
+
+```bash
+npx tsx scripts/collect-decisions.ts --games=100 --mix=v7 --vMode=uniform --vMargin=0 --v=v7 \
+  --out=$HOME/data/pokemon-decisions/run7.jsonl   # 11,000試合 / 336,787行、約8分
+```
+
+`--mix=v7` は V 対 v1 の試合を 1/4 → 1/2 にし、eps / random を半分ずつにする。行の割合は
+v1 62% / V（uniform・margin 0）24% / random 7% / eps 6%。学習は log-loss 0.4220 / AUC 0.8905。
+
+| V | uniform 0.05 | uniform 0 | maximin 0.05 | maximin 0 |
+|---|---|---|---|---|
+| 現行（run3） | 83.7% [82.6, 84.8] | 82.6% [81.5, 83.7] | 79.4% [78.2, 80.6] | 79.0% [77.8, 80.2] |
+| v7（run7） | 81.7% [80.6, 82.8] | 78.0% [76.8, 79.2] | 75.3% [74.0, 76.6] | 67.4% [66.0, 68.8] |
+
+（v1 相手、`--split=report`、各 4,400試合。現行の uniform 2本は同じコードで再計測し、値が一致した）
+
+- **4条件すべてで現行を下回る。** margin 0 ほど差が大きく、兄弟手の順位付けが弱くなっている。
+- run7 は「V の行を増やす」と「eps / random を半分にする」の2つを同時に変えたので、どちらが効いたかは切り分けていない。
+  収集コードのコメントにあるとおり、摂動した方策の行は1手先読みが分布の外に出たときの過大評価を抑える役割があった。
+
 ## 2026-10-25 に見つけて直した測定系のバグ
 
 - **`--mode=maximin` が黙って `uniform` になっていた。** `ValueSearchOptions` の型に `'maximin'` が無く、
