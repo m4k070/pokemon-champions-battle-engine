@@ -27,6 +27,8 @@ import { appendFileSync, writeFileSync } from 'node:fs';
 //   npx tsx scripts/rollout-diagnostic.ts --points=200 --rollouts=16 --mode=maximin
 //   主な引数: --builds=N --seeds=N --points=N --rollouts=R --margin=<trustMargin>
 //             --mode=worst|maximin|uniform|belief --maxTurns=50 --out=<jsonl>
+//             --continuation=v1|value（2ターン目以降の自分側。v1 は両者ベースライン、
+//               value は自分側を V（同じ mode/margin）・相手側を v1 にして、実戦と同じ構図で打つ）
 
 const arg = (name: string, fallback: string): string =>
   (process.argv.find((a) => a.startsWith(`--${name}=`)) ?? `--${name}=${fallback}`).split('=')[1] ?? fallback;
@@ -38,6 +40,8 @@ const seedsLimit = Number(arg('seeds', '20'));
 const margin = Number(arg('margin', '0'));
 const maxTurns = Number(arg('maxTurns', '50'));
 const mode = arg('mode', 'maximin') as 'model' | 'uniform' | 'worst' | 'maximin' | 'belief';
+const continuation = arg('continuation', 'v1');
+if (continuation !== 'v1' && continuation !== 'value') throw new Error(`未知の --continuation=${continuation}`);
 const out = arg('out', `${process.env.HOME}/.local/state/pokemon-champions/rollout-diagnostic.jsonl`);
 
 interface Candidate {
@@ -99,7 +103,7 @@ class ScriptedAgent implements BattleAgent {
   }
 }
 
-// ある手を1ターン打ち、以後は両者ベースラインで決着まで打つ。乱数は引数で固定（共通乱数）。
+// ある手を1ターン打ち、以後は継続方策で決着まで打つ。乱数は引数で固定（共通乱数）。
 async function rollout(
   session: BattleSession,
   side: 0 | 1,
@@ -117,8 +121,13 @@ async function rollout(
   } catch {
     return null; // 不正な手
   }
-  const agentA = new HeuristicV1BattleAgent(new SeededRandom(seed * 31 + 11));
-  const agentB = new HeuristicV1BattleAgent(new SeededRandom(seed * 31 + 13));
+  const own: BattleAgent =
+    continuation === 'value'
+      ? new ValueSearchBattleAgent(new SeededRandom(seed * 31 + 11), { opponentMode: mode, trustMargin: margin })
+      : new HeuristicV1BattleAgent(new SeededRandom(seed * 31 + 11));
+  const other = new HeuristicV1BattleAgent(new SeededRandom(seed * 31 + 13));
+  const agentA = side === 0 ? own : other;
+  const agentB = side === 0 ? other : own;
   let turns = 1;
   while (!fork.isFinished() && turns < maxTurns) {
     try {
@@ -320,7 +329,7 @@ async function main(): Promise<void> {
       mean(results.map((point) => point.drawBaseline / Math.max(1, point.rollouts)))) /
     2;
 
-  console.log(`\n診断点 ${n} / rollout ${rollouts}本ずつ / mode=${mode} margin=${margin} / ${seconds.toFixed(0)}秒`);
+  console.log(`\n診断点 ${n} / rollout ${rollouts}本ずつ / mode=${mode} margin=${margin} continuation=${continuation} / ${seconds.toFixed(0)}秒`);
   console.log(`rollout の引き分け率 ${(100 * drawRate).toFixed(1)}%（0.5勝として数える）`);
   console.log(`V の手が実勝率で上回った割合 ${((100 * positive) / Math.max(1, n)).toFixed(1)}% / 同等 ${((100 * zero) / Math.max(1, n)).toFixed(1)}% / 下回った ${((100 * negative) / Math.max(1, n)).toFixed(1)}%`);
   console.log(`平均 ΔQ̂ ${(100 * mean(deltaQ)).toFixed(2)}pt / 平均 regret ${(100 * mean(regret)).toFixed(2)}pt`);
