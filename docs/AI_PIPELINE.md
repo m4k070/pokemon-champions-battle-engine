@@ -34,13 +34,37 @@ value-ab.ts / eval-pool.ts                           （対戦での強さを測
 - 現行ハッシュ: `eddabac7da9ae012`（77列）。run4.jsonl もこの値（TS 側と Python 側で一致を確認）。
   run4.jsonl は sidecar 無し（ガード導入前）なので `verified: False` と記録されるが、列名ハッシュは現行と一致する。
 - run3.jsonl は 29列（`2990ffc39193d0a5`）で sidecar 無し。学習時に「警告して続行」になる。
-- 抽出に無い旧列は `DECLARED_FEATURE_DEFAULTS` で理由付きで宣言する。現在は `weather: 0` のみ
-  （run3 の木が参照。0 を供給した状態で 82.4% / 83.1% を実測済みで、29列時代と同等）。
+- 抽出に無い旧列は `LEGACY_FEATURE_COMPUTERS` が context から実値を供給する（現在 `weather` のみ）。
+  `DECLARED_FEATURE_DEFAULTS` はベクトルに列が無いときの最終フォールバック（0）。
+  木の入力は `valueInputs(context)` = 77列 + 旧列。**学習データの記録は `extractFeatures` の 77列のまま**
+  （取り違えると次世代のデータだけ列が増える。テストで固定している）。
+- `weather` を 0 固定にしていた時期がある（run4/run5 の収集）。run3 のデータでは意思決定の 34.0% で
+  weather が立っていたので、その maximin は天候下で劣化した専門家だった。
 - 列名を変える／増やすときの手順: `features.ts` と `FEATURE_NAMES` を同時に直す → `npx jest` →
   データを新しいスキーマで集め直す → 木を学習し直す。木を残したまま列名を変えると読み込み時に落ちる（意図した挙動）。
 
 ## 現行 V の状態（2026-10-25）
 
-- コミット済みの V は run3 学習版（29列の木）。77列の抽出に当てても
-  margin0.05 で 82.4% [81.2, 83.5]、margin0 で 83.1% [82.0, 84.2]。
-- run4 学習版（77列）は 80.4% / 74.1% で、退行は run4 のデータ側にある（`docs/HANDOFF-2026-10-25.md`）。
+コミット済みの V は run3 学習版（29列の木）。凍結ベースラインv1 相手・report seed 3001–3200・4,400試合:
+
+| V（学習データ／maximin の入力） | margin 0.05 | margin 0 | 引き分け |
+|---|---|---|---|
+| run3 学習（現行）・weather 0固定 | 82.4% [81.2, 83.5] | 83.1% [82.0, 84.2] | 6.3% / 5.2% |
+| run3 学習（現行）・weather 実値 | 82.5% [81.3, 83.6] | 82.6% [81.5, 83.7] | 6.3% / 5.2% |
+| run4 学習（weather 0固定の maximin） | 80.4% | 74.1% | 8.8% / 9.5% |
+| run6 学習（weather 実値の maximin） | 81.5% [80.3, 82.6] | 77.5% [76.3, 78.7] | 8.1% / 7.3% |
+
+- 現行 V は weather を 0 固定にしても実値でも強さが変わらない。
+- 新しいデータで学習した V は「weather を直す」だけでは現行に届かない（run4 → run6 で +1.1/+3.4pt、
+  それでも現行比 −1.0/−5.1pt）。margin0 と 0.05 の差は現行 0.1pt に対し run6 4.0pt で、
+  **兄弟手の順位付け（ΔV）がまだ弱い**。原因はデータの質（H2: ラベルが混合方策の価値）側に残っている。
+
+## V を昇格させるときの手順
+
+1. `npx jest` が緑（現行 V のまま）であることを確認。
+2. `~/data/pokemon-decisions/value-trees-vN.json` を `src/ai/value-trees.json` にコピー。
+3. **`parity-check.json` を `tests/fixtures/value-parity.json` にコピーする**（学習時の 200行サンプル）。
+   忘れると `tests/value-trees.test.ts` が旧い列数で落ちる（＝昇格の検出になる）。
+4. `value-ab.ts --split=report` を margin 0.05 / 0 の2本。昇格条件は「v1 相手に現行を下回らない」
+   「（可能なら）現行 V との直接対戦で 50% 以上」。log-loss は補助指標。
+

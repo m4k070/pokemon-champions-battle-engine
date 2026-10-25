@@ -13,7 +13,7 @@
 import type { BattleContext } from './battle-agent.js';
 import { extractFeatures } from './features.js';
 import type { FeatureVector } from './features.js';
-import { assertTreeSchema, DECLARED_FEATURE_DEFAULTS, FEATURE_SCHEMA_HASH } from './feature-schema.js';
+import { assertTreeSchema, DECLARED_FEATURE_DEFAULTS, LEGACY_FEATURE_COMPUTERS, FEATURE_SCHEMA_HASH } from './feature-schema.js';
 import treeData from './value-trees.json' with { type: 'json' };
 
 type TreeNode = { f: number; t: number; l: number; r: number } | { v: number };
@@ -52,6 +52,17 @@ export function evaluateVector(features: FeatureVector): number {
   return 1 / (1 + Math.exp(-raw));
 }
 
+// 木に入力するベクトル。77列の抽出に、木が参照する旧列（context から計算）を足す。
+// ここを飛ばすと旧 V は「天候を常に0と見る」専門家になり、天候下で手を誤る
+// （run4/run5 の maximin がその状態だった）。
+export function valueInputs(context: BattleContext): FeatureVector {
+  const features = extractFeatures(context);
+  for (const [name, compute] of Object.entries(LEGACY_FEATURE_COMPUTERS)) {
+    if (!(name in features)) features[name] = compute(context);
+  }
+  return features;
+}
+
 export function evaluateValue(context: BattleContext): number {
-  return evaluateVector(extractFeatures(context));
+  return evaluateVector(valueInputs(context));
 }
