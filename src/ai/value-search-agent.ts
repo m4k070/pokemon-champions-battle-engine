@@ -22,7 +22,7 @@ class ScriptedAgent implements BattleAgent {
   }
 
   async selectLead(team: Parameters<BattleAgent['selectLead']>[0]) {
-    return team[0]!;
+    return team[0];
   }
 
   async selectAction(context: BattleContext): Promise<AgentDecision> {
@@ -97,8 +97,8 @@ export class ValueSearchBattleAgent implements BattleAgent {
     const evaluated = limit > 0 ? candidates.slice(0, limit) : candidates;
 
     let bestValue = -Infinity;
-    let bestAction: AgentAction = evaluated[0]!.action;
-    let bestLabel = evaluated[0]!.label;
+    let bestAction: AgentAction = evaluated[0].action;
+    let bestLabel = evaluated[0].label;
     for (const candidate of evaluated) {
       const value = await this.evaluate(session, side, candidate.action);
       if (value > bestValue) {
@@ -138,14 +138,14 @@ export class ValueSearchBattleAgent implements BattleAgent {
     }
     if (mode === 'model') {
       const fork = session.fork();
-      const other = (side === 0 ? 1 : 0) as 0 | 1;
+      const other = side === 0 ? 1 : 0;
       const opponentDecision = await this.opponentModel.selectAction(fork.getContext(other));
       return this.simulate(fork, side, action, opponentDecision.action);
     }
 
     // 相手の合法手を列挙して、平均（uniform）または最悪値（worst）を取る。
     const probe = session.fork();
-    const other = (side === 0 ? 1 : 0) as 0 | 1;
+    const other = side === 0 ? 1 : 0;
     const opponentActions = this.enumerateActions(probe.getContext(other));
     if (opponentActions.length === 0) return -Infinity;
     let sum = 0;

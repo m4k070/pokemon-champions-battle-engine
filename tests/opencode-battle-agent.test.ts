@@ -34,9 +34,13 @@ function makeContext(overrides: Partial<BattleContext> = {}): BattleContext {
     field: overrides.field ?? {
       weather: 'sand',
       weatherTurnsLeft: 3,
+      terrain: null,
+      terrainTurnsLeft: 0,
       trickRoom: false,
       trickRoomTurnsLeft: 0,
       stealthRock: { self: true, opponent: false },
+      spikes: { self: 0, opponent: 0 },
+      toxicSpikes: { self: 0, opponent: 0 },
     },
     recentLog: overrides.recentLog ?? ['ガブリアスが場に出た！', 'カバルドンのじしん'],
   };

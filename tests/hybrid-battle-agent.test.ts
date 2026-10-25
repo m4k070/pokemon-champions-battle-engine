@@ -12,6 +12,7 @@ function makePokemon(name: string, moves: string[], types: ['normal'] | ['normal
     name,
     types,
     ability: 'none',
+    item: null,
     baseStats: { HP: 150, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
     moves: moves.map((moveName) => createMove({
       name: moveName, type: 'normal', power: 60, accuracy: 100, pp: 20, category: 'physical',
@@ -27,6 +28,7 @@ function context(turn: number, selfHp = 0.8): BattleContext {
     name: '相手',
     types: ['electric'],
     ability: 'none',
+    item: null,
     baseStats: { HP: 150, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
     moves: [createMove({ name: 'でんげき', type: 'fighting', power: 60, accuracy: 100, pp: 20, category: 'physical' })],
   });
@@ -43,7 +45,7 @@ function context(turn: number, selfHp = 0.8): BattleContext {
       weather: null, weatherTurnsLeft: 0,
       terrain: null, terrainTurnsLeft: 0,
       trickRoom: false, trickRoomTurnsLeft: 0,
-      stealthRock: { self: false, opponent: false },
+      stealthRock: { self: false, opponent: false }, spikes: { self: 0, opponent: 0 }, toxicSpikes: { self: 0, opponent: 0 },
     },
     recentLog: [],
   };
@@ -164,7 +166,7 @@ describe('ハイブリッド方策', () => {
       mustSwitch: false,
       field: {
         weather: null, weatherTurnsLeft: 0, terrain: null, terrainTurnsLeft: 0,
-        trickRoom: false, trickRoomTurnsLeft: 0, stealthRock: { self: false, opponent: false },
+        trickRoom: false, trickRoomTurnsLeft: 0, stealthRock: { self: false, opponent: false }, spikes: { self: 0, opponent: 0 }, toxicSpikes: { self: 0, opponent: 0 },
       },
       recentLog: [],
     };

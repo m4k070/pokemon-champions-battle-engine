@@ -15,18 +15,18 @@ import type { FeatureVector } from './features.js';
 import { assertTreeSchema, DECLARED_FEATURE_DEFAULTS, LEGACY_FEATURE_COMPUTERS, FEATURE_SCHEMA_HASH } from './feature-schema.js';
 import treeData from './value-trees.json' with { type: 'json' };
 
-type TreeNode = { f: number; t: number; l: number; r: number } | { v: number };
+export type TreeNode = { f: number; t: number; l: number; r: number } | { v: number };
 
 export interface TreeModel {
   features: string[];
-  trees: unknown;
+  trees: TreeNode[][];
 }
 
 // 木の JSON から勝率関数を作る。既定の V（value-trees.json）のほか、
 // 別の木どうしを直接対戦させる評価でも使う。
 export function makeVectorEvaluator(model: TreeModel, source: string): (features: FeatureVector) => number {
   const features = model.features;
-  const trees = model.trees as TreeNode[][];
+  const trees = model.trees;
   // 木が参照する列は、抽出に存在するか DECLARED_FEATURE_DEFAULTS に宣言されていること。
   // ここで落ちるのは「列名を変えたのに木を学習し直していない」状態（黙って0で埋めない）。
   assertTreeSchema(features, source);
@@ -45,12 +45,12 @@ export function makeVectorEvaluator(model: TreeModel, source: string): (features
     for (const nodes of trees) {
       let index = 0;
       for (let step = 0; step < 64; step++) {
-        const node = nodes[index]!;
+        const node = nodes[index];
         if (!('f' in node)) {
           raw += node.v;
           break;
         }
-        index = values[node.f]! <= node.t ? node.l : node.r;
+        index = values[node.f] <= node.t ? node.l : node.r;
       }
     }
     return 1 / (1 + Math.exp(-raw));

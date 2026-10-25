@@ -32,9 +32,13 @@ function makeContext(overrides: Partial<BattleContext> = {}): BattleContext {
     field: overrides.field ?? {
       weather: null,
       weatherTurnsLeft: 0,
+      terrain: null,
+      terrainTurnsLeft: 0,
       trickRoom: false,
       trickRoomTurnsLeft: 0,
       stealthRock: { self: false, opponent: false },
+      spikes: { self: 0, opponent: 0 },
+      toxicSpikes: { self: 0, opponent: 0 },
     },
     recentLog: overrides.recentLog ?? [],
   };

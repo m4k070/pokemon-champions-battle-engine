@@ -10,14 +10,14 @@ import { SeededRandom } from '../src/rng.js';
 const stats = { HP: 150, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
 
 function mon(name: string, moves: ReturnType<typeof createMove>[], over: Partial<typeof stats> = {}): Pokemon {
-  return new Pokemon({ name, types: ['normal'], ability: 'none', baseStats: { ...stats, ...over }, moves });
+  return new Pokemon({ name, types: ['normal'], ability: 'none', item: null, baseStats: { ...stats, ...over }, moves });
 }
 
 function context(passer: Pokemon, ace: Pokemon, opponent: Pokemon): BattleContext {
   return {
     turn: 3, self: passer, selfTeam: [passer, ace], opponent, opponentTeam: [opponent],
     canMegaEvolve: false, mustSwitch: false,
-    field: { weather: null, weatherTurnsLeft: 0, terrain: null, terrainTurnsLeft: 0, trickRoom: false, trickRoomTurnsLeft: 0, stealthRock: { self: false, opponent: false } },
+    field: { weather: null, weatherTurnsLeft: 0, terrain: null, terrainTurnsLeft: 0, trickRoom: false, trickRoomTurnsLeft: 0, stealthRock: { self: false, opponent: false }, spikes: { self: 0, opponent: 0 }, toxicSpikes: { self: 0, opponent: 0 } },
     recentLog: [],
   };
 }

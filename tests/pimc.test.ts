@@ -33,7 +33,7 @@ describe('PIMC の決定化', () => {
 
   test('候補が無い種族はそのまま返す', () => {
     const belief: Belief = new Map();
-    const unknown = new Pokemon({ name: 'unknownmon', types: ['normal'], ability: 'none', baseStats: stats, moves: [move('たいあたり')] });
+    const unknown = new Pokemon({ name: 'unknownmon', types: ['normal'], ability: 'none', item: null, baseStats: stats, moves: [move('たいあたり')] });
     const agent = new PimcBattleAgent(belief, 2, 1);
     expect(agent.determinize(unknown).moves.length).toBe(1);
   });

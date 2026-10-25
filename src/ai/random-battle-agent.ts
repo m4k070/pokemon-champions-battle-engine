@@ -9,7 +9,7 @@ export class RandomBattleAgent implements BattleAgent {
   constructor(private readonly rng: SeededRandom) {}
 
   async selectLead(team: Pokemon[]): Promise<Pokemon> {
-    return team[0]!;
+    return team[0];
   }
 
   async selectAction(context: BattleContext): Promise<AgentDecision> {
@@ -20,8 +20,8 @@ export class RandomBattleAgent implements BattleAgent {
     if (total === 0) return { action: { type: 'forfeit' } };
     const pick = Math.min(total - 1, Math.floor(this.rng.next() * total));
     if (pick < moveChoices.length) {
-      return { action: { type: 'move', moveIndex: moveChoices[pick]!, target: 0, megaEvolve: legal.canMegaEvolve || undefined } };
+      return { action: { type: 'move', moveIndex: moveChoices[pick], target: 0, megaEvolve: legal.canMegaEvolve || undefined } };
     }
-    return { action: { type: 'switch', pokemonIndex: switchChoices[pick - moveChoices.length]! } };
+    return { action: { type: 'switch', pokemonIndex: switchChoices[pick - moveChoices.length] } };
   }
 }

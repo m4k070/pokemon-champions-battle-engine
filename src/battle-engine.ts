@@ -5,6 +5,7 @@ import type { TerrainType } from './battle-field.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
 import { Pokemon } from './pokemon.js';
 import type { MoveData, StatusCondition, StatStageKey, TypeName, WeatherType, TypeChart } from './types.js';
+import { STAT_STAGE_KEYS } from './types.js';
 import { isDamageMove, isPhysicalMove, isSpecialMove, isStatusMove, cloneDamageMove, targetsOpponent } from './move.js';
 import type { UseMoveResult, NoEffectReason } from './use-move-result.js';
 import { SYSTEM_RANDOM } from './rng.js';
@@ -663,7 +664,7 @@ export class BattleEngine {
 
     // ふいうち: 相手がそのターン攻撃技を選んでいなければ失敗する（本編仕様）。
     // 「選んでいるか」は BattleRunner が毎ターン設定する（intendsToAttackThisTurn）。
-    if (isDamageMove(move) && move.failsUnlessTargetAttacks && defender.intendsToAttackThisTurn !== true) {
+    if (isDamageMove(move) && move.failsUnlessTargetAttacks && !defender.intendsToAttackThisTurn) {
       this.log.push(`${attacker.name}の${move.name}は決まらなかった`);
       return { outcome: 'failed', reason: 'target-not-attacking' };
     }
@@ -901,7 +902,7 @@ export class BattleEngine {
     // くろいきり: 場に出ている全員の能力変化をリセットする（本編仕様）。
     if (move.resetsStatStages) {
       for (const pokemon of [attacker, defender]) {
-        for (const key of Object.keys(pokemon.statStages) as (keyof typeof pokemon.statStages)[]) {
+        for (const key of STAT_STAGE_KEYS) {
           pokemon.statStages[key] = 0;
         }
       }

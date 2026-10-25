@@ -50,8 +50,8 @@ describe('強制交代', () => {
     // Act
     session.beginTurn();
     session.applyTurn(
-      { action: { type: 'move', moveIndex: 0 } },
-      { action: { type: 'move', moveIndex: 0 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
     );
 
     // Assert
@@ -71,8 +71,8 @@ describe('強制交代', () => {
     // Act
     session.beginTurn();
     session.applyTurn(
-      { action: { type: 'move', moveIndex: 0 } },
-      { action: { type: 'move', moveIndex: 0 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
     );
 
     // Assert
@@ -90,8 +90,8 @@ describe('強制交代', () => {
     // Act
     session.beginTurn();
     session.applyTurn(
-      { action: { type: 'move', moveIndex: 0 } },
-      { action: { type: 'move', moveIndex: 0 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
+      { action: { type: 'move', moveIndex: 0, target: 0 } },
     );
 
     // Assert

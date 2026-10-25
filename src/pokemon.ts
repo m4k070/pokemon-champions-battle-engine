@@ -16,6 +16,15 @@ const statPointSystem = new StatPointSystem();
 const STAT_STAGE_MIN = -6;
 const STAT_STAGE_MAX = 6;
 
+// Object.create の戻り値は any なので、プロトタイプと同じ型を返す形で型を付ける。
+const createWithPrototype: <T extends object>(prototype: T) => T = Object.create;
+
+// 同じプロトタイプ（メソッド）を持つ浅い複製。フィールドを差し替えても元の個体は変わらない
+// （配列・オブジェクトのフィールドは共有する）。不完全情報モードの伏せた視点や PIMC の決定化で使う。
+export function shallowClonePokemon(pokemon: Pokemon): Pokemon {
+  return Object.assign(createWithPrototype(Pokemon.prototype), pokemon);
+}
+
 function zeroStatStages(): StatStages {
   return { ATK: 0, DEF: 0, SPATK: 0, SPDEF: 0, SPEED: 0 };
 }

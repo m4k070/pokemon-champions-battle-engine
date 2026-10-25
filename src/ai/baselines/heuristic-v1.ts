@@ -4,6 +4,7 @@
 // A/B の相手を固定するための基準で、ここを更新すると過去の比較が無効になる。
 import type { Pokemon } from '../../pokemon.js';
 import type { MoveData, StatStageKey, TypeName } from '../../types.js';
+import { STAT_STAGE_KEYS } from '../../types.js';
 import { TYPE_CHART } from '../../type-chart.js';
 import { SYSTEM_RANDOM } from '../../rng.js';
 import type { RandomSource } from '../../rng.js';
@@ -212,7 +213,7 @@ function passGain(
     const before = bestDamageAgainst(candidate, context.opponent, context.field);
     const original = { ...candidate.statStages };
     const boosted = { ...original };
-    for (const key of Object.keys(boosted) as StatStageKey[]) {
+    for (const key of STAT_STAGE_KEYS) {
       boosted[key] = Math.max(-6, Math.min(6, boosted[key] + self.statStages[key]));
     }
     for (const change of extra) {
@@ -414,12 +415,12 @@ export class HeuristicV1BattleAgent implements BattleAgent {
     if (moves.length === 0) {
       if (switches.length === 0) return { action: { type: 'forfeit' } };
       const ranked = this.rankSwitches(context, switches);
-      this.lastEvaluation = ranked.map(({ pokemon, index }) => ({
+      this.lastEvaluation = ranked.map(({ pokemon }) => ({
         label: `交代:${pokemon.name}`,
         score: matchupScore(pokemon, context),
         kind: 'switch' as const,
       }));
-      return { action: { type: 'switch', pokemonIndex: ranked[0]!.index } };
+      return { action: { type: 'switch', pokemonIndex: ranked[0].index } };
     }
 
     // バトンタッチ（能力変化を引き継いで退場する技）の価値。
@@ -468,7 +469,7 @@ export class HeuristicV1BattleAgent implements BattleAgent {
     const noAnswer = bestDamageRatio < 0.25;
     const inDanger = hpRatio(context.self) < 0.4 || incomingWorst >= 0.8;
     if (this.allowVoluntarySwitch && noAnswer && inDanger && switches.length > 0) {
-      const candidate = this.rankSwitches(context, switches)[0]!;
+      const candidate = this.rankSwitches(context, switches)[0];
       if (matchupScore(candidate.pokemon, context) > -60) {
         this.lastEvaluation = [
           { label: `交代:${candidate.pokemon.name}`, score: matchupScore(candidate.pokemon, context), kind: 'switch' as const },
@@ -485,7 +486,7 @@ export class HeuristicV1BattleAgent implements BattleAgent {
   private pickBest(scored: ScoredAction[]): ScoredAction {
     const max = Math.max(...scored.map((entry) => entry.score));
     const ties = scored.filter((entry) => entry.score >= max - EPSILON);
-    return ties[Math.floor(this.rng.next() * ties.length)]!;
+    return ties[Math.floor(this.rng.next() * ties.length)];
   }
 
   private rankSwitches(

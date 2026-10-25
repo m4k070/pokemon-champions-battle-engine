@@ -19,7 +19,7 @@ const belief: Belief = new Map([
 ]);
 
 function makePokemon(name: string, moves: ReturnType<typeof createMove>[]): Pokemon {
-  return new Pokemon({ name, types: ['normal'], ability: 'none', baseStats: stats, moves });
+  return new Pokemon({ name, types: ['normal'], ability: 'none', item: null, baseStats: stats, moves });
 }
 
 function makeContext(opponent: Pokemon, bench: Pokemon[] = []): BattleContext {
@@ -39,7 +39,7 @@ function makeContext(opponent: Pokemon, bench: Pokemon[] = []): BattleContext {
       terrainTurnsLeft: 0,
       trickRoom: false,
       trickRoomTurnsLeft: 0,
-      stealthRock: { self: false, opponent: false },
+      stealthRock: { self: false, opponent: false }, spikes: { self: 0, opponent: 0 }, toxicSpikes: { self: 0, opponent: 0 },
     },
     recentLog: [],
   };

@@ -115,7 +115,7 @@ export function resolveBasicSelection(
       const id = normalizeName(member.name);
       return token === display || token === id || token.includes(display) || display.includes(token);
     });
-    if (index >= 0 && !picked.includes(pokemons[index]!)) picked.push(pokemons[index]!);
+    if (index >= 0 && !picked.includes(pokemons[index])) picked.push(pokemons[index]);
   }
   return picked;
 }
