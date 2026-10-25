@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { AgentAction } from '../types.js';
 import type { Pokemon } from '../pokemon.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './battle-agent.js';
@@ -14,6 +15,22 @@ const WEATHER_NAMES = {
 } as const;
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
+
+// OpenAI 互換 /chat/completions の応答のうち、tool_call の引数だけを取り出す。
+// プロバイダによって欠けるフィールドがあるので、途中はすべて省略可能にしておく。
+const chatCompletionSchema = z.object({
+  choices: z
+    .array(
+      z.object({
+        message: z
+          .object({
+            tool_calls: z.array(z.object({ function: z.object({ arguments: z.string() }) })).optional(),
+          })
+          .optional(),
+      })
+    )
+    .optional(),
+});
 
 export interface OpenCodeBattleAgentOptions {
   // 未指定時は環境変数 OPENCODE_API_KEY を使う（キーをコードやログに直接書かない）。
@@ -162,7 +179,7 @@ export class OpenCodeBattleAgent implements BattleAgent {
     this.apiKey = apiKey;
     this.model = options.model ?? DEFAULT_MODEL;
     this.baseURL = options.baseURL ?? DEFAULT_BASE_URL;
-    this.fetchFn = options.fetchFn ?? (fetch as FetchLike);
+    this.fetchFn = options.fetchFn ?? fetch;
     this.maxRetries = options.maxRetries ?? 1;
   }
 
@@ -226,8 +243,8 @@ export class OpenCodeBattleAgent implements BattleAgent {
       throw new Error(`OpenCode API呼び出しに失敗しました: ${response.status} ${response.statusText}`);
     }
 
-    const data = (await response.json()) as any;
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    const data = chatCompletionSchema.safeParse(await response.json());
+    const toolCall = data.success ? data.data.choices?.[0]?.message?.tool_calls?.[0] : undefined;
     if (!toolCall) {
       throw new Error('LLMの応答にtool_callが含まれていません');
     }
