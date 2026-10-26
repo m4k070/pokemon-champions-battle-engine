@@ -45,6 +45,14 @@ const WEATHER_BALL_TYPE: Partial<Record<WeatherType, TypeName>> = {
 
 // だいちのはどう: フィールドの種類に応じてタイプが変わる（威力は2倍）。
 // 使用者が接地しているときだけ適用する（ふゆう・ひこうは変化しない）。
+// タイプ強化の持ち物: 対応するタイプの技の威力1.2倍（本編仕様）。
+const TYPE_BOOST_ITEMS: Partial<Record<string, TypeName>> = {
+  'black-glasses': 'dark',
+  'dragon-fang': 'dragon',
+  'mystic-water': 'water',
+  'spell-tag': 'ghost',
+};
+
 // グラスフィールドで威力が半減する地面技（本編仕様。マグニチュードも対象だがチャンピオンズに無い）。
 const GRASSY_HALVED_MOVE_NAMES = new Set(['じしん', 'じならし', 'earthquake', 'bulldoze']);
 
@@ -212,7 +220,7 @@ export class BattleEngine {
     if (this.flowerVeilProtects(target)) return true;
     if (status === 'sleep' && target.ability === 'insomnia') return true;
     if (status === 'paralysis' && target.ability === 'limber') return true;
-    if (status === 'burn' && target.ability === 'thermal-exchange') return true;
+    if (status === 'burn' && (target.ability === 'thermal-exchange' || target.ability === 'water-bubble')) return true;
     return false;
   }
 
@@ -782,7 +790,7 @@ export class BattleEngine {
     if (move.fieldEffect === 'reflect') {
       const side = this.getSide(attacker);
       if (side !== null) {
-        this.field.reflect[this.sideKey(side)] = 5;
+        this.field.reflect[this.sideKey(side)] = attacker.item === 'light-clay' ? 8 : 5;
         this.log.push(`${attacker.name}側の場に「リフレクター」の壁ができた`);
       }
       return effectApplied();
@@ -848,7 +856,8 @@ export class BattleEngine {
     if (move.fieldEffect === 'aurora-veil') {
       const side = this.getSide(attacker);
       if (side !== null) {
-        this.field.auroraVeil[this.sideKey(side)] = 5;
+        // ひかりのねんど: 壁のターン数を8にする（本編仕様）。
+        this.field.auroraVeil[this.sideKey(side)] = attacker.item === 'light-clay' ? 8 : 5;
         this.log.push(`${attacker.name}側にオーロラベールが張られた`);
       }
       return effectApplied();
@@ -1122,6 +1131,10 @@ export class BattleEngine {
 
     if (attacker.item === 'life-orb') {
       power *= 1.3;
+    }
+
+    if (attacker.item !== null && TYPE_BOOST_ITEMS[attacker.item] === effectiveType) {
+      power *= 1.2;
     }
 
     // こだわりハチマキ/メガネは該当カテゴリの威力を1.5倍にする（技は使用後に固定される）。

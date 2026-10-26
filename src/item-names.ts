@@ -3,19 +3,25 @@
 export const ITEM_NAMES = [
   // --- 挙動が実装されている持ち物 ---
   // エンジンが名前で直接分岐する。
+  'air-balloon',
+  'black-glasses',
   'chesto-berry',
   'choice-band',
   'choice-scarf',
   'choice-specs',
   'focus-sash',
+  'dragon-fang',
   'iron-ball',
   'leftovers',
   'life-orb',
+  'light-clay',
   'lum-berry',
   'mental-herb',
+  'mystic-water',
   'shed-shell',
   'shuca-berry',
   'sitrus-berry',
+  'spell-tag',
   'terrain-extender',
   'toxic-orb',
   'white-herb',
@@ -32,6 +38,9 @@ export const ITEM_NAMES = [
   'golisopodite',
   'lucarionite-z',
   'clefablite',
+  'absolite-z',
+  'froslassite',
+  'staraptite',
   'charizardite-y',
   'delphoxite',
   'dragoniteite',
@@ -59,16 +68,12 @@ export const ITEM_NAMES = [
   // --- 名前だけを持つ持ち物 ---
   // ポケモンのデータとしては現れるが、バトル中の分岐には影響しない。
   // gamewith 最強パーティランキング（2026-10-19）の構築に登場するものもここに含む。
-  'air-balloon',
-  'black-glasses',
   'damp-rock',
   'grassy-seed',
   'haban-berry',
-  'mystic-water',
   'psychic-seed',
   'red-card',
   'rocky-helmet',
-  'spell-tag',
 ] as const;
 
 export type ItemName = (typeof ITEM_NAMES)[number];

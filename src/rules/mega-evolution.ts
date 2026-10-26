@@ -138,6 +138,33 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     abilityChange: 'aura-guard',
     statBoosts: { ATK: -10, DEF: 0, SPATK: 49, SPDEF: 0, SPEED: 61 },
   },
+  // メガアブソルZ: あく/ゴースト・きれあじ・65-154-60-75-60-151（A+24/S+76 = +100）。
+  // 出典: Bulbapedia「Absol (Pokémon)」（2026-10-26 確認）。M-6 構築記事のメガ後実数値（A209・S179）とも一致
+  'absolite-z': {
+    pokemon: 'absol',
+    megaName: 'mega-absol-z',
+    typeChange: ['dark', 'ghost'],
+    abilityChange: 'sharpness',
+    statBoosts: { ATK: 24, DEF: 0, SPATK: 0, SPDEF: 0, SPEED: 76 },
+  },
+  // メガユキメノコ: こおり/ゴースト・ゆきふらし・70-80-70-140-100-120（SA+60/SD+30/S+10 = +100）。
+  // 出典: Bulbapedia「Froslass (Pokémon)」（2026-10-26 確認）。特性は M-6 構築記事の「呪われボディ→雪降らし」とも一致
+  'froslassite': {
+    pokemon: 'froslass',
+    megaName: 'mega-froslass',
+    typeChange: ['ice', 'ghost'],
+    abilityChange: 'snow-warning',
+    statBoosts: { ATK: 0, DEF: 0, SPATK: 60, SPDEF: 30, SPEED: 10 },
+  },
+  // メガムクホーク: かくとう/ひこう・あまのじゃく・85-140-100-60-90-110（A+20/D+30/SA+10/SD+30/S+10 = +100）。
+  // 出典: Bulbapedia「Staraptor (Pokémon)」（2026-10-26 確認）。メガストーンの英語名は Staraptite
+  'staraptite': {
+    pokemon: 'staraptor',
+    megaName: 'mega-staraptor',
+    typeChange: ['fighting', 'flying'],
+    abilityChange: 'contrary',
+    statBoosts: { ATK: 20, DEF: 30, SPATK: 10, SPDEF: 30, SPEED: 10 },
+  },
   // メガピクシー: フェアリー/ひこう・マジックミラー・95-80-93-135-110-70（A+10/D+20/SA+40/SD+20/S+10 = +100）。
   // 出典: やっくんチャンピオンズ図鑑 n36m（2026-10-19 確認）
   'clefablite': {

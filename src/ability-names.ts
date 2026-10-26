@@ -28,6 +28,8 @@ export const ABILITY_NAMES = [
   'frisk',
   'good-as-gold',
   'aura-guard',
+  'sharpness',
+  'water-bubble',
   'harvest',
   'justified',
   'keen-eye',
