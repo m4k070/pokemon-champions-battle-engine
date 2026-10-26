@@ -25,14 +25,15 @@ export const REGENERATOR: AbilityDefinition = {
   },
 };
 
-// さめはだ: 接触技を受けたとき、攻撃者に最大HPの1/8ダメージ。
+// さめはだ: 接触技を受けたとき、攻撃者に「攻撃者の」最大HPの1/8ダメージ（本編仕様）。
 export const ROUGH_SKIN: AbilityDefinition = {
   name: 'rough-skin',
-  onDamaged: ({ defender, attacker, move }) => {
-    if (isDamageMove(move) && move.contact) {
-      const damage = Math.floor(defender.maxHP / 8);
-      attacker.takeDamage(Math.max(1, damage));
+  onDamaged: ({ defender, attacker, move, engine }) => {
+    if (isDamageMove(move) && move.contact && attacker !== defender) {
+      const damage = Math.max(1, Math.floor(attacker.maxHP / 8));
+      attacker.takeDamage(damage);
       // takeDamage は engine なしで呼ぶためログはこちらで出す。
+      engine.log.push(`${attacker.name}は${defender.name}のさめはだで${damage}のダメージを受けた`);
     }
   },
 };
@@ -259,6 +260,41 @@ export const PSYCHIC_SURGE: AbilityDefinition = {
   },
 };
 
+// きれあじ: 切る技の威力1.5倍（本編仕様。メガアブソルZの特性）。
+// 切る技は本編の一覧のうち、チャンピオンズで覚えるものを名前で持つ。
+const SLICING_MOVE_NAMES = new Set([
+  'つばめがえし', 'エアカッター', 'エアスラッシュ', 'アクアカッター', 'クロスポイズン', 'つじぎり',
+  'サイコカッター', 'リーフブレード', 'はっぱカッター', 'シェルブレード', 'せいなるつるぎ', 'ひけんちえなみ',
+  'きりさく', 'シザークロス', 'ソーラーブレード', 'ドゲザン',
+  'aerial-ace', 'air-cutter', 'air-slash', 'aqua-cutter', 'cross-poison', 'night-slash', 'psycho-cut',
+  'leaf-blade', 'razor-leaf', 'razor-shell', 'sacred-sword', 'ceaseless-edge', 'slash', 'x-scissor',
+  'solar-blade', 'kowtow-cleave',
+]);
+export const SHARPNESS: AbilityDefinition = {
+  name: 'sharpness',
+  modifyMovePower: ({ move, value }) => (SLICING_MOVE_NAMES.has(move.name) ? Math.floor(value * 1.5) : value),
+};
+
+// すいほう: みず技の威力2倍、受けるほのお技のダメージ半減、やけどにならない（本編仕様）。
+// やけどの無効化は battle-engine の blocksStatusByAbility 側で行う。
+export const WATER_BUBBLE: AbilityDefinition = {
+  name: 'water-bubble',
+  modifyMovePower: ({ move, value }) => (move.type === 'water' ? value * 2 : value),
+  onDamaged: ({ move, damage }) => (move.type === 'fire' ? Math.floor(damage / 2) : damage),
+};
+
+// グラスメイカー: 入場時にグラスフィールドを展開する（5ターン。グランドコート持ちなら8ターン）。
+// フィールドの効果（くさ技1.3倍・じしん等の半減・毎ターンの回復・グラススライダーの先制）は
+// battle-engine 側が field.terrain を見て行う。
+export const GRASSY_SURGE: AbilityDefinition = {
+  name: 'grassy-surge',
+  onSwitchIn: ({ pokemon, engine }) => {
+    const turns = pokemon.item === 'terrain-extender' ? 8 : 5;
+    engine.setTerrainFromAbility('grassy-terrain', turns);
+    engine.log.push(`${pokemon.name}のグラスメイカーでグラスフィールドが発動した！`);
+  },
+};
+
 // すいすい: 雨のとき素早さが2倍になる（速度計算は battle-engine の calculateSpeed 側で判定）。
 export const SWIFT_SWIM: AbilityDefinition = {
   name: 'swift-swim',
@@ -295,6 +331,11 @@ export const AERILATE: AbilityDefinition = {
 // フェアリースキン: ノーマル技がフェアリー技になる（威力1.2倍）。
 export const PIXILATE: AbilityDefinition = {
   name: 'pixilate',
+};
+
+// フリーズスキン: ノーマル技がこおり技になる（威力1.2倍）。
+export const REFRIGERATE: AbilityDefinition = {
+  name: 'refrigerate',
 };
 
 // かたやぶり: 攻撃時に相手の特性を無視する（がんじょう・あついしぼう・マルチスケイル等）。
@@ -536,6 +577,9 @@ export const META_ABILITIES: AbilityDefinition[] = [
   SPICY_SPRAY,
   ELECTRIC_SURGE,
   PSYCHIC_SURGE,
+  GRASSY_SURGE,
+  SHARPNESS,
+  WATER_BUBBLE,
   DISGUISE,
   GOOD_AS_GOLD,
   AURA_GUARD,
@@ -545,6 +589,7 @@ export const META_ABILITIES: AbilityDefinition[] = [
   ADAPTABILITY,
   AERILATE,
   PIXILATE,
+  REFRIGERATE,
   MOLD_BREAKER,
   MAGIC_BOUNCE,
   PROTEAN,

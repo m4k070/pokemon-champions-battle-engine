@@ -44,13 +44,13 @@ describe('技が出せなかったとき: 理由が型で返る', () => {
     expect(result).toEqual({ outcome: 'failed', reason: 'asleep' });
   });
 
-  test('ちょうはつ中に攻撃技を使うと taunted', () => {
+  test('ちょうはつ中に変化技を使うと taunted', () => {
     const engine = new BattleEngine();
     const attacker = makePokemon('Attacker');
     const defender = makePokemon('Defender');
     attacker.applyTaunt(3);
 
-    const result = engine.useMove(attacker, defender, tackle());
+    const result = engine.useMove(attacker, defender, createMove({ name: 'swords-dance', type: 'normal', power: 0, accuracy: 100, pp: 20, category: 'status', selfStatChange: [{ stat: 'ATK', delta: 2 }] }));
 
     expect(result).toEqual({ outcome: 'failed', reason: 'taunted' });
   });

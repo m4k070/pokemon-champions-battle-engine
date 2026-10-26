@@ -6,10 +6,12 @@ export type MoveFailureReason =
   | 'asleep'             // ねむりで動けない
   | 'frozen'             // こおりで動けない
   | 'paralyzed'          // まひで動けない
+  | 'flinched'           // ひるんで動けない
   | 'taunted'            // ちょうはつで攻撃技を出せない
   | 'encored'            // アンコールで直前の技以外を出せない
   | 'blocked-by-terrain' // フィールド（サイコフィールド）に先制技を阻まれた
   | 'blocked-by-ability' // 相手の特性に無効化された（ぼうだん・ひらいしん等）
+  | 'blocked-by-item'    // 相手の持ち物に無効化された（ふうせん）
   | 'missed'             // 命中判定に失敗した
   | 'protected'          // 相手がまもる等で防いだ
   | 'protect-failed'     // まもるの連続使用で失敗した

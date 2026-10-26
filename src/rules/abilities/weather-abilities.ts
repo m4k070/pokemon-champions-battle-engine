@@ -46,8 +46,8 @@ export const DROUGHT = weatherSwitchInAbility({
 export const SNOW_WARNING = weatherSwitchInAbility({
   name: 'snow-warning',
   label: 'ゆきふらし',
-  weather: 'hail',
-  description: 'あられが降り始めた',
+  weather: 'snow',
+  description: '雪が降り始めた',
 });
 
 export const WEATHER_ABILITIES: AbilityDefinition[] = [SAND_STREAM, DRIZZLE, DROUGHT, SNOW_WARNING];

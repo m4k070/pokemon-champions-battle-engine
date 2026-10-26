@@ -7,6 +7,7 @@ import { compatibleSets, defaultBelief } from './opponent-belief.js';
 import type { Belief } from './opponent-belief.js';
 import { HeuristicV1BattleAgent } from './baselines/heuristic-v1.js';
 import { SeededRandom } from '../rng.js';
+import { createMove } from '../move.js';
 
 // 学習した勝率予測 V(s) を使った1手先読み。
 //
@@ -57,6 +58,9 @@ export interface ValueSearchOptions {
   // 学習した V は「ベースラインが訪れる状態」でしか較正されていないため、貪欲に最大化すると
   // 分布外の状態に踏み込み、過大評価された手を選び続ける（クエスピクシー構築で実測）。
   trustMargin?: number; // 既定 0.05（学習分布を広げた V での実測最良）
+  // 'oracle'（既定。これまでの評価条件）: 探索の複製が本番と同じ乱数を使い、相手の手は相手自身の視点（本当の技構成）から列挙する。
+  // 'fair': 探索の複製だけ乱数を引き直し、相手の未公開の技・持ち物・特性は信念（候補セット）で埋める。人間との対戦用。
+  fairness?: 'oracle' | 'fair';
   // 局面の勝率関数（学習した V）。エンジンは学習済みの木を持たないので必須。
   // 木の JSON からは makeValueEvaluator で作る。
   evaluate: (context: BattleContext) => number;
@@ -64,9 +68,19 @@ export interface ValueSearchOptions {
 
 export class ValueSearchBattleAgent implements BattleAgent {
   private readonly opponentModel: BattleAgent;
+  // fair のとき、探索の複製に与える乱数の seed。手番ごとに1つ引き、その手番の全候補で共有する（候補どうしを同じ乱数で比べる）。
+  private searchSeed = 0;
 
-  constructor(_rng: SeededRandom, private readonly options: ValueSearchOptions) {
+  constructor(private readonly rng: SeededRandom, private readonly options: ValueSearchOptions) {
     this.opponentModel = options.opponentModel ?? new HeuristicV1BattleAgent(new SeededRandom(7));
+  }
+
+  private get fair(): boolean {
+    return this.options.fairness === 'fair';
+  }
+
+  private forkOf(session: BattleSession): BattleSession {
+    return this.fair ? session.fork({ rngSeed: this.searchSeed }) : session.fork();
   }
 
   async selectLead(team: Parameters<BattleAgent['selectLead']>[0]) {
@@ -92,6 +106,7 @@ export class ValueSearchBattleAgent implements BattleAgent {
       candidates.push({ action: { type: 'switch', pokemonIndex: target.index }, label: `交代:${target.pokemon.name}` });
     }
     if (candidates.length === 0) return this.opponentModel.selectAction(context);
+    if (this.fair) this.searchSeed = Math.floor(this.rng.next() * 4294967296);
 
     const limit = this.options.maxCandidates ?? 0;
     const evaluated = limit > 0 ? candidates.slice(0, limit) : candidates;
@@ -127,17 +142,31 @@ export class ValueSearchBattleAgent implements BattleAgent {
     // 既定は maximin。相手方策を読む 'model' は実戦では使えないので既定にしない
     // （実測: 'worst' 84.5% / 'belief' 78.8% 対 凍結v1、プールでも 'worst' が 'belief' に59.1%）。
     const mode = this.options.opponentMode ?? 'worst';
-    if (mode === 'belief') {
-      const scenarios = this.beliefScenarios(session.fork(), side);
+    if (mode === 'belief' || (this.fair && mode !== 'model')) {
+      const scenarios = this.fair
+        ? fairOpponentScenarios(session.getContext(side), this.options.belief ?? defaultBelief())
+        : this.beliefScenarios(session.fork(), side);
+      if (scenarios.length === 0) return -Infinity;
+      if (mode !== 'belief') {
+        // fair の uniform / worst: 信念から作った相手の手について平均または最悪値。
+        let sum = 0;
+        let worst = Infinity;
+        for (const scenario of scenarios) {
+          const value = await this.simulateWith(this.forkOf(session), side, action, scenario);
+          sum += value;
+          worst = Math.min(worst, value);
+        }
+        return mode === 'worst' || mode === 'maximin' ? worst : sum / scenarios.length;
+      }
       if (scenarios.length === 0) return -Infinity;
       let sum = 0;
       for (const scenario of scenarios) {
-        sum += await this.simulateWith(session.fork(), side, action, scenario);
+        sum += await this.simulateWith(this.forkOf(session), side, action, scenario);
       }
       return sum / scenarios.length;
     }
     if (mode === 'model') {
-      const fork = session.fork();
+      const fork = this.forkOf(session);
       const other = side === 0 ? 1 : 0;
       const opponentDecision = await this.opponentModel.selectAction(fork.getContext(other));
       return this.simulate(fork, side, action, opponentDecision.action);
@@ -151,7 +180,7 @@ export class ValueSearchBattleAgent implements BattleAgent {
     let sum = 0;
     let worst = Infinity;
     for (const opponentAction of opponentActions) {
-      const value = await this.simulate(session.fork(), side, action, opponentAction);
+      const value = await this.simulate(this.forkOf(session), side, action, opponentAction);
       sum += value;
       worst = Math.min(worst, value);
     }
@@ -168,7 +197,7 @@ export class ValueSearchBattleAgent implements BattleAgent {
   // 相手の型の信念から「ありうる手」の場面を作る。
   // 候補セットごとに技4つ、加えて交代（ベンチに残っている全員）を1つずつ。
   // 実際の技構成・PPは見ないので、不完全情報モードでも情報が漏れない。
-  private beliefScenarios(fork: BattleSession, side: 0 | 1): { moves: Pokemon['moves'] | null; action: AgentAction }[] {
+  private beliefScenarios(fork: BattleSession, side: 0 | 1): OpponentScenario[] {
     return opponentScenarios(fork.getContext(side), this.options.belief ?? defaultBelief());
   }
 
@@ -176,12 +205,14 @@ export class ValueSearchBattleAgent implements BattleAgent {
     fork: BattleSession,
     side: 0 | 1,
     action: AgentAction,
-    scenario: { moves: Pokemon['moves'] | null; action: AgentAction },
+    scenario: OpponentScenario,
   ): Promise<number> {
+    const opponent = side === 0 ? fork.activeB : fork.activeA;
     if (scenario.moves !== null) {
-      const opponent = side === 0 ? fork.activeB : fork.activeA;
       opponent.moves = scenario.moves.map((move) => ({ ...move }));
     }
+    if (scenario.item !== undefined) opponent.item = scenario.item;
+    if (scenario.ability !== undefined) opponent.ability = scenario.ability;
     return this.simulate(fork, side, action, scenario.action);
   }
 
@@ -236,4 +267,51 @@ export function opponentScenarios(
     scenarios.push({ moves: null, action: { type: 'switch', pokemonIndex: index } });
   });
   return scenarios;
+}
+
+// 相手の手の場面。moves / item / ability があれば、探索の複製の中で相手の場のポケモンをその値に置き換える。
+export interface OpponentScenario {
+  moves: Pokemon['moves'] | null;
+  item?: Pokemon['item'];
+  ability?: Pokemon['ability'];
+  action: AgentAction;
+}
+
+// fair モードの相手の手。context は探索する側から見た盤面（不完全情報なら相手は公開済みの技・持ち物・特性だけ）。
+// 信念の候補セットごとに技4つ（未公開の持ち物・特性もその候補の値で埋める）と、交代を1つずつ。
+// 信念に候補が無い種族は、公開済みの技と、まだ技が見えていなければタイプ一致の仮の技を1つ使う。
+export function fairOpponentScenarios(context: BattleContext, belief: Belief = defaultBelief()): OpponentScenario[] {
+  const opponent = context.opponent;
+  const sets = compatibleSets(opponent, belief);
+  const scenarios: OpponentScenario[] = [];
+  const knownItem = opponent.item !== null;
+  const knownAbility = opponent.ability !== 'none';
+
+  for (const set of sets) {
+    for (let index = 0; index < set.moves.length; index++) {
+      scenarios.push({
+        moves: set.moves,
+        item: knownItem ? undefined : set.item,
+        ability: knownAbility ? undefined : set.ability,
+        action: { type: 'move', moveIndex: index, target: 0 },
+      });
+    }
+  }
+  if (scenarios.length === 0) {
+    const moves = opponent.moves.length > 0 ? opponent.moves : [placeholderMove(opponent)];
+    for (let index = 0; index < moves.length; index++) {
+      scenarios.push({ moves, action: { type: 'move', moveIndex: index, target: 0 } });
+    }
+  }
+  context.opponentTeam.forEach((pokemon, index) => {
+    if (pokemon.isFainted || pokemon.name === opponent.name) return;
+    scenarios.push({ moves: null, action: { type: 'switch', pokemonIndex: index } });
+  });
+  return scenarios;
+}
+
+// 技が1つも見えていない、信念にも無い相手の仮の技: 第1タイプの威力80、攻撃と特攻の高いほうの分類。
+function placeholderMove(pokemon: Pokemon): Pokemon['moves'][number] {
+  const physical = pokemon.baseStats.ATK >= pokemon.baseStats.SPATK;
+  return createMove({ name: '（仮の技）', type: pokemon.types[0] ?? 'normal', power: 80, accuracy: 100, pp: 16, category: physical ? 'physical' : 'special' });
 }
