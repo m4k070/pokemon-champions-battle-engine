@@ -1,5 +1,6 @@
 import { BattleEngine } from './battle-engine.js';
 import type { RandomSource } from './rng.js';
+import { SeededRandom } from './rng.js';
 import { MegaEvolutionSystem } from './rules/mega-evolution.js';
 import { isDamageMove } from './move.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
@@ -206,13 +207,16 @@ export class BattleSession {
   // structuredCloneでスナップショットを複製してから復元するため、参照を共有しない。
   // 情報レベルは引き継ぐ（'partial' の対戦で fork が 'full' になると、探索が相手の
   // 伏せ情報を見てしまう＝実戦ではできない推論になる）。
-  fork(): BattleSession {
+  // 既定では乱数の状態も複製するので、同じ行動なら本番と同じ結果（急所・命中・ダメージの乱数）になる。
+  // 探索で本番の乱数を覗かないようにするには rngSeed を渡し、複製側だけ乱数を引き直す。
+  fork(options: { rngSeed?: number } = {}): BattleSession {
     const session = BattleSession.fromSnapshot(
       structuredClone(this.snapshot()),
       this.megaEvolutionSystem,
       this.information,
     );
     session.reasoningLog = [...this.reasoningLog];
+    if (options.rngSeed !== undefined) session.engine.rng = new SeededRandom(options.rngSeed);
     return session;
   }
 
