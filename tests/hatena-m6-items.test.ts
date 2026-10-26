@@ -60,6 +60,7 @@ describe('ひかりのねんど', () => {
     const engine = new BattleEngine({ rng: new SeededRandom(1) });
     engine.setActivePokemon(0, user);
     engine.setActivePokemon(1, mon('相手'));
+    engine.weather = 'snow';
     engine.useMove(user, mon('相手'), createMove({ name: 'オーロラベール', type: 'ice', power: 0, accuracy: 100, pp: 20, category: 'status', fieldEffect: 'aurora-veil' }));
     expect(engine.field.auroraVeil.playerA).toBe(8);
   });
@@ -136,5 +137,46 @@ describe('ちょうはつ（技）', () => {
     engine.setActivePokemon(1, target);
     engine.useMove(user, target, taunt());
     expect(target.isTaunted).toBe(true);
+  });
+});
+
+describe('ゆき（チャンピオンズの天候）', () => {
+  const engineWith = (weather: 'snow' | 'sand' | null) => {
+    const engine = new BattleEngine({ rng: new SeededRandom(2) });
+    engine.weather = weather;
+    return engine;
+  };
+
+  test('毎ターンのダメージが無い', () => {
+    const target = mon('相手');
+    const engine = engineWith('snow');
+    engine.setActivePokemon(0, target);
+    engine.endTurn([target], []);
+    expect(target.currentHP).toBe(target.maxHP);
+  });
+
+  test('こおりタイプのぼうぎょ1.5倍、すなあらしはいわタイプのとくぼう1.5倍', () => {
+    const ice = mon('こおり', { types: ['ice'] });
+    const rock = mon('いわ', { types: ['rock'] });
+    const physical = move('たいあたり', 'normal', 'physical');
+    const special = move('スピードスター', 'normal', 'special');
+    expect(engineWith('snow').calculateDefense(ice, physical)).toBe(Math.floor(engineWith(null).calculateDefense(ice, physical) * 1.5));
+    expect(engineWith('snow').calculateDefense(ice, special)).toBe(engineWith(null).calculateDefense(ice, special));
+    expect(engineWith('sand').calculateDefense(rock, special)).toBe(Math.floor(engineWith(null).calculateDefense(rock, special) * 1.5));
+  });
+
+  test('ふぶきはゆきの間は必中', () => {
+    let missed = 0;
+    for (let seed = 0; seed < 40; seed++) {
+      const attacker = mon('攻撃側');
+      const defender = mon('相手');
+      const engine = new BattleEngine({ rng: new SeededRandom(seed) });
+      engine.weather = 'snow';
+      engine.setActivePokemon(0, attacker);
+      engine.setActivePokemon(1, defender);
+      const result = engine.useMove(attacker, defender, createMove({ name: 'ふぶき', type: 'ice', power: 110, accuracy: 70, pp: 5, category: 'special' }));
+      if (result.outcome === 'failed') missed++;
+    }
+    expect(missed).toBe(0);
   });
 });

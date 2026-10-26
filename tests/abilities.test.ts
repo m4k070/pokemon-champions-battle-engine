@@ -27,7 +27,7 @@ describe('Ability registry', () => {
   test.each([
     ['drizzle', 'rain', 'あめふらし'],
     ['drought', 'sun', 'ひでり'],
-    ['snow-warning', 'hail', 'ゆきふらし'],
+    ['snow-warning', 'snow', 'ゆきふらし'],
     ['sand-stream', 'sand', 'すなおこし'],
   ] as const)('%s sets weather to %s on switch-in', (ability, weather, label) => {
     const engine = new BattleEngine();

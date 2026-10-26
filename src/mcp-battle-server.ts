@@ -75,7 +75,7 @@ const MoveInputSchema = z.object({
   contact: z.boolean().optional(),
   restoresShieldForm: z.boolean().optional(),
   inflictsSpikes: z.boolean().optional(),
-  weather: z.enum(['sand', 'rain', 'sun', 'hail']).nullable().optional(),
+  weather: z.enum(['sand', 'rain', 'sun', 'snow']).nullable().optional(),
   // T1〜T7 と現環境構築の対応で増えた効果（MCP 経由でも指定できるようにする）。
   inflictsDrowsy: z.boolean().optional(),
   selfHealPercent: z.number().min(0).max(1).nullable().optional(),

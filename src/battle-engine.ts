@@ -43,7 +43,7 @@ const WEATHER_BALL_TYPE: Partial<Record<WeatherType, TypeName>> = {
   rain: 'water',
   sun: 'fire',
   sand: 'rock',
-  hail: 'ice',
+  snow: 'ice',
 };
 
 // だいちのはどう: フィールドの種類に応じてタイプが変わる（威力は2倍）。
@@ -72,7 +72,7 @@ const WEATHER_HEAL_PERCENT: Record<'none' | WeatherType, number> = {
   sun: 2 / 3,
   rain: 0.25,
   sand: 0.25,
-  hail: 0.25,
+  snow: 0.25,
 };
 
 // ダメージの揺れ幅（本編・チャンピオンズ共通の16段階）。
@@ -401,6 +401,13 @@ export class BattleEngine {
       : false;
     const stageMultiplier = ignoreStages || ignoresBoost ? 1 : defender.getStatStageMultiplier(statKey);
     let defense = Math.floor(defender.stats[statKey] * stageMultiplier);
+
+    // すなあらし: いわタイプのとくぼう1.5倍。ゆき: こおりタイプのぼうぎょ1.5倍（本編仕様）。
+    if (this.weather === 'sand' && statKey === 'SPDEF' && defender.types.includes('rock')) {
+      defense = Math.floor(defense * 1.5);
+    } else if (this.weather === 'snow' && statKey === 'DEF' && defender.types.includes('ice')) {
+      defense = Math.floor(defense * 1.5);
+    }
 
     const ability = getAbilityDefinition(defender.ability);
     // かたやぶり（mold-breaker）持ちの攻撃は防御側の特性（あついしぼう等）を無視する
@@ -752,7 +759,9 @@ export class BattleEngine {
       // ノーガード(no-guard): 攻撃側・防御側どちらかが持てば命中率100%になる。
       const attackerNoGuard = getAbilityDefinition(attacker.ability)?.name === 'no-guard';
       const defenderNoGuard = getAbilityDefinition(defender.ability)?.name === 'no-guard';
-      if (!attackerNoGuard && !defenderNoGuard && this.rng.next() * 100 > move.accuracy) {
+      // ふぶき: ゆきの間は必中（本編仕様）。
+      const snowBlizzard = this.weather === 'snow' && (move.name === 'ふぶき' || move.name === 'blizzard');
+      if (!attackerNoGuard && !defenderNoGuard && !snowBlizzard && this.rng.next() * 100 > move.accuracy) {
         this.log.push('技は外れた');
         // 飛び膝蹴り等のクラッシュダメージ（最大HPの50%）
         if (isDamageMove(move) && move.crashDamage) {
@@ -854,9 +863,12 @@ export class BattleEngine {
       return effectApplied();
     }
 
-    // オーロラベール: 5ターンの間、その側が受けるダメージを半減する（本編仕様）。
-    // TODO: 出典確認（本編は あられ/ゆき が条件。チャンピオンズでの条件は未確認）
+    // オーロラベール: 5ターンの間、その側が受けるダメージを半減する。ゆきの間しか張れない（本編仕様）。
     if (move.fieldEffect === 'aurora-veil') {
+      if (this.weather !== 'snow') {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('no-applicable-effect');
+      }
       const side = this.getSide(attacker);
       if (side !== null) {
         // ひかりのねんど: 壁のターン数を8にする（本編仕様）。
@@ -889,7 +901,7 @@ export class BattleEngine {
     if (move.weather) {
       this.weather = move.weather;
       this.weatherTurnsLeft = 5;
-      const weatherName = { rain: 'あめ', sun: 'にほんばれ', sand: 'すなあらし', hail: 'あられ' }[move.weather];
+      const weatherName = { rain: 'あめ', sun: 'にほんばれ', sand: 'すなあらし', snow: 'ゆき' }[move.weather];
       this.log.push(`${attacker.name}は${weatherName}を呼び出した`);
       return effectApplied();
     }
@@ -1616,19 +1628,18 @@ export class BattleEngine {
   }
 
   applyWeatherDamage(team: Pokemon[]): void {
-    if (this.weather !== 'sand' && this.weather !== 'hail') return;
+    // ゆきは毎ターンのダメージが無い（SV 以降・チャンピオンズの仕様）。
+    if (this.weather !== 'sand') return;
 
     for (const pokemon of team) {
       if (pokemon.isFainted) continue;
 
-      const isImmune = this.weather === 'sand'
-        ? pokemon.types.some((t) => t === 'rock' || t === 'ground' || t === 'steel')
-        : pokemon.types.includes('ice');
+      const isImmune = pokemon.types.some((t) => t === 'rock' || t === 'ground' || t === 'steel');
       if (isImmune) continue;
 
       const damage = Math.floor(pokemon.maxHP / 16);
       pokemon.takeDamage(damage, this);
-      const weatherName = this.weather === 'sand' ? '砂嵐' : 'あられ';
+      const weatherName = '砂嵐';
       this.log.push(`${pokemon.name}は${weatherName}のダメージで${damage}のダメージを受けた`);
     }
   }

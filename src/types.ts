@@ -7,7 +7,8 @@ export type MoveCategory = 'physical' | 'special' | 'status';
 
 export type StatusCondition = 'sleep' | 'poison' | 'burn' | 'paralysis' | 'freeze' | 'badly-poisoned';
 
-export type WeatherType = 'sand' | 'rain' | 'sun' | 'hail';
+// 'snow' はチャンピオンズの「ゆき」（SV 以降と同じ。毎ターンのダメージは無く、こおりタイプのぼうぎょ1.5倍）。
+export type WeatherType = 'sand' | 'rain' | 'sun' | 'snow';
 
 export type StatKey = 'HP' | 'ATK' | 'DEF' | 'SPATK' | 'SPDEF' | 'SPEED';
 
