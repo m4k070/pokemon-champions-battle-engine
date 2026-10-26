@@ -368,6 +368,42 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(asDamageResult(r).effectiveness).toBe(2); // フェアリー技として抜群
   });
 
+  test('フリーズスキン: ノーマル技がこおり技として計算され、威力1.2倍（タイプ一致も乗る）', () => {
+    const glalie = (ability: AbilityName) => new Pokemon({
+      name: 'Glalie',
+      types: ['ice'],
+      ability,
+      item: null,
+      baseStats: { HP: 80, ATK: 120, DEF: 80, SPATK: 120, SPDEF: 80, SPEED: 100 },
+      stats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      moves: [move({ name: 'Explosion', type: 'normal', power: 100 })],
+    });
+    // ドラゴンタイプ: こおり2倍（ノーマルは等倍）
+    const defender = () => new Pokemon({
+      name: 'Def',
+      types: ['dragon'],
+      ability: 'none',
+      item: null,
+      baseStats: { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 },
+      stats: { HP: 400, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 },
+    });
+    const hit = (ability: AbilityName) => {
+      const attacker = glalie(ability);
+      const target = defender();
+      const local = new BattleEngine({ rng: fixedRandom(0.5) });
+      local.setActivePokemon(0, attacker);
+      local.setActivePokemon(1, target);
+      return asDamageResult(local.useMove(attacker, target, move({ name: 'Return', type: 'normal', power: 100, accuracy: 100 })));
+    };
+    const skin = hit('refrigerate');
+    const plain = hit('none');
+    expect(skin.effectiveness).toBe(2);
+    expect(plain.effectiveness).toBe(1);
+    // 抜群2倍 × タイプ一致1.5倍 × 1.2倍 = 3.6倍（乱数と切り捨てのぶれを見込む）
+    expect(skin.damage / plain.damage).toBeGreaterThan(3.3);
+    expect(skin.damage / plain.damage).toBeLessThan(3.9);
+  });
+
   test('かたやぶり: 相手の特性（マルチスケイル）を無視する', () => {
     const makeDef = (ability: AbilityName) => makePokemon('Def', ability, { HP: 200, ATK: 10, DEF: 10, SPATK: 10, SPDEF: 10, SPEED: 10 });
     const attacker = makePokemon('Attacker', 'mold-breaker', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });

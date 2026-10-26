@@ -1209,12 +1209,16 @@ export class BattleEngine {
 
     // スカイスキン（aerilate）: ノーマル技がひこう技になる（威力1.2倍）
     // フェアリースキン（pixilate）: ノーマル技がフェアリー技になる（威力1.2倍）
+    // フリーズスキン（refrigerate）: ノーマル技がこおり技になる（威力1.2倍）
     if (effectiveType === 'normal') {
       if (attacker.ability === 'aerilate') {
         effectiveType = 'flying';
         power = Math.floor(power * 1.2);
       } else if (attacker.ability === 'pixilate') {
         effectiveType = 'fairy';
+        power = Math.floor(power * 1.2);
+      } else if (attacker.ability === 'refrigerate') {
+        effectiveType = 'ice';
         power = Math.floor(power * 1.2);
       }
     }

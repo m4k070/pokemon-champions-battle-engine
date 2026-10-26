@@ -333,6 +333,11 @@ export const PIXILATE: AbilityDefinition = {
   name: 'pixilate',
 };
 
+// フリーズスキン: ノーマル技がこおり技になる（威力1.2倍）。
+export const REFRIGERATE: AbilityDefinition = {
+  name: 'refrigerate',
+};
+
 // かたやぶり: 攻撃時に相手の特性を無視する（がんじょう・あついしぼう・マルチスケイル等）。
 // 判定は battle-engine の攻撃処理側で name 判定して行う。
 export const MOLD_BREAKER: AbilityDefinition = {
@@ -584,6 +589,7 @@ export const META_ABILITIES: AbilityDefinition[] = [
   ADAPTABILITY,
   AERILATE,
   PIXILATE,
+  REFRIGERATE,
   MOLD_BREAKER,
   MAGIC_BOUNCE,
   PROTEAN,

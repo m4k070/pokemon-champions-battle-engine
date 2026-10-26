@@ -64,6 +64,7 @@ export const ABILITY_NAMES = [
   'pixilate',
   'poison-point',
   'protean',
+  'refrigerate',
   'regenerator',
   'rough-skin',
   'sand-force',
