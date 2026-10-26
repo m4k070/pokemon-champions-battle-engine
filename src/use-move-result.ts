@@ -7,13 +7,21 @@ export type MoveFailureReason =
   | 'frozen'             // こおりで動けない
   | 'paralyzed'          // まひで動けない
   | 'taunted'            // ちょうはつで攻撃技を出せない
+  | 'encored'            // アンコールで直前の技以外を出せない
+  | 'blocked-by-terrain' // フィールド（サイコフィールド）に先制技を阻まれた
   | 'blocked-by-ability' // 相手の特性に無効化された（ぼうだん・ひらいしん等）
-  | 'missed';            // 命中判定に失敗した
+  | 'missed'             // 命中判定に失敗した
+  | 'protected'          // 相手がまもる等で防いだ
+  | 'protect-failed'     // まもるの連続使用で失敗した
+  | 'target-not-attacking' // ふいうち: 相手が攻撃技を選んでいなかった
+  | 'no-item';           // ポルターガイスト: 相手が持ち物を持っていなかった
 
 // 技は出たが効果を生まなかった理由。
 export type NoEffectReason =
   | 'type-immune'          // タイプ相性が0倍だった
   | 'status-immune'        // 相手が状態異常を受け付けなかった
+  | 'full-hp'              // 回復技を使ったがHPが満タンだった
+  | 'not-enough-hp'        // みがわり等の代償を払うHPが足りなかった
   | 'no-applicable-effect'; // 技が対応する効果を持っていなかった（未実装の変化技）
 
 // 技の解決結果。技が成立したかどうかと、成立した場合に何が起きたかを

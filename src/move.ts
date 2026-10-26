@@ -16,6 +16,13 @@ import type {
   WeatherType,
 } from './types.js';
 
+// 波動技（メガランチャーの対象）。カタログの表記（日本語）と英語IDの両方を受ける。
+// 名前から既定値を決めるのは、構築カタログの全定義にフラグを書き足さなくて済むようにするため。
+const PULSE_MOVE_NAMES = new Set([
+  'はどうだん', 'あくのはどう', 'みずのはどう', 'りゅうのはどう', 'だいちのはどう', 'こんげんのはどう',
+  'aura-sphere', 'dark-pulse', 'water-pulse', 'dragon-pulse', 'terrain-pulse', 'origin-pulse',
+]);
+
 // カテゴリを省略した技はダメージ技（物理）として扱う。
 // 変化技は power の概念を持たないため、必ず category: 'status' の明示を要求する。
 const DEFAULT_MOVE_CATEGORY = 'physical' as const;
@@ -80,10 +87,38 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   maxHits?: number;
   multiHitPowers?: number[];
   pivot: boolean;
+  // バトンタッチ等: 交代時に能力変化を引き継ぐ。
+  passStats: boolean;
+  // アシストパワー: 能力上昇の合計で威力が上がる。
+  storedPower: boolean;
   crashDamage: boolean;
   contact: boolean;
   restoresShieldForm: boolean;
   inflictsSpikes: boolean;
+  inflictsDrowsy: boolean;
+  selfHealPercent: number | null;
+  usesDefenseForAttack: boolean;
+  inflictsEncore: boolean;
+  boostedByPsychicTerrain: boolean;
+  resetsStatStages: boolean;
+  createsSubstitute: boolean;
+  protects: boolean;
+  rests: boolean;
+  wishes: boolean;
+  forcesSwitch: boolean;
+  drainPercent: number | null;
+  ignoresTypeEffectiveness: boolean;
+  recoilPercent: number | null;
+  recoilMaxHpPercent: number | null;
+  usesTargetAttack: boolean;
+  weightBasedPower: boolean;
+  knockOff: boolean;
+  failsIfNoItem: boolean;
+  doublesIfTargetDamaged: boolean;
+  alwaysCrit: boolean;
+  failsUnlessTargetAttacks: boolean;
+  terrainPulse: boolean;
+  pulse: boolean;
 
   constructor(data: DamageMoveInput) {
     this.name = data.name;
@@ -105,10 +140,36 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.maxHits = data.maxHits;
     this.multiHitPowers = data.multiHitPowers;
     this.pivot = data.pivot ?? false;
+    this.passStats = data.passStats ?? false;
+    this.storedPower = data.storedPower ?? false;
     this.crashDamage = data.crashDamage ?? false;
     this.contact = data.contact ?? false;
     this.restoresShieldForm = data.restoresShieldForm ?? false;
     this.inflictsSpikes = data.inflictsSpikes ?? false;
+    this.inflictsDrowsy = data.inflictsDrowsy ?? false;
+    this.selfHealPercent = data.selfHealPercent ?? null;
+    this.usesDefenseForAttack = data.usesDefenseForAttack ?? false;
+    this.inflictsEncore = data.inflictsEncore ?? false;
+    this.boostedByPsychicTerrain = data.boostedByPsychicTerrain ?? false;
+    this.resetsStatStages = data.resetsStatStages ?? false;
+    this.createsSubstitute = data.createsSubstitute ?? false;
+    this.protects = data.protects ?? false;
+    this.rests = data.rests ?? false;
+    this.wishes = data.wishes ?? false;
+    this.forcesSwitch = data.forcesSwitch ?? false;
+    this.drainPercent = data.drainPercent ?? null;
+    this.ignoresTypeEffectiveness = data.ignoresTypeEffectiveness ?? false;
+    this.recoilPercent = data.recoilPercent ?? null;
+    this.recoilMaxHpPercent = data.recoilMaxHpPercent ?? null;
+    this.usesTargetAttack = data.usesTargetAttack ?? false;
+    this.weightBasedPower = data.weightBasedPower ?? false;
+    this.knockOff = data.knockOff ?? false;
+    this.failsIfNoItem = data.failsIfNoItem ?? false;
+    this.doublesIfTargetDamaged = data.doublesIfTargetDamaged ?? false;
+    this.alwaysCrit = data.alwaysCrit ?? false;
+    this.failsUnlessTargetAttacks = data.failsUnlessTargetAttacks ?? false;
+    this.terrainPulse = data.terrainPulse ?? false;
+    this.pulse = data.pulse ?? PULSE_MOVE_NAMES.has(data.name);
   }
 }
 
@@ -141,7 +202,18 @@ export class StatusMove implements StatusMoveData {
   weatherHeal: boolean;
   weather: WeatherType | null;
   pivot: boolean;
+  passStats: boolean;
   restoresShieldForm: boolean;
+  inflictsDrowsy: boolean;
+  selfHealPercent: number | null;
+  inflictsEncore: boolean;
+  boostedByPsychicTerrain: boolean;
+  resetsStatStages: boolean;
+  createsSubstitute: boolean;
+  protects: boolean;
+  rests: boolean;
+  wishes: boolean;
+  forcesSwitch: boolean;
 
   constructor(data: StatusMoveInput) {
     this.name = data.name;
@@ -159,7 +231,18 @@ export class StatusMove implements StatusMoveData {
     this.weatherHeal = data.weatherHeal ?? false;
     this.weather = data.weather ?? null;
     this.pivot = data.pivot ?? false;
+    this.passStats = data.passStats ?? false;
     this.restoresShieldForm = data.restoresShieldForm ?? false;
+    this.inflictsDrowsy = data.inflictsDrowsy ?? false;
+    this.selfHealPercent = data.selfHealPercent ?? null;
+    this.inflictsEncore = data.inflictsEncore ?? false;
+    this.boostedByPsychicTerrain = data.boostedByPsychicTerrain ?? false;
+    this.resetsStatStages = data.resetsStatStages ?? false;
+    this.createsSubstitute = data.createsSubstitute ?? false;
+    this.protects = data.protects ?? false;
+    this.rests = data.rests ?? false;
+    this.wishes = data.wishes ?? false;
+    this.forcesSwitch = data.forcesSwitch ?? false;
   }
 }
 
@@ -234,7 +317,18 @@ export function createMove(data: MoveInput): Move {
   return new PhysicalMove(data);
 }
 
-// --- ダメージ技の複製 ---
+// --- 技の複製 ---
+
+// 技を独立したインスタンスとして複製する。
+//
+// BattleEngine は使用時に `move.pp -= 1` で技オブジェクト自体を書き換える。同じ MoveData を
+// 複数の Pokemon に渡すと PP が共有され、同じ構築のミラー対戦で PP が二重に減る。
+// カタログのように「1つのテンプレートから何体も作る」場合は必ずこれで複製する。
+export function cloneMove(move: MoveData): MoveData {
+  if (move.category === 'status') return createMove({ ...move, category: 'status' });
+  if (move.category === 'physical') return createMove({ ...move, category: 'physical' });
+  return createMove({ ...move, category: 'special' });
+}
 
 // 威力・タイプを差し替えたダメージ技を複製する
 // （STAB補正・天候によるタイプ変化・多段ヒットごとの威力調整で使う）。
@@ -247,4 +341,22 @@ export function cloneDamageMove(
     return { ...move, ...overrides, category: 'physical' };
   }
   return { ...move, ...overrides, category: 'special' };
+}
+
+
+// わるあがき: 技のPPがすべて尽きたときだけ使える無タイプの攻撃。
+// タイプ相性を受けず、与えたダメージの1/4を反動で受ける（本編仕様）。
+export const STRUGGLE_MOVE_NAME = 'わるあがき';
+
+export function createStruggleMove(): DamageMove {
+  return createMove({
+    name: STRUGGLE_MOVE_NAME,
+    type: 'normal',
+    power: 50,
+    accuracy: 100,
+    pp: 1,
+    category: 'physical',
+    ignoresTypeEffectiveness: true,
+    recoilPercent: 0.25,
+  });
 }

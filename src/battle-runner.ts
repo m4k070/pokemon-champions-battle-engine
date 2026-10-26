@@ -1,7 +1,13 @@
 import { BattleEngine } from './battle-engine.js';
+import type { RandomSource } from './rng.js';
 import { MegaEvolutionSystem } from './rules/mega-evolution.js';
+import { isDamageMove } from './move.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
+import { createStruggleMove } from './move.js';
 import type { Pokemon } from './pokemon.js';
+import { shallowClonePokemon } from './pokemon.js';
+import type { AgentAction } from './types.js';
+import { STAT_STAGE_KEYS } from './types.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './ai/battle-agent.js';
 import { snapshotBattle, restoreBattle } from './battle-snapshot.js';
 import type { BattleSnapshot, PendingTurn } from './battle-snapshot.js';
@@ -46,11 +52,21 @@ function buildContext(
     field: {
       weather: engine.weather,
       weatherTurnsLeft: engine.weatherTurnsLeft,
+      terrain: engine.field.terrain,
+      terrainTurnsLeft: engine.field.terrainTurnsLeft,
       trickRoom: engine.trickRoom,
       trickRoomTurnsLeft: engine.trickRoomTurnsLeft,
       stealthRock: {
         self: engine.field.stealthRock[sideKey(side)],
         opponent: engine.field.stealthRock[sideKey(side === 0 ? 1 : 0)],
+      },
+      spikes: {
+        self: engine.field.spikes[sideKey(side)],
+        opponent: engine.field.spikes[sideKey(side === 0 ? 1 : 0)],
+      },
+      toxicSpikes: {
+        self: engine.field.toxicSpikes[sideKey(side)],
+        opponent: engine.field.toxicSpikes[sideKey(side === 0 ? 1 : 0)],
       },
     },
     recentLog: engine.log,
@@ -61,11 +77,19 @@ function isTeamWiped(team: Pokemon[]): boolean {
   return team.every((p) => p.isFainted);
 }
 
+// 不完全情報モード: 相手の技・持ち物・特性は「使われたもの」だけ見える。
+// 実戦の読み合い（型の特定・技の記憶）を再現するためのモード。
+export type InformationLevel = 'full' | 'partial';
+
 export interface StartSessionOptions {
   leadA?: Pokemon;
   leadB?: Pokemon;
   engine?: BattleEngine;
   megaEvolutionSystem?: MegaEvolutionSystem;
+  // 乱数の供給源。engine を渡さないときに engine 側へ引き継ぐ（seed 固定の入口）。
+  rng?: RandomSource;
+  // 既定は 'full'（これまでの挙動）。'partial' で相手の未公開情報を伏せる。
+  information?: InformationLevel;
 }
 
 // 1ターンずつ進められるバトルの実行単位。snapshot()/restore()/fork()により
@@ -80,6 +104,11 @@ export class BattleSession {
   activeB: Pokemon;
   megaEvolutionSystem: MegaEvolutionSystem;
   private megaUsed: [boolean, boolean] = [false, false];
+  // 不完全情報モード用の「見えた情報」。viewer → (相手ポケモン → 見えた技index / 持ち物 / 特性)。
+  readonly information: InformationLevel;
+  private knownMoves: [Map<Pokemon, Set<number>>, Map<Pokemon, Set<number>>] = [new Map<Pokemon, Set<number>>(), new Map<Pokemon, Set<number>>()];
+  private knownItems: [Set<Pokemon>, Set<Pokemon>] = [new Set(), new Set()];
+  private knownAbilities: [Set<Pokemon>, Set<Pokemon>] = [new Set(), new Set()];
   reasoningLog: TurnReasoning[] = [];
   private turnBegun = false;
   // 技の実行途中でpivot技の交代先入力を待つために、ターンの進行状態をここに保持する。
@@ -92,19 +121,28 @@ export class BattleSession {
     teamB: Pokemon[],
     activeA: Pokemon,
     activeB: Pokemon,
-    megaEvolutionSystem: MegaEvolutionSystem
+    megaEvolutionSystem: MegaEvolutionSystem,
+    information: InformationLevel = 'full'
   ) {
+    this.information = information;
     this.engine = engine;
     this.teamA = teamA;
     this.teamB = teamB;
     this.activeA = activeA;
     this.activeB = activeB;
     this.megaEvolutionSystem = megaEvolutionSystem;
+
+    // おみとおしは先発でも発動する（相手の持ち物がわかる）。
+    if (activeA.ability === 'frisk' && activeB) this.knownItems[0].add(activeB);
+    if (activeB && activeB.ability === 'frisk') this.knownItems[1].add(activeA);
   }
 
   static async start(teamA: Pokemon[], teamB: Pokemon[], options: StartSessionOptions = {}): Promise<BattleSession> {
-    const engine = options.engine ?? new BattleEngine();
+    const engine = options.engine
+      ?? new BattleEngine(options.rng === undefined ? {} : { rng: options.rng });
     const megaEvolutionSystem = options.megaEvolutionSystem ?? new MegaEvolutionSystem();
+    // 味方の状態を見る特性（フラワーヴェール・そうだいしょう）のためにチームを登録する。
+    engine.registerTeams(teamA, teamB);
     const leadA = options.leadA ?? teamA[0];
     const leadB = options.leadB ?? teamB[0];
 
@@ -121,12 +159,16 @@ export class BattleSession {
       engine.switchIn(entry.pokemon, entry.team, entry.side);
     }
 
-    return new BattleSession(engine, teamA, teamB, leadA, leadB, megaEvolutionSystem);
+    return new BattleSession(engine, teamA, teamB, leadA, leadB, megaEvolutionSystem, options.information ?? 'full');
   }
 
-  static fromSnapshot(snapshot: BattleSnapshot, megaEvolutionSystem: MegaEvolutionSystem = new MegaEvolutionSystem()): BattleSession {
+  static fromSnapshot(
+    snapshot: BattleSnapshot,
+    megaEvolutionSystem: MegaEvolutionSystem = new MegaEvolutionSystem(),
+    information: InformationLevel = 'full',
+  ): BattleSession {
     const { engine, teamA, teamB, activeA, activeB } = restoreBattle(snapshot);
-    const session = new BattleSession(engine, teamA, teamB, activeA, activeB, megaEvolutionSystem);
+    const session = new BattleSession(engine, teamA, teamB, activeA, activeB, megaEvolutionSystem, information);
     session.restoreSessionState(snapshot);
     return session;
   }
@@ -162,8 +204,14 @@ export class BattleSession {
 
   // 現在の状態から独立した別セッションを作る（分岐探索用）。
   // structuredCloneでスナップショットを複製してから復元するため、参照を共有しない。
+  // 情報レベルは引き継ぐ（'partial' の対戦で fork が 'full' になると、探索が相手の
+  // 伏せ情報を見てしまう＝実戦ではできない推論になる）。
   fork(): BattleSession {
-    const session = BattleSession.fromSnapshot(structuredClone(this.snapshot()), this.megaEvolutionSystem);
+    const session = BattleSession.fromSnapshot(
+      structuredClone(this.snapshot()),
+      this.megaEvolutionSystem,
+      this.information,
+    );
     session.reasoningLog = [...this.reasoningLog];
     return session;
   }
@@ -210,9 +258,58 @@ export class BattleSession {
     // 瀕死交代とpivot交代はどちらも「技を選べず交代先だけを選ぶ場面」なので同じフラグに集約する。
     const mustSwitch = this.needsForcedSwitch(side) || this.needsPivotSwitch(side);
 
-    return side === 0
-      ? buildContext(this.engine, 0, this.activeA, this.teamA, this.activeB, this.teamB, canMegaEvolve, mustSwitch)
-      : buildContext(this.engine, 1, this.activeB, this.teamB, this.activeA, this.teamA, canMegaEvolve, mustSwitch);
+    const opponent = side === 0 ? this.activeB : this.activeA;
+    const opponentTeam = side === 0 ? this.teamB : this.teamA;
+    const self = side === 0 ? this.activeA : this.activeB;
+    const selfTeam = side === 0 ? this.teamA : this.teamB;
+
+    const context = buildContext(
+      this.engine,
+      side,
+      self,
+      selfTeam,
+      this.redact(side, opponent),
+      opponentTeam.map((pokemon) => this.redact(side, pokemon)),
+      canMegaEvolve,
+      mustSwitch,
+    );
+    // 分岐探索（1手先読み）用。局面の複製はエージェント側で行う。
+    context.side = side;
+    context.session = this;
+    return context;
+  }
+
+  // 相手の情報を「見えている分だけ」に絞る。full モードでは素通し。
+  // 見えないもの: 技（使われるまで）、持ち物、特性（メガシンカ等で判明するまで）。
+  private redact(viewer: 0 | 1, pokemon: Pokemon): Pokemon {
+    if (this.information === 'full') return pokemon;
+
+    const revealedMoves = this.knownMoves[viewer].get(pokemon) ?? new Set<number>();
+    const clone = shallowClonePokemon(pokemon);
+    clone.moves = pokemon.moves.filter((_, index) => revealedMoves.has(index));
+    clone.item = this.knownItems[viewer].has(pokemon) ? pokemon.item : null;
+    // 特性は「外から見えた挙動があったか」で公開する（いかくの発動・技の無効化・軽減など）。
+    clone.ability = this.knownAbilities[viewer].has(pokemon) || pokemon.abilityRevealed
+      ? pokemon.ability
+      : 'none';
+    return clone;
+  }
+
+  // 行動から相手に伝わる情報を記録する（使った技・メガシンカによる持ち物と特性の判明）。
+  private reveal(viewer: 0 | 1, actor: Pokemon, action: AgentAction): void {
+    if (this.information === 'full') return;
+    if (action.type !== 'move') return;
+
+    let revealed = this.knownMoves[viewer].get(actor);
+    if (!revealed) {
+      revealed = new Set<number>();
+      this.knownMoves[viewer].set(actor, revealed);
+    }
+    if (action.moveIndex >= 0) revealed.add(action.moveIndex);
+    if (action.megaEvolve) {
+      this.knownItems[viewer].add(actor);
+      this.knownAbilities[viewer].add(actor);
+    }
   }
 
   // ターン開始処理（天候・トリックルームの残りターン消費）。1ターンにつき1回だけ効く。
@@ -302,6 +399,10 @@ export class BattleSession {
     outgoing.resetSeeded(); // やどりぎのタネも場を離れると解除される
     outgoing.resetLockedMove(); // こだわり系の技固定も場を離れると解除される
     outgoing.resetTaunt(); // ちょうはつも場を離れると解除される
+    outgoing.resetDrowsy(); // あくびのねむけも場を離れると解除される
+    outgoing.resetEncore(); // アンコールも場を離れると解除される
+    // ばけのかわは場を離れても戻らない（バトル中1回きり。第8世代以降）。リセットしない。
+    outgoing.resetSubstitute(); // みがわりは場を離れると消える
 
     // 場を離れるときの特性フック（さいせいりょく等）。
     const ability = getAbilityDefinition(outgoing.ability);
@@ -312,6 +413,16 @@ export class BattleSession {
 
     if (side === 0) this.activeA = switched;
     else this.activeB = switched;
+
+    // おみとおし: 場に出たとき相手の持ち物がわかる（判明として記録する）。
+    if (switched.ability === 'frisk') {
+      const opponent = this.engine.getOpponent(switched);
+      if (opponent) {
+        this.knownItems[side].add(opponent);
+        this.engine.observeAbility(switched);
+        this.engine.log.push(`${switched.name}のおみとおしで${opponent.name}の持ち物がわかった`);
+      }
+    }
   }
 
   // 両陣営が同時に選んだ行動を適用する。交代は(switch-in効果の上書き順を除き)
@@ -390,11 +501,22 @@ export class BattleSession {
       attackers.push({ side: 1, pokemon: this.activeB, priority: moveB?.priority ?? 0 });
     }
 
+    // ふいうちの判定材料: そのターン攻撃技を選んでいるかを両者に記録する（本編仕様）。
+    for (const [side, action] of [[0, actionA], [1, actionB]] as const) {
+      const pokemon = side === 0 ? this.activeA : this.activeB;
+      const chosen = action.type !== 'move'
+        ? undefined
+        : action.moveIndex === -1
+          ? createStruggleMove()
+          : pokemon.moves[action.moveIndex];
+      pokemon.intendsToAttackThisTurn = chosen !== undefined && isDamageMove(chosen);
+    }
+
     // priority 降順 → speed 降順の2段ソート（同速はランダム）
     // orderBySpeed と同じく、先にシャッフルしてから安定ソートする
     const shuffled = [...attackers];
     for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(this.engine.rng.next() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     const sortedAttackers = shuffled
@@ -433,13 +555,24 @@ export class BattleSession {
       const action = side === 0 ? pending.actionA : pending.actionB;
       if (action.type !== 'move') continue;
 
-      if (action.moveIndex < 0 || action.moveIndex >= attacker.moves.length) {
+      // moveIndex = -1 はわるあがき（技のPPが尽きたとき。battle-agent の getLegalActions が返す）。
+      const chosenMove = action.moveIndex === -1
+        ? createStruggleMove()
+        : attacker.moves[action.moveIndex];
+      if (!chosenMove) {
         this.engine.log.push(`${attacker.name}のmoveIndex ${action.moveIndex}は範囲外です`);
         continue;
       }
-      const result = this.engine.useMove(attacker, defender, attacker.moves[action.moveIndex]);
-      // こだわり系は「技を出した時点」で固定される（外した場合も固定される）。
-      attacker.lockMove(action.moveIndex);
+      const result = this.engine.useMove(attacker, defender, chosenMove);
+      // こだわり系は「技を出した時点」で固定される（外した場合も固定される）。わるあがきは固定しない。
+      if (action.moveIndex >= 0) attacker.lockMove(action.moveIndex);
+
+      // ほえる・ドラゴンテール: 相手を控えと強制交代させる（本編仕様）。
+      // 控えが全員瀕死なら何も起きない。
+      if (defender.forcedOut) {
+        defender.resetForcedOut();
+        this.applyForcedOutSwitch(side === 0 ? 1 : 0);
+      }
 
       if (this.isFinished()) break;
 
@@ -466,6 +599,16 @@ export class BattleSession {
     return team.some((pokemon) => !pokemon.isFainted && pokemon !== active);
   }
 
+  // ほえる・ドラゴンテールによる強制交代。控えから無作為に1体を選んで繰り出す（本編仕様）。
+  private applyForcedOutSwitch(side: 0 | 1): void {
+    const team = side === 0 ? this.teamA : this.teamB;
+    const active = side === 0 ? this.activeA : this.activeB;
+    const bench = team.filter((pokemon) => pokemon !== active && !pokemon.isFainted);
+    if (bench.length === 0) return;
+    const picked = bench[Math.floor(this.engine.rng.next() * bench.length)];
+    this.switchTo(side, picked, team);
+  }
+
   // pivot技を使った側の交代先を適用し、ターンの残りを再開する。
   // needsPivotSwitch(side)がtrueの間だけ有効。
   applyPivotSwitch(side: 0 | 1, decision: AgentDecision): void {
@@ -482,8 +625,21 @@ export class BattleSession {
     const active = side === 0 ? this.activeA : this.activeB;
     const replacement = this.requireSwitchTarget(side, decision.action.pokemonIndex, 'pivot交代');
 
+    // バトンタッチ: 交代前に能力ランクを控えておく（switchTo が退場側をリセットするため）。
+    const pivotAction = side === 0 ? pending.actionA : pending.actionB;
+    const pivotMove = pivotAction.type === 'move' ? active.moves[pivotAction.moveIndex] : null;
+    const carriedStages = pivotMove?.passStats ? { ...active.statStages } : null;
+
     this.reasoningLog.push({ turn: this.engine.turn, side, pokemonName: active.name, reasoning: decision.reasoning });
     this.switchTo(side, replacement, team);
+
+    if (carriedStages !== null) {
+      const incoming = side === 0 ? this.activeA : this.activeB;
+      for (const key of STAT_STAGE_KEYS) {
+        incoming.statStages[key] = carriedStages[key];
+      }
+      this.engine.log.push(`${incoming.name}は能力変化を引き継いだ`);
+    }
 
     // 交代が済んだので、残りの技を解決できる状態へ戻す。
     this.pendingTurn = {
@@ -493,6 +649,20 @@ export class BattleSession {
       remainingSides: pending.remainingSides,
     };
     this.runRemainingMoves();
+  }
+
+  // 瀕死交代を両者とも不要になるまで解決する。
+  // 交代先が設置技（ステルスロック等）で瀕死になることがあり、1回では終わらない。
+  // ここで打ち切ると applyTurn の「瀕死が残っている」ガードで例外になる。
+  private async resolveForcedSwitches(agentA: BattleAgent, agentB: BattleAgent): Promise<void> {
+    while (this.needsForcedSwitch(0) || this.needsForcedSwitch(1)) {
+      if (this.needsForcedSwitch(0)) {
+        this.applyForcedSwitch(0, await agentA.selectAction(this.getContext(0)));
+      }
+      if (this.needsForcedSwitch(1)) {
+        this.applyForcedSwitch(1, await agentB.selectAction(this.getContext(1)));
+      }
+    }
   }
 
   // ターン終了処理（状態異常・天候ダメージ・持ち物）。次のbeginTurn()に備える。
@@ -509,12 +679,7 @@ export class BattleSession {
   async playTurn(agentA: BattleAgent, agentB: BattleAgent): Promise<void> {
     this.beginTurn();
 
-    if (this.needsForcedSwitch(0)) {
-      this.applyForcedSwitch(0, await agentA.selectAction(this.getContext(0)));
-    }
-    if (this.needsForcedSwitch(1)) {
-      this.applyForcedSwitch(1, await agentB.selectAction(this.getContext(1)));
-    }
+    await this.resolveForcedSwitches(agentA, agentB);
 
     if (this.isFinished()) {
       this.endTurn();
@@ -525,6 +690,10 @@ export class BattleSession {
       agentA.selectAction(this.getContext(0)),
       agentB.selectAction(this.getContext(1)),
     ]);
+
+    // 不完全情報モード: 使った技と、メガシンカで判明する持ち物・特性を相手に開示する。
+    this.reveal(1, this.activeA, decisionA.action);
+    this.reveal(0, this.activeB, decisionB.action);
 
     this.applyTurn(decisionA, decisionB);
 
@@ -608,7 +777,14 @@ export async function runBattle(
   options: RunBattleOptions = {}
 ): Promise<BattleResult> {
   const maxTurns = options.maxTurns ?? 50;
-  const session = await BattleSession.start(teamA, teamB, options);
+  // 先発はエージェントに決めさせる（leadA/leadB を明示した場合はそちらを優先）。
+  // これまでは team[0] 固定だったため、メガ枠が2番目以降の構築が1ターン目からメガを出せず、
+  // 構築の強さではなく並び順を測ってしまっていた。
+  const session = await BattleSession.start(teamA, teamB, {
+    ...options,
+    leadA: options.leadA ?? (await agentA.selectLead(teamA)),
+    leadB: options.leadB ?? (await agentB.selectLead(teamB)),
+  });
 
   while (!session.isFinished() && session.engine.turn < maxTurns) {
     await session.playTurn(agentA, agentB);

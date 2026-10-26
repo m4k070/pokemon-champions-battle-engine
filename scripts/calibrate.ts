@@ -1,0 +1,218 @@
+// Stage 0b 相当の検量線（エンジン校正).
+//
+// 条件（docs/WORK_ORDER_2026-10-18.md の T9 検証と同じ）:
+//   - ジュペッタ構築を除く11構築の全ペア 55 × seed 6 = 330試合
+//   - 行動: 既定は RandomBattleAgent、--agent=heuristic で HeuristicBattleAgent
+//   - maxTurns の既定は 50（--max-turns=N で変更。50だと引き分けが3割出る）
+//
+// 使い方: npx tsx scripts/calibrate.ts [--json] [--agent=heuristic] [--max-turns=300] [--engine-seed]
+//
+// 注意: --engine-seed を付けないとエンジン側の乱数（命中・急所・ダメージ揺れ）が毎回変わり、
+//       同じseedでも結果が再現しない。方策や構築の比較をするときは必ず付ける。
+// 出力: 構築ごとの勝率、Tier（SS/S/A）別の対戦勝率、例外の発生数。
+
+import { runBattle } from '../src/battle-runner.js';
+import { RandomBattleAgent } from '../src/ai/battle-agent.js';
+import { HeuristicBattleAgent } from '../src/ai/heuristic-battle-agent.js';
+import { HybridBattleAgent } from '../src/ai/hybrid-battle-agent.js';
+import { selectTeam, selectTeamWithPlan } from '../src/ai/team-selection.js';
+import { SeededRandom } from '../src/rng.js';
+import { META_TEAMS, teamToPokemons } from '../src/data/meta-teams.js';
+import { writeFileSync } from 'node:fs';
+
+// 評価画像（gamewith.jp/pokemon-champions/555537 の tier_rank_*.png alt）に基づく区分。
+// ページは 2026-10-19 19:37 更新版。カタログ順とは一致しないので名前で持つ。
+const TIERS: Record<string, 'SS' | 'S' | 'A'> = {
+  'メガガブリアスZ構築': 'SS',
+  'メガグソクムシャ構築': 'SS',
+  'カバマンダ構築': 'SS',
+  'メガリザードンY構築': 'SS',
+  'メガカメックス構築': 'SS',
+  'メガジュペッタ構築': 'S',
+  'メガライチュウY構築': 'S',
+  'カバルカ構築': 'S',
+  'カイリューガルド構築': 'A',
+  'クエスピクシー構築': 'A',
+  'メガラグラージ構築': 'A',
+};
+
+const ALL_SEEDS = [101, 202, 303, 404, 505, 606];
+// --seeds=N: 試合数を絞る（LLM方策は1試合が遅いため）。
+const seedArg = process.argv.find((arg) => arg.startsWith('--seeds='));
+const SEEDS = seedArg ? ALL_SEEDS.slice(0, Number(seedArg.split('=')[1])) : ALL_SEEDS;
+const EXCLUDED = 'メガジュペッタ構築';
+
+interface TeamStat {
+  games: number;
+  wins: number;
+  losses: number;
+  draws: number;
+}
+
+async function main(): Promise<void> {
+  // エンジン乱数も固定するモード（前後比較の主測定）。既定は指示書どおり行動だけを固定。
+  const engineSeeded = process.argv.includes('--engine-seed');
+  // --agent=heuristic: ルールベース方策で回す（行動の価値を測るため）。
+  const agentKind = (process.argv.find((arg) => arg.startsWith('--agent=')) ?? '--agent=random').split('=')[1];
+  // --max-turns=N: 引き分け（打ち切り）を減らしたいときに使う。
+  const maxTurnsArg = process.argv.find((arg) => arg.startsWith('--max-turns='));
+  const maxTurns = maxTurnsArg ? Number(maxTurnsArg.split('=')[1]) : undefined;
+  const noSwitch = process.argv.includes('--no-switch');
+  // --selection=rule: 6体から3体をルールで選出してから対戦する（シングル3選出の再現）。
+  const useSelection = process.argv.includes('--selection=rule');
+  const usePlan = process.argv.includes('--selection=plan');
+  // --information=partial: 相手の未公開情報を伏せた状態で対戦する。
+  const information = process.argv.includes('--information=partial') ? 'partial' as const : 'full' as const;
+  const prepare = (entry: Parameters<typeof teamToPokemons>[0]) => {
+    const full = teamToPokemons(entry);
+    if (usePlan) return selectTeamWithPlan(entry, full).members;
+    return useSelection ? selectTeam(full).members : full;
+  };
+  // --agent=hybrid: 拮抗した局面だけLLMに聞く（既定トリガーは「判断が拮抗」）。
+  const apiKey = process.env.OPENCODE_GO_API_KEY ?? process.env.OPENCODE_API_KEY ?? '';
+  const makeAgent = (seed: number) => agentKind === 'heuristic'
+    ? new HeuristicBattleAgent(new SeededRandom(seed), { allowVoluntarySwitch: !noSwitch })
+    : agentKind === 'hybrid'
+      ? new HybridBattleAgent(new SeededRandom(seed), { apiKey, maxConsultations: 12, cooldownTurns: 0 })
+      : new RandomBattleAgent(new SeededRandom(seed));
+  const teams = META_TEAMS.filter((team) => team.name !== EXCLUDED).map((team) => ({
+    name: team.name,
+    entry: team,
+  }));
+  const stats = new Map<string, TeamStat>();
+  for (const team of teams) stats.set(team.name, { games: 0, wins: 0, losses: 0, draws: 0 });
+
+  const tierStats = new Map<string, { games: number; wins: number }>();
+  const games: { a: string; b: string; seed: number; winner: 0 | 1 | null; error?: string }[] = [];
+  if (process.argv.includes('--show-selection')) {
+    for (const entry of META_TEAMS) {
+      const full = teamToPokemons(entry);
+      const picked = usePlan ? selectTeamWithPlan(entry, full) : selectTeam(full);
+      console.log(`${entry.name}: ${picked.members.map((pokemon) => pokemon.name).join(' / ')}`);
+    }
+  }
+  let errors = 0;
+  let totalGames = 0;
+  const hybridStats = { consults: 0, overrides: 0, failures: 0, ms: 0 };
+
+  for (let i = 0; i < teams.length; i++) {
+    for (let j = i + 1; j < teams.length; j++) {
+      const teamA = teams[i]!;
+      const teamB = teams[j]!;
+      for (const seed of SEEDS) {
+        totalGames++;
+        const a = stats.get(teamA.name)!;
+        const b = stats.get(teamB.name)!;
+        try {
+          const selectedA = prepare(teamA.entry);
+          const selectedB = prepare(teamB.entry);
+          const agentA = makeAgent(seed * 31 + 1);
+          const agentB = makeAgent(seed * 31 + 2);
+          const result = await runBattle(
+            selectedA,
+            selectedB,
+            agentA,
+            agentB,
+            // エンジン側（命中・急所・ダメージ揺れ・同速）も固定する。
+            // 指定しないと SYSTEM_RANDOM になり、同じseedでも結果が毎回変わる。
+            {
+              ...(maxTurns !== undefined ? { maxTurns } : {}),
+              ...(engineSeeded ? { rng: new SeededRandom(seed * 31 + 3) } : {}),
+              // 選出順の先頭を初手にする（エージェントの selectLead より優先）。
+              leadA: selectedA[0],
+              leadB: selectedB[0],
+              information,
+            },
+          );
+          if (agentKind === 'hybrid') {
+            for (const agent of [agentA, agentB] as HybridBattleAgent[]) {
+              hybridStats.consults += agent.consultations.length;
+              hybridStats.overrides += agent.consultations.filter((entry) => !entry.agreed).length;
+              hybridStats.failures += agent.consultations.filter((entry) => entry.error).length;
+              hybridStats.ms += agent.consultations.reduce((sum, entry) => sum + entry.ms, 0);
+            }
+          }
+          // 進捗を1試合ごとに出す（LLM方策は1試合が遅く、無音だと止まったか判別できない）。
+          if (process.argv.includes('--progress')) {
+            const mark = result.winner === 0 ? 'A' : result.winner === 1 ? 'B' : '分';
+            console.log(`[${totalGames}] ${teamA.name} vs ${teamB.name} seed${seed} → ${mark} (${result.turns}T)`);
+          }
+          a.games++;
+          b.games++;
+          games.push({ a: teamA.name, b: teamB.name, seed, winner: result.winner });
+          if (result.winner === 0) {
+            a.wins++;
+            b.losses++;
+          } else if (result.winner === 1) {
+            b.wins++;
+            a.losses++;
+          } else {
+            a.draws++;
+            b.draws++;
+          }
+          const tierA = TIERS[teamA.name];
+          const tierB = TIERS[teamB.name];
+          if (tierA && tierB && tierA !== tierB) {
+            for (const [from, to, winner] of [
+              [tierA, tierB, 0],
+              [tierB, tierA, 1],
+            ] as const) {
+              const key = `${from} vs ${to}`;
+              const bucket = tierStats.get(key) ?? { games: 0, wins: 0 };
+              bucket.games++;
+              if (result.winner === winner) bucket.wins++;
+              tierStats.set(key, bucket);
+            }
+          }
+        } catch (error) {
+          errors++;
+          games.push({
+            a: teamA.name,
+            b: teamB.name,
+            seed,
+            winner: null,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          console.error(
+            `ERROR ${teamA.name} vs ${teamB.name} seed=${seed}: ` +
+              (error instanceof Error ? error.message : String(error)),
+          );
+        }
+      }
+    }
+  }
+
+  const pct = (num: number, den: number): string => (den === 0 ? '-' : `${((num / den) * 100).toFixed(1)}%`);
+  console.log(`\n試合数: ${totalGames} / 例外: ${errors}`);
+  console.log('\n構築別勝率（勝/試合, 引き分け）');
+  const rows = teams
+    .map((team) => ({ name: team.name, tier: TIERS[team.name] ?? '?', ...stats.get(team.name)! }))
+    .sort((a, b) => b.wins / Math.max(b.games, 1) - a.wins / Math.max(a.games, 1));
+  for (const row of rows) {
+    console.log(
+      `${row.tier.padEnd(2)} ${row.name.padEnd(22, '　')} ${row.wins}勝/${row.games} (${pct(row.wins, row.games)}) 分${row.draws}`,
+    );
+  }
+  console.log('\nTier別（勝率は from 側から見た値）');
+  if (agentKind === 'hybrid') {
+    const perGame = hybridStats.consults / Math.max(1, totalGames);
+    console.log(`\nLLM相談: 合計${hybridStats.consults}回 (${perGame.toFixed(1)}/試合) 上書き${hybridStats.overrides} 失敗${hybridStats.failures} 平均${(hybridStats.ms / Math.max(1, hybridStats.consults) / 1000).toFixed(1)}秒`);
+  }
+  for (const [key, value] of [...tierStats.entries()].sort()) {
+    console.log(`${key}: ${value.wins}/${value.games} (${pct(value.wins, value.games)})`);
+  }
+
+  if (process.argv.includes('--json')) {
+    console.log('\n' + JSON.stringify({ totalGames, errors, rows, tiers: Object.fromEntries(tierStats) }));
+  }
+
+  const dumpIndex = process.argv.indexOf('--dump');
+  if (dumpIndex !== -1 && process.argv[dumpIndex + 1]) {
+    writeFileSync(process.argv[dumpIndex + 1], JSON.stringify({ totalGames, errors, games }, null, 1));
+  }
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

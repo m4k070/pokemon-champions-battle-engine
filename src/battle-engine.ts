@@ -1,11 +1,16 @@
 import { EventEmitter } from './event-emitter.js';
 import { TYPE_CHART } from './type-chart.js';
 import { BattleField } from './battle-field.js';
+import type { TerrainType } from './battle-field.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
 import { Pokemon } from './pokemon.js';
 import type { MoveData, StatusCondition, StatStageKey, TypeName, WeatherType, TypeChart } from './types.js';
+import { STAT_STAGE_KEYS } from './types.js';
 import { isDamageMove, isPhysicalMove, isSpecialMove, isStatusMove, cloneDamageMove, targetsOpponent } from './move.js';
 import type { UseMoveResult, NoEffectReason } from './use-move-result.js';
+import { SYSTEM_RANDOM } from './rng.js';
+import { isMegaStone } from './rules/mega-evolution.js';
+import type { RandomSource } from './rng.js';
 
 export type { UseMoveResult, MoveFailureReason, NoEffectReason } from './use-move-result.js';
 
@@ -21,6 +26,9 @@ export interface MoveLogEntry {
 // 猛毒(どくどく)のダメージ増加は本編仕様に合わせて15ターン目で頭打ちにする。
 const TOXIC_MAX_COUNTER = 15;
 
+// アンコール: 相手の直前の技を固定するターン数（本編仕様）。
+const ENCORE_TURNS = 3;
+
 // ターン終了時の割合ダメージの分母（やけどは最大HPの1/16、どくは1/8）。
 // 猛毒は経過ターン数 n に対して maxHP * n / 16。
 const BURN_DAMAGE_DENOMINATOR = 16;
@@ -35,6 +43,15 @@ const WEATHER_BALL_TYPE: Partial<Record<WeatherType, TypeName>> = {
   hail: 'ice',
 };
 
+// だいちのはどう: フィールドの種類に応じてタイプが変わる（威力は2倍）。
+// 使用者が接地しているときだけ適用する（ふゆう・ひこうは変化しない）。
+const TERRAIN_PULSE_TYPE: Record<NonNullable<TerrainType>, TypeName> = {
+  'electric-terrain': 'electric',
+  'psychic-terrain': 'psychic',
+  'grassy-terrain': 'grass',
+  'misty-terrain': 'fairy',
+};
+
 // あさのひざし等、天候依存の自己回復技の回復割合（本編仕様）。
 const WEATHER_HEAL_PERCENT: Record<'none' | WeatherType, number> = {
   none: 0.5,
@@ -43,6 +60,18 @@ const WEATHER_HEAL_PERCENT: Record<'none' | WeatherType, number> = {
   sand: 0.25,
   hail: 0.25,
 };
+
+// ダメージの揺れ幅（本編・チャンピオンズ共通の16段階）。
+// 0.85, 0.86, ... 0.99, 1.00 のいずれかを等確率で引く。
+// 出典: champions.pokewiki.net「ダメージ計算式」（乱数は16パターン・各1/16）。
+const DAMAGE_ROLL_MIN_PERCENT = 85;
+const DAMAGE_ROLL_STEPS = 16;
+
+// 急所。第7世代以降は1/24で発生し、ダメージが1.5倍になる。
+// 壁（リフレクター等）と、攻撃側のマイナスランク・防御側のプラスランクを無視する。
+// 出典: champions.pokewiki.net「ダメージ計算式」（急所 1/24・1.5倍・不利ランクと壁を無視）。
+const CRIT_CHANCE_DENOMINATOR = 24;
+const CRIT_MULTIPLIER = 1.5;
 
 // 通常配分の多段技（スキルリンク等は非対応）のヒット数分布。
 const MULTI_HIT_TABLE: { hits: number; weight: number }[] = [
@@ -62,8 +91,22 @@ const STATUS_IMMUNE_TYPES: Partial<Record<StatusCondition, TypeName[]>> = {
   poison: ['steel'],
 };
 
+export interface BattleEngineOptions {
+  // 乱数の供給源。省略時はシステム乱数（再現不可。従来の挙動）。
+  rng?: RandomSource;
+}
+
+// 実数値・ダメージ補正の計算条件。急所かどうかで「不利なランクを無視する」等が変わる。
+export interface AttackCalculationOptions {
+  critical?: boolean;
+  // ダメージ計算の相手。イカサマ（相手のこうげきを使う）で参照する。
+  // 省略時は getOpponent(attacker) にフォールバックする。
+  defender?: Pokemon;
+}
+
 export class BattleEngine {
   events: EventEmitter;
+  rng: RandomSource;
   weather: WeatherType | null;
   weatherTurnsLeft: number;
   trickRoom: boolean;
@@ -79,8 +122,11 @@ export class BattleEngine {
   // いのちのたまの反動は「そのターンにダメージを与えた攻撃者」だけに発動するため、
   // ターンをまたいで参照できるようendTurn()で記録・end-turnイベント処理後にリセットする。
   private attackersDealtDamageThisTurn: Set<Pokemon> = new Set();
+  // そのターンにダメージを受けたポケモン（ダメおしの威力2倍判定に使う）。
+  private defendersDamagedThisTurn: Set<Pokemon> = new Set();
 
-  constructor() {
+  constructor(options: BattleEngineOptions = {}) {
+    this.rng = options.rng ?? SYSTEM_RANDOM;
     this.events = new EventEmitter();
     this.weather = null;
     this.weatherTurnsLeft = 0;
@@ -96,6 +142,10 @@ export class BattleEngine {
 
   private sideKey(side: 0 | 1): 'playerA' | 'playerB' {
     return side === 0 ? 'playerA' : 'playerB';
+  }
+
+  private opposingSide(side: 0 | 1): 0 | 1 {
+    return side === 0 ? 1 : 0;
   }
 
   setStealthRock(side: 0 | 1): void {
@@ -125,6 +175,62 @@ export class BattleEngine {
     return null;
   }
 
+  // ---- 特性の観測・共通判定 ----
+  // 特性の効果は持ち物と違い双方から観測できるので、viewer ごとではなく個体に記録する。
+
+  // 登録済みのチーム。フラワーヴェールやそうだいしょうのように味方の状態を見る特性で使う。
+  private registeredTeams: [Pokemon[], Pokemon[]] | null = null;
+
+  registerTeams(teamA: Pokemon[], teamB: Pokemon[]): void {
+    this.registeredTeams = [teamA, teamB];
+  }
+
+  // 特性の挙動が外から見えたことを記録する（不完全情報モードの赤化判定に使う）。
+  observeAbility(pokemon: Pokemon): void {
+    pokemon.abilityRevealed = true;
+  }
+
+  teamOf(pokemon: Pokemon): Pokemon[] {
+    if (!this.registeredTeams) return [pokemon];
+    const [teamA, teamB] = this.registeredTeams;
+    if (teamA.includes(pokemon)) return teamA;
+    if (teamB.includes(pokemon)) return teamB;
+    return [pokemon];
+  }
+
+  // フラワーヴェール: くさタイプの自分・味方は能力を下げられず、状態異常にもならない。
+  flowerVeilProtects(pokemon: Pokemon): boolean {
+    if (!pokemon.types.includes('grass')) return false;
+    return this.teamOf(pokemon).some((ally) => !ally.isFainted && ally.ability === 'flower-veil');
+  }
+
+  // 特性による状態異常の無効化（ふみん・じゅうなん・ねつこうかん・フラワーヴェール）。
+  blocksStatusByAbility(target: Pokemon, status: StatusCondition): boolean {
+    if (this.flowerVeilProtects(target)) return true;
+    if (status === 'sleep' && target.ability === 'insomnia') return true;
+    if (status === 'paralysis' && target.ability === 'limber') return true;
+    if (status === 'burn' && target.ability === 'thermal-exchange') return true;
+    return false;
+  }
+
+  // どくげしょう: 対象の陣営の場にどくびしを置く（最大2層）。
+  addToxicSpikes(pokemon: Pokemon, layers = 1): void {
+    const side = this.getSide(pokemon);
+    if (side === null) return;
+    const key = this.sideKey(side);
+    const before = this.field.toxicSpikes[key];
+    this.field.toxicSpikes[key] = Math.min(2, before + layers);
+    if (this.field.toxicSpikes[key] !== before) {
+      this.log.push(`${pokemon.name}側の場にどくびしが${this.field.toxicSpikes[key]}層設置された`);
+    }
+  }
+
+  // こぼれダネ等が地形を展開する。
+  setTerrainFromAbility(terrain: NonNullable<TerrainType>, turns = 5): void {
+    this.field.terrain = terrain;
+    this.field.terrainTurnsLeft = turns;
+  }
+
   private setupEventHandlers(): void {
     this.events.on('switch-in', (data) => {
       const p = data.pokemon;
@@ -138,7 +244,16 @@ export class BattleEngine {
       const team = data.team;
       if (!Array.isArray(team)) return;
 
-      for (const p of team) {
+      // 持ち物による回復・反動は「その時点で場に出ているポケモン」にだけ適用する。
+      // 以前は team（両陣営の全員＝12体）を回していたため、控えのポケモンが
+      // たべのこしで回復し続けていた（2026-10-20 の検証で判明）。
+      // activePokemon が未設定のケース（テストで直接エンジンを使う）だけ全員に適用する。
+      const actives = [this.activePokemon0, this.activePokemon1].filter(
+        (pokemon): pokemon is Pokemon => pokemon !== null,
+      );
+      const targets = actives.length > 0 ? actives : team;
+
+      for (const p of targets) {
         if (!(p instanceof Pokemon)) continue;
         if (p.isFainted) continue;
 
@@ -179,7 +294,7 @@ export class BattleEngine {
 
         // どくどくだま: ターン終了時に猛毒状態になる（1回限り）。
         if (p.item === 'toxic-orb' && !p.itemUsed && !p.status) {
-          p.applyStatus('badly-poisoned');
+          p.applyStatus('badly-poisoned', this.rng);
           p.itemUsed = true;
           this.log.push(`${p.name}はどくどくだまの毒に侵された`);
         }
@@ -219,17 +334,35 @@ export class BattleEngine {
     });
   }
 
-  calculateAttack(attacker: Pokemon, move: MoveData): number {
-    const statKey: StatStageKey = isPhysicalMove(move) ? 'ATK' : 'SPATK';
+  calculateAttack(attacker: Pokemon, move: MoveData, options: AttackCalculationOptions = {}): number {
+    // ボディプレスは「こうげき」ではなく「ぼうぎょ」とその能力ランクを参照する（本編仕様）。
+    const usesDefense = isDamageMove(move) && move.usesDefenseForAttack === true;
+    // イカサマは相手の「こうげき」とその能力ランクを使う（本編仕様）。
+    // 使用者のこうげきを参照しないため、やけど・攻撃を強化する特性は適用しない。
+    const usesTargetAttack = isDamageMove(move) && move.usesTargetAttack === true;
+    const statKey: StatStageKey = usesDefense ? 'DEF' : isPhysicalMove(move) ? 'ATK' : 'SPATK';
+    if (usesTargetAttack) {
+      const target = options.defender ?? this.getOpponent(attacker);
+      if (target) {
+        const targetMultiplier = target.getStatStageMultiplier(statKey);
+        const targetAttack = Math.floor(target.stats[statKey] * targetMultiplier);
+        this.events.emit('calculate-attack', { attacker, move, attack: targetAttack });
+        return targetAttack;
+      }
+    }
+    // 急所は攻撃側のマイナスランクを無視する（0段階として扱う）。
+    const ignoresDrop = options.critical === true && attacker.statStages[statKey] < 0;
     // 防御側がてんねん(ignoresOpponentStatChanges)なら、攻撃側の能力ランクを無視する。
     const defender = this.getOpponent(attacker);
     const ignoreStages = defender
       ? (getAbilityDefinition(defender.ability)?.ignoresOpponentStatChanges?.() ?? false)
       : false;
-    const stageMultiplier = ignoreStages ? 1 : attacker.getStatStageMultiplier(statKey);
+    const stageMultiplier = ignoreStages || ignoresDrop ? 1 : attacker.getStatStageMultiplier(statKey);
     let attack = Math.floor(attacker.stats[statKey] * stageMultiplier);
 
-    if (attacker.status === 'burn' && isPhysicalMove(move)) {
+    // やけどは「こうげき」を半減させる効果なので、ぼうぎょを参照する技には効かない。
+    // TODO: 出典確認（ちからもち等「こうげき」を倍にする特性との相互作用は未確認）
+    if (attacker.status === 'burn' && isPhysicalMove(move) && !usesDefense) {
       attack = Math.floor(attack / 2);
     }
 
@@ -243,14 +376,16 @@ export class BattleEngine {
     return attack;
   }
 
-  calculateDefense(defender: Pokemon, move: MoveData): number {
+  calculateDefense(defender: Pokemon, move: MoveData, options: AttackCalculationOptions = {}): number {
     const statKey: StatStageKey = isPhysicalMove(move) ? 'DEF' : 'SPDEF';
+    // 急所は防御側のプラスランクを無視する（0段階として扱う）。
+    const ignoresBoost = options.critical === true && defender.statStages[statKey] > 0;
     // 攻撃側がてんねん(ignoresOpponentStatChanges)なら、防御側の能力ランクを無視する。
     const attacker = this.getOpponent(defender);
     const ignoreStages = attacker
       ? (getAbilityDefinition(attacker.ability)?.ignoresOpponentStatChanges?.() ?? false)
       : false;
-    const stageMultiplier = ignoreStages ? 1 : defender.getStatStageMultiplier(statKey);
+    const stageMultiplier = ignoreStages || ignoresBoost ? 1 : defender.getStatStageMultiplier(statKey);
     let defense = Math.floor(defender.stats[statKey] * stageMultiplier);
 
     const ability = getAbilityDefinition(defender.ability);
@@ -300,6 +435,8 @@ export class BattleEngine {
   // タイプ相性を求める。攻撃側の特性による補正（きもったま等）も反映する。
   // 変化技の無効判定とダメージ技の倍率計算の双方から使う。
   resolveTypeEffectiveness(attacker: Pokemon, defender: Pokemon, move: MoveData): number {
+    // わるあがきはタイプ相性を受けない（本編仕様。無タイプ扱い）。
+    if (move.ignoresTypeEffectiveness) return 1;
     const baseEffectiveness = this.getTypeEffectiveness(move.type, defender.types);
     // 攻撃側の特性によるタイプ相性補正（きもったま: Normal/Fighting→Ghost 有効化等）
     const attackerAbility = getAbilityDefinition(attacker.ability);
@@ -313,21 +450,78 @@ export class BattleEngine {
     });
   }
 
-  applyModifiers(baseDamage: number, attacker: Pokemon, defender: Pokemon, move: MoveData): { finalDamage: number; effectiveness: number } {
+  // ダメージ補正の合成。タイプ相性 → 急所 → 壁（リフレクター）の順に適用する。
+  // 急所は壁を貫通するため、壁による軽減は急所のときに適用しない。
+  // 乱数（0.85〜1.00）はここでは掛けない（rollDamage が担当）。
+  applyModifiers(
+    baseDamage: number,
+    attacker: Pokemon,
+    defender: Pokemon,
+    move: MoveData,
+    options: AttackCalculationOptions = {}
+  ): { finalDamage: number; effectiveness: number } {
     const effectiveness = this.resolveTypeEffectiveness(attacker, defender, move);
+    const critical = options.critical === true;
     let finalDamage = Math.floor(baseDamage * effectiveness);
 
+    if (critical) {
+      finalDamage = Math.floor(finalDamage * CRIT_MULTIPLIER);
+    }
+
     const defenderSide = this.getSide(defender);
-    if (isPhysicalMove(move) && defenderSide !== null && this.field.reflect[this.sideKey(defenderSide)] > 0) {
+    if (!critical && isPhysicalMove(move) && defenderSide !== null && this.field.reflect[this.sideKey(defenderSide)] > 0) {
       finalDamage = Math.floor(finalDamage / 2);
     }
 
-    this.events.emit('apply-modifiers', { attacker, defender, move, finalDamage, effectiveness });
+    // オーロラベール: 張られている側が受けるダメージを半減する（物理・特殊を問わない。本編仕様）。
+    // 急所は壁を貫通するため適用しない。
+    if (!critical && defenderSide !== null && this.field.auroraVeil[this.sideKey(defenderSide)] > 0) {
+      finalDamage = Math.floor(finalDamage / 2);
+    }
+
+    this.events.emit('apply-modifiers', { attacker, defender, move, finalDamage, effectiveness, critical });
 
     return { finalDamage, effectiveness };
   }
 
-  applyDamage(defender: Pokemon, damage: number, attacker?: Pokemon, move?: MoveData): void {
+  // くさむすび・けたぐり: 相手の体重で威力が変わる（本編仕様）。
+  powerFromWeight(weightKg: number): number {
+    if (weightKg < 10) return 20;
+    if (weightKg < 25) return 40;
+    if (weightKg < 50) return 60;
+    if (weightKg < 100) return 80;
+    if (weightKg < 200) return 100;
+    return 120;
+  }
+
+  // はたきおとすで落とせる持ち物か（メガストーンは落とせない）。
+  hasRemovableItem(pokemon: Pokemon): boolean {
+    return pokemon.item !== null && !isMegaStone(pokemon.item);
+  }
+
+  // 急所に当たったかを引く。急所無効の特性（シェルアーマー）を持つ相手には発生しない。
+  rollCriticalHit(defender: Pokemon): boolean {
+    const ability = getAbilityDefinition(defender.ability);
+    if (ability?.preventsCriticalHits?.() === true) return false;
+    return this.rng.next() < 1 / CRIT_CHANCE_DENOMINATOR;
+  }
+
+  // ダメージの揺れ（0.85〜1.00の16段階）を引く。
+  rollDamageFactor(): number {
+    const step = Math.floor(this.rng.next() * DAMAGE_ROLL_STEPS);
+    return (DAMAGE_ROLL_MIN_PERCENT + step) / 100;
+  }
+
+  // 補正後のダメージに揺れを掛ける。タイプ相性が0倍でなければ最低1ダメージ残す（本編仕様）。
+  rollDamage(damage: number, effectiveness: number): number {
+    if (damage <= 0) return 0;
+    const rolled = Math.floor(damage * this.rollDamageFactor());
+    return rolled > 0 || effectiveness <= 0 ? rolled : 1;
+  }
+
+  // 実ダメージ（特性・持ち物の補正後）を返す。ばけのかわのように特性がダメージを差し替えるため、
+  // 呼び出し側は補正前の値ではなく戻り値をログ・反動・ドレインの計算に使う。
+  applyDamage(defender: Pokemon, damage: number, attacker?: Pokemon, move?: MoveData): number {
     let effectiveDamage = damage;
 
     // 特性の被弾時フック（がんじょう・じきゅうりょく・あついしぼう・さめはだ等）。
@@ -335,7 +529,23 @@ export class BattleEngine {
     if (attacker && move && attacker.ability !== 'mold-breaker') {
       const ability = getAbilityDefinition(defender.ability);
       const adjusted = ability?.onDamaged?.({ defender, attacker, move, damage, engine: this });
-      if (typeof adjusted === 'number') effectiveDamage = adjusted;
+      if (typeof adjusted === 'number') {
+        effectiveDamage = adjusted;
+        // 軽減・肩代わりが外から見えたので、特性を公開する。
+        this.observeAbility(defender);
+      }
+    }
+
+    // みがわり: 場に身代わりがあるときは、ダメージを身代わりが受ける（本編仕様）。
+    // 身代わりが受けたぶんは本体のHPには及ばない。身代わりのHPが0になると壊れる。
+    if (defender.substituteHP > 0) {
+      const absorbed = Math.min(defender.substituteHP, effectiveDamage);
+      defender.substituteHP -= absorbed;
+      if (defender.substituteHP <= 0) {
+        defender.substituteHP = 0;
+        this.log.push(`${defender.name}のみがわりは こわれた`);
+      }
+      return absorbed;
     }
 
     // シュカのみ: 地面技のダメージを半減する（1回限り）。
@@ -345,7 +555,11 @@ export class BattleEngine {
       this.log.push(`${defender.name}はシュカのみで地面技のダメージを半減した`);
     }
 
+    // 注意: 戻り値はHP差分ではなく補正後の計算値。きあいのタスキ等が takeDamage 内の
+    // apply-damage イベントでダメージをさらに削る場合、その分は戻り値に反映されない
+    // （ログ・反動の従来挙動を変えないため）。
     defender.takeDamage(effectiveDamage, this);
+    return effectiveDamage;
   }
 
   useMove(attacker: Pokemon, defender: Pokemon, move: MoveData): UseMoveResult {
@@ -360,7 +574,7 @@ export class BattleEngine {
       return { outcome: 'failed', reason: 'asleep' };
     }
     if (attacker.status === 'freeze') {
-      if (Math.random() < 0.2) {
+      if (this.rng.next() < 0.2) {
         attacker.removeStatus();
         this.log.push(`${attacker.name}はこおりがとけた！`);
       } else {
@@ -369,10 +583,17 @@ export class BattleEngine {
       }
     }
     if (attacker.status === 'paralysis') {
-      if (Math.random() < 0.25) {
+      if (this.rng.next() < 0.25) {
         this.log.push(`${attacker.name}はまひして動けない`);
         return { outcome: 'failed', reason: 'paralyzed' };
       }
+    }
+
+    // まもる: そのターンの間、相手から受ける技を無効化する（本編仕様）。
+    // 自分を対象にする技（つるぎのまい等）は防げないため targetsOpponent で限定する。
+    if (defender.protecting && targetsOpponent(move)) {
+      this.log.push(`${defender.name}は身を守っている`);
+      return { outcome: 'failed', reason: 'protected' };
     }
 
     // マジックミラー（magic-bounce）: 変化技を跳ね返す（対象を入れ替えて再適用）。
@@ -382,7 +603,20 @@ export class BattleEngine {
       return this.useMove(defender, attacker, move);
     }
 
-    move.pp -= 1;
+    // プレッシャー: 相手が持っていると、こちらのPP消費が2倍になる（かたやぶりは無視）。
+    // わるあがきはPPを持たないので消費しない（プレッシャーも乗らない）。
+    if (move.ignoresTypeEffectiveness && move.name === 'わるあがき') {
+      // no-op
+    } else {
+      const pressureTax = defender.ability === 'pressure' && attacker.ability !== 'mold-breaker' ? 2 : 1;
+      if (pressureTax > 1) this.observeAbility(defender);
+      move.pp = Math.max(0, move.pp - pressureTax);
+    }
+
+    // まもる以外の技を出したら連続使用のカウントは切れる（本編仕様）。
+    if (!move.protects) {
+      attacker.protectStreak = 0;
+    }
 
     this.log.push(`${attacker.name}の${move.name}`);
     const attackerSide = this.getSide(attacker);
@@ -410,6 +644,37 @@ export class BattleEngine {
       }
     }
 
+    // アンコール: 固定された技以外は出せない。合法手（getLegalActions）からも除外されるが、
+    // 直接 useMove を呼ばれた場合にも効くようエンジン側でも拒否する。
+    const encoredMove = attacker.encoredMoveIndex === null
+      ? null
+      : attacker.moves[attacker.encoredMoveIndex] ?? null;
+    if (encoredMove && encoredMove.name !== move.name) {
+      this.log.push(`${attacker.name}はアンコールで${encoredMove.name}しか出せない！`);
+      return { outcome: 'failed', reason: 'encored' };
+    }
+
+    // サイコフィールド: 接地している相手には先制技（優先度+1以上）が効かない（本編仕様）。
+    // 相手が接地していなければ（ひこう・ふゆう）通常どおり効く。
+    if (this.field.terrain === 'psychic-terrain' && move.priority > 0
+        && targetsOpponent(move) && this.isGrounded(defender)) {
+      this.log.push(`${defender.name}はサイコフィールドに守られている！`);
+      return { outcome: 'failed', reason: 'blocked-by-terrain' };
+    }
+
+    // ふいうち: 相手がそのターン攻撃技を選んでいなければ失敗する（本編仕様）。
+    // 「選んでいるか」は BattleRunner が毎ターン設定する（intendsToAttackThisTurn）。
+    if (isDamageMove(move) && move.failsUnlessTargetAttacks && !defender.intendsToAttackThisTurn) {
+      this.log.push(`${attacker.name}の${move.name}は決まらなかった`);
+      return { outcome: 'failed', reason: 'target-not-attacking' };
+    }
+
+    // ポルターガイスト: 相手が持ち物を持っていなければ失敗する（本編仕様）。
+    if (isDamageMove(move) && move.failsIfNoItem && defender.item === null) {
+      this.log.push(`${attacker.name}の${move.name}は決まらなかった`);
+      return { outcome: 'failed', reason: 'no-item' };
+    }
+
     // ぼうだん等の技無効化特性は命中判定より前に解決する（本編仕様）。
     // かたやぶり（mold-breaker）持ちの攻撃は防御側の特性（ぼうだん・ひらいしん等）を無視する。
     const defenderAbility = getAbilityDefinition(defender.ability);
@@ -419,6 +684,17 @@ export class BattleEngine {
         defender.modifyStatStage('SPATK', 1);
         this.log.push(`${defender.name}のひらいしんで特攻が上がった`);
       }
+      // ちくでん: でんき技を無効化し、特攻を1段階上げる。
+      if (defender.ability === 'volt-absorb' && move.type === 'electric') {
+        defender.modifyStatStage('SPATK', 1);
+        this.log.push(`${defender.name}のちくでんで特攻が上がった`);
+      }
+      // もらいび: ほのお技を吸収し、以後じぶんのほのお技の威力が1.5倍になる。
+      if (defender.ability === 'flash-fire' && move.type === 'fire') {
+        defender.flashFireActive = true;
+        this.log.push(`${defender.name}のもらいびでほのお技を吸収した`);
+      }
+      this.observeAbility(defender);
       this.log.push(`${defender.name}の${defender.ability}で効果がないようだ`);
       return { outcome: 'failed', reason: 'blocked-by-ability' };
     }
@@ -441,13 +717,22 @@ export class BattleEngine {
         this.log.push('効果がなかった');
         return noEffect('type-immune');
       }
+
+      // みがわり: 身代わりがあるとき、相手に向けた変化技は身代わりに阻まれる（本編仕様）。
+      // 場に置く技（ステロ・まきびし等）と自分を対象にする技は防がない。
+      // あくび・アンコールは targetsOpponent に載っていないため個別に含める。
+      if (defender.substituteHP > 0 && !move.fieldEffect && !move.selfStatChange && !move.createsSubstitute) {
+        this.log.push(`${defender.name}は身代わりで${move.name}を防いだ`);
+        return noEffect('no-applicable-effect');
+      }
+
     }
 
     if (move.accuracy < 100) {
       // ノーガード(no-guard): 攻撃側・防御側どちらかが持てば命中率100%になる。
       const attackerNoGuard = getAbilityDefinition(attacker.ability)?.name === 'no-guard';
       const defenderNoGuard = getAbilityDefinition(defender.ability)?.name === 'no-guard';
-      if (!attackerNoGuard && !defenderNoGuard && Math.random() * 100 > move.accuracy) {
+      if (!attackerNoGuard && !defenderNoGuard && this.rng.next() * 100 > move.accuracy) {
         this.log.push('技は外れた');
         // 飛び膝蹴り等のクラッシュダメージ（最大HPの50%）
         if (isDamageMove(move) && move.crashDamage) {
@@ -459,6 +744,9 @@ export class BattleEngine {
         return { outcome: 'failed', reason: 'missed' };
       }
     }
+
+    // 技が実行に進んだ時点で「直前に使った技」として記録する（アンコールの対象になる）。
+    attacker.recordLastMove(move.name);
 
     if (move.fieldEffect === 'trick-room') {
       if (this.trickRoom) {
@@ -495,12 +783,13 @@ export class BattleEngine {
     if (move.fieldEffect === 'stealth-rock') {
       const side = this.getSide(attacker);
       if (side !== null) {
-        const key = this.sideKey(side);
+        // 設置技は「相手の場」に置く（自分の場ではない）。
+        const key = this.sideKey(this.opposingSide(side));
         if (this.field.stealthRock[key]) {
           this.log.push('ステルスロックは既に設置されている');
         } else {
           this.field.stealthRock[key] = true;
-          this.log.push(`${attacker.name}側の場にステルスロックが散りばめられた`);
+          this.log.push(`${defender.name}側の場にステルスロックが散りばめられた`);
         }
       }
       return effectApplied();
@@ -509,12 +798,12 @@ export class BattleEngine {
     if (move.fieldEffect === 'spikes') {
       const side = this.getSide(attacker);
       if (side !== null) {
-        const key = this.sideKey(side);
+        const key = this.sideKey(this.opposingSide(side));
         if (this.field.spikes[key] >= 3) {
           this.log.push('まきびしはこれ以上盛れない');
         } else {
           this.field.spikes[key]++;
-          this.log.push(`${attacker.name}側の場にまきびしが${this.field.spikes[key]}層設置された`);
+          this.log.push(`${defender.name}側の場にまきびしが${this.field.spikes[key]}層設置された`);
         }
       }
       return effectApplied();
@@ -523,13 +812,54 @@ export class BattleEngine {
     if (move.fieldEffect === 'toxic-spikes') {
       const side = this.getSide(attacker);
       if (side !== null) {
-        const key = this.sideKey(side);
+        const key = this.sideKey(this.opposingSide(side));
         if (this.field.toxicSpikes[key] >= 2) {
           this.log.push('どくびしはこれ以上盛れない');
         } else {
           this.field.toxicSpikes[key]++;
-          this.log.push(`${attacker.name}側の場にどくびしが${this.field.toxicSpikes[key]}層設置された`);
+          this.log.push(`${defender.name}側の場にどくびしが${this.field.toxicSpikes[key]}層設置された`);
         }
+      }
+      return effectApplied();
+    }
+
+    // サイコフィールド / ミストフィールド: 5ターンの間フィールドを展開する。
+    // グランドコート持ちなら8ターンになる（本編仕様）。
+    if (move.fieldEffect === 'psychic-terrain' || move.fieldEffect === 'misty-terrain') {
+      const turns = attacker.item === 'terrain-extender' ? 8 : 5;
+      const terrainName = move.fieldEffect === 'psychic-terrain' ? 'サイコフィールド' : 'ミストフィールド';
+      this.field.terrain = move.fieldEffect;
+      this.field.terrainTurnsLeft = turns;
+      this.log.push(`${attacker.name}は${terrainName}を展開した（${turns}ターン）`);
+      return effectApplied();
+    }
+
+    // オーロラベール: 5ターンの間、その側が受けるダメージを半減する（本編仕様）。
+    // TODO: 出典確認（本編は あられ/ゆき が条件。チャンピオンズでの条件は未確認）
+    if (move.fieldEffect === 'aurora-veil') {
+      const side = this.getSide(attacker);
+      if (side !== null) {
+        this.field.auroraVeil[this.sideKey(side)] = 5;
+        this.log.push(`${attacker.name}側にオーロラベールが張られた`);
+      }
+      return effectApplied();
+    }
+
+    // ほえる: 相手を控えと強制交代させる（本編仕様）。
+    // チームを持っているのは BattleRunner なので、ここでは印を立てるだけ。
+    // ダメージ技（ドラゴンテール）はダメージ解決の後に同じ印を立てるため、ここでは変化技に限定する。
+    if (isStatusMove(move) && move.forcesSwitch) {
+      defender.forcedOut = true;
+      this.log.push(`${defender.name}は場を追い出された`);
+      return effectApplied();
+    }
+
+    // ねがいごと: 次のターンの終了時に、その側の場に出ているポケモンを最大HPの半分回復する（本編仕様）。
+    if (move.wishes) {
+      const side = this.getSide(attacker);
+      if (side !== null) {
+        this.field.wish[this.sideKey(side)] = 2;
+        this.log.push(`${attacker.name}は願い事をした`);
       }
       return effectApplied();
     }
@@ -548,6 +878,122 @@ export class BattleEngine {
       const heal = Math.floor(attacker.maxHP * percent);
       attacker.heal(heal);
       this.log.push(`${attacker.name}は${move.name}で${heal}回復した`);
+      return effectApplied();
+    }
+
+    // みがわり: 自分のHPを最大HPの1/4払って身代わりを出す（本編仕様）。
+    // 残りHPが代償以下なら失敗する。
+    if (move.createsSubstitute) {
+      if (attacker.substituteHP > 0) {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('no-applicable-effect');
+      }
+      const cost = Math.floor(attacker.maxHP / 4);
+      if (attacker.currentHP <= cost) {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('not-enough-hp');
+      }
+      attacker.currentHP -= cost;
+      attacker.substituteHP = cost;
+      this.log.push(`${attacker.name}は身代わりを出した`);
+      return effectApplied();
+    }
+
+    // くろいきり: 場に出ている全員の能力変化をリセットする（本編仕様）。
+    if (move.resetsStatStages) {
+      for (const pokemon of [attacker, defender]) {
+        for (const key of STAT_STAGE_KEYS) {
+          pokemon.statStages[key] = 0;
+        }
+      }
+      this.log.push('すべての能力変化がリセットされた');
+      return effectApplied();
+    }
+
+    // まもる: そのターン相手の技を防ぐ。連続で使うと成功率が半減していく（本編仕様）。
+    if (move.protects) {
+      const successChance = 1 / Math.pow(2, attacker.protectStreak);
+      if (this.rng.next() >= successChance) {
+        attacker.resetProtect();
+        this.log.push('しかし うまくきまらなかった');
+        return { outcome: 'failed', reason: 'protect-failed' };
+      }
+      attacker.protecting = true;
+      attacker.protectStreak += 1;
+      this.log.push(`${attacker.name}は身を守っている`);
+      return effectApplied();
+    }
+
+    // ねむる: HPを全回復して2ターンのねむり状態になる（本編仕様）。
+    // 既に状態異常があるとき、HPが満タンのときは失敗する。
+    if (move.rests) {
+      if (attacker.statusState.kind !== 'none') {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('status-immune');
+      }
+      if (attacker.currentHP >= attacker.maxHP) {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('full-hp');
+      }
+      attacker.heal(attacker.maxHP);
+      attacker.applySleep(2); // 本編のねむるは2ターン
+      this.log.push(`${attacker.name}は眠ってしまった`);
+      return effectApplied();
+    }
+
+    // なまける等: 自分のHPを最大HPの一定割合だけ回復する。HPが満タンなら失敗する（本編仕様）。
+    if (move.selfHealPercent !== null && move.selfHealPercent !== undefined) {
+      if (attacker.currentHP >= attacker.maxHP) {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('full-hp');
+      }
+      const heal = Math.floor(attacker.maxHP * move.selfHealPercent);
+      attacker.heal(heal);
+      this.log.push(`${attacker.name}は${move.name}で${heal}回復した`);
+      return effectApplied();
+    }
+
+    // みがわり: あくび・アンコールは targetsOpponent に載らないため、ここでも防ぐ。
+    if (defender.substituteHP > 0 && isStatusMove(move) && (move.inflictsDrowsy || move.inflictsEncore)) {
+      this.log.push(`${defender.name}は身代わりで${move.name}を防いだ`);
+      return noEffect('no-applicable-effect');
+    }
+
+    // あくび: 相手をねむけにし、次のターンの終了時にねむりにする（交代で解除）。
+    // 出典: yakkun.com（チャンピオンズ）「相手を『ねむけ』状態にして、次のターン終了時に
+    // 相手を『ねむり』状態にする。ただし、そのポケモンが交代されると効果は消える。必ず命中」。
+    // タイプによる無効は無いため、変化技共通のタイプ相性判定（targetsOpponent）には載せない。
+    if (move.inflictsDrowsy) {
+      if (defender.isDrowsy) {
+        this.log.push(`${defender.name}はすでにねむけている`);
+        return noEffect('no-applicable-effect');
+      }
+      // すでに状態異常なら眠れないため、ねむけも付かない（本編仕様）。
+      if (defender.status !== null) {
+        this.log.push('効果がなかった');
+        return noEffect('status-immune');
+      }
+      defender.applyDrowsy(this.turn + 1);
+      this.log.push(`${defender.name}はねむけを誘われた`);
+      return effectApplied();
+    }
+
+    // アンコール: 相手が直前に使った技を3ターンの間固定する（交代で解除）。
+    // 直前の技が無い（まだ技を使っていない）場合は失敗する（本編仕様）。
+    if (move.inflictsEncore) {
+      if (defender.isEncored) {
+        this.log.push(`${defender.name}はすでにアンコールされている`);
+        return noEffect('no-applicable-effect');
+      }
+      const lastIndex = defender.lastMoveName === null
+        ? -1
+        : defender.moves.findIndex((candidate) => candidate.name === defender.lastMoveName);
+      if (lastIndex < 0) {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('no-applicable-effect');
+      }
+      defender.applyEncore(lastIndex, this.turn + ENCORE_TURNS);
+      this.log.push(`${defender.name}はアンコールで${defender.moves[lastIndex].name}を選び続ける`);
       return effectApplied();
     }
 
@@ -596,6 +1042,13 @@ export class BattleEngine {
       return this.inflictStatusCondition(defender, move.status, statusMovePivot);
     }
 
+    // バトンタッチ: 技自体は「能力を引き継いで退場する」効果なので成立扱いにする。
+    // 引き継ぎ本体は交代時（BattleSession.applyPivotSwitch）で処理する。
+    if (isStatusMove(move) && move.passStats) {
+      this.log.push(`${attacker.name}は能力を引き継ぐ準備をした`);
+      return effectApplied();
+    }
+
     // ここに到達する変化技は、対応する効果フィールドを持たないもの（まもる・はねる等の未実装技）。
     // 威力0のためダメージ計算に進めても何も起きないので、この時点で解決を終える。
     if (isStatusMove(move)) {
@@ -611,6 +1064,26 @@ export class BattleEngine {
       : move.type;
 
     let power = move.power;
+
+    // だいちのはどう: フィールド下ではタイプが変わり威力2倍。使用者が接地している場合のみ。
+    if (move.terrainPulse === true && this.field.terrain !== null && this.isGrounded(attacker)) {
+      effectiveType = TERRAIN_PULSE_TYPE[this.field.terrain];
+      power *= 2;
+    }
+
+    // メガランチャー: 波動技の威力1.5倍（本編仕様）。
+    if (move.pulse === true && attacker.ability === 'mega-launcher') {
+      power = Math.floor(power * 1.5);
+    }
+
+    // アシストパワー: 自分の能力上昇1段階につき威力+20（本編仕様、上限860）。
+    if (move.storedPower === true) {
+      const stages = Object.entries(attacker.statStages as Record<string, number>)
+        .filter(([key]) => key !== 'ACCURACY' && key !== 'EVASION')
+        .reduce((sum, [, value]) => sum + Math.max(0, value), 0);
+      power = Math.min(860, 20 + 20 * stages);
+      this.log.push(`アシストパワーの威力が${power}になった`);
+    }
 
     // スカイスキン（aerilate）: ノーマル技がひこう技になる（威力1.2倍）
     // フェアリースキン（pixilate）: ノーマル技がフェアリー技になる（威力1.2倍）
@@ -640,10 +1113,43 @@ export class BattleEngine {
       power *= 1.5;
     }
 
+    // ワイドフォース: サイコフィールド下で接地していれば威力1.5倍（本編仕様）。
+    if (isDamageMove(move) && move.boostedByPsychicTerrain === true
+        && this.field.terrain === 'psychic-terrain' && this.isGrounded(attacker)) {
+      power = Math.floor(power * 1.5);
+    }
+
+    // サイコフィールド: 接地している側のエスパー技は威力1.3倍（本編仕様）。
+    if (this.field.terrain === 'psychic-terrain' && effectiveType === 'psychic'
+        && this.isGrounded(attacker)) {
+      power = Math.floor(power * 1.3);
+    }
+
+    // ミストフィールド: 接地している側が受けるドラゴン技は威力が半減する（本編仕様）。
+    if (this.field.terrain === 'misty-terrain' && effectiveType === 'dragon' && this.isGrounded(defender)) {
+      power = Math.floor(power * 0.5);
+    }
+
     // 特性による威力補正（テクニシャン等）。
     const powerAbility = getAbilityDefinition(attacker.ability);
     if (powerAbility?.modifyMovePower) {
       power = powerAbility.modifyMovePower({ pokemon: attacker, move, value: power, engine: this });
+    }
+
+    // くさむすび・けたぐり: 相手の体重で威力が決まる（本編仕様）。
+    if (isDamageMove(move) && move.weightBasedPower) {
+      power = this.powerFromWeight(defender.weightKg);
+    }
+
+    // はたきおとす: 相手が落とせる持ち物を持っていれば威力1.5倍（本編仕様）。
+    const knocksOffItem = isDamageMove(move) && move.knockOff && this.hasRemovableItem(defender);
+    if (knocksOffItem) {
+      power = Math.floor(power * 1.5);
+    }
+
+    // ダメおし: そのターン既に相手がダメージを受けていれば威力2倍（本編仕様）。
+    if (isDamageMove(move) && move.doublesIfTargetDamaged && this.defendersDamagedThisTurn.has(defender)) {
+      power *= 2;
     }
 
     const moveWithStab = cloneDamageMove(move, { power, type: effectiveType });
@@ -657,6 +1163,7 @@ export class BattleEngine {
       ? (move.maxHits ? Math.min(this.rollMultiHitCount(), move.maxHits) : this.rollMultiHitCount())
       : isParentalBond ? 2 : 1;
     let totalDamage = 0;
+    let substituteAbsorbed = false;
     let lastEffectiveness = 1;
 
     for (let hit = 0; hit < hitCount && !defender.isFainted; hit++) {
@@ -670,16 +1177,35 @@ export class BattleEngine {
       }
       const hitMove = cloneDamageMove(moveWithStab, { power: hitPower });
 
-      const attack = this.calculateAttack(attacker, hitMove);
-      const defense = this.calculateDefense(defender, hitMove);
+      // 急所判定はヒットごとに行う（本編仕様）。乱数の消費順もここで固定される。
+      // 必ず急所の技（トリックフラワー等）は乱数を引かない。
+      const critical = isDamageMove(move) && move.alwaysCrit
+        ? getAbilityDefinition(defender.ability)?.preventsCriticalHits?.() !== true
+        : this.rollCriticalHit(defender);
+      const attack = this.calculateAttack(attacker, hitMove, { critical, defender });
+      const defense = this.calculateDefense(defender, hitMove, { critical });
       const baseDamage = this.calculateBaseDamage(attack, defense, hitMove);
-      const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, hitMove);
-      this.applyDamage(defender, finalDamage, attacker, hitMove);
-      totalDamage += finalDamage;
+      const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, hitMove, { critical });
+      // 乱数（0.85〜1.00）はヒットごとに独立して引く。
+      const rolledDamage = this.rollDamage(finalDamage, effectiveness);
+      if (critical) {
+        this.log.push('急所に当たった！');
+      }
+      const hadSubstitute = defender.substituteHP > 0;
+      // タイプ無効（実ダメージ0）のときは applyDamage を呼ばない。呼ぶとばけのかわ・
+      // さめはだ・じきゅうりょく等の被弾フックが誤って発動する（本編では無効化される）。
+      const dealtDamage = rolledDamage > 0 ? this.applyDamage(defender, rolledDamage, attacker, hitMove) : 0;
+      if (hadSubstitute) {
+        substituteAbsorbed = true;
+      }
+      // ログ・反動・ドレインは特性適用後の実ダメージで積む
+      // （ばけのかわは攻撃を無効化して1/8だけ通すため、rolledDamage とは一致しない）。
+      totalDamage += dealtDamage;
       lastEffectiveness = effectiveness;
 
-      if (finalDamage > 0) {
+      if (dealtDamage > 0) {
         this.attackersDealtDamageThisTurn.add(attacker);
+        this.defendersDamagedThisTurn.add(defender);
       }
     }
 
@@ -702,19 +1228,68 @@ export class BattleEngine {
       return { outcome: 'no-effect', reason: 'type-immune', pivot: false };
     }
 
-    this.log.push(`${defender.name}に${totalDamage}のダメージ`);
+    this.log.push(
+      substituteAbsorbed
+        ? `${defender.name}の身代わりに${totalDamage}のダメージ`
+        : `${defender.name}に${totalDamage}のダメージ`,
+    );
 
     // 特性の「ダメージ技を命中させた後」フック（バトルスイッチ等）。
     const attackerAbility = getAbilityDefinition(attacker.ability);
     attackerAbility?.onMoveUsed?.({ attacker, defender, move, engine: this });
 
+    // ドレイン技（きゅうけつ・ギガドレイン等）: 与えたダメージの一定割合を回復する。
+    // 身代わりに吸われたぶんも「与えたダメージ」として回復に回る（本編仕様）。
+    if (move.drainPercent !== null && move.drainPercent !== undefined && totalDamage > 0) {
+      const drain = Math.floor(totalDamage * move.drainPercent);
+      if (drain > 0) {
+        attacker.heal(drain);
+        this.log.push(`${attacker.name}は${move.name}で${drain}回復した`);
+      }
+    }
+
+    // 反動技: 与えたダメージの一定割合、または最大HPの一定割合を自分も受ける（本編仕様）。
+    if (isDamageMove(move) && totalDamage > 0) {
+      const recoilOfDamage = move.recoilPercent ? Math.floor(totalDamage * move.recoilPercent) : 0;
+      const recoilOfMaxHp = move.recoilMaxHpPercent
+        ? Math.floor(attacker.maxHP * move.recoilMaxHpPercent)
+        : 0;
+      const recoil = recoilOfDamage + recoilOfMaxHp;
+      if (recoil > 0) {
+        attacker.takeDamage(recoil, this);
+        this.log.push(`${attacker.name}は反動で${recoil}のダメージを受けた`);
+        if (attacker.isFainted) {
+          this.log.push(`${attacker.name}は戦闘不能になった`);
+        }
+      }
+    }
+
+    // はたきおとす: 命中したら相手の持ち物を落とす（本編仕様。メガストーンは落とせない）。
+    if (knocksOffItem && !defender.isFainted) {
+      this.log.push(`${defender.name}の${defender.item}を落とした`);
+      defender.item = null;
+    }
+
+    // ドラゴンテール等: ダメージを与えたうえで相手を強制交代させる（本編仕様）。
+    if (isDamageMove(move) && move.forcesSwitch && !defender.isFainted) {
+      defender.forcedOut = true;
+      this.log.push(`${defender.name}は場を追い出された`);
+    }
+
     if (defender.isFainted) {
       this.log.push(`${defender.name}は戦闘不能になった`);
     } else {
-      if (move.secondaryEffect && Math.random() * 100 < move.secondaryEffect.chance) {
-        const applied = defender.applyStatus(move.secondaryEffect.status);
-        if (applied) {
-          this.log.push(`${defender.name}は${move.secondaryEffect.status}状態になった`);
+      const mistyProtected = this.field.terrain === 'misty-terrain' && this.isGrounded(defender);
+      if (move.secondaryEffect && !mistyProtected && this.rng.next() * 100 < move.secondaryEffect.chance) {
+        // 特性による無効化は追加効果でも効く。
+        if (this.blocksStatusByAbility(defender, move.secondaryEffect.status)) {
+          this.observeAbility(defender);
+          this.log.push(`${defender.name}の${defender.ability}で状態異常にならない`);
+        } else {
+          const applied = defender.applyStatus(move.secondaryEffect.status, this.rng);
+          if (applied) {
+            this.log.push(`${defender.name}は${move.secondaryEffect.status}状態になった`);
+          }
         }
       }
       if (move.targetStatChange) {
@@ -749,7 +1324,7 @@ export class BattleEngine {
 
   // 通常配分（2発37.5%/3発37.5%/4発12.5%/5発12.5%）でヒット数を決める。
   private rollMultiHitCount(): number {
-    const roll = Math.random();
+    const roll = this.rng.next();
     let cumulative = 0;
     for (const { hits, weight } of MULTI_HIT_TABLE) {
       cumulative += weight;
@@ -760,7 +1335,7 @@ export class BattleEngine {
 
   private applyTargetStatChange(attacker: Pokemon, pokemon: Pokemon, changes: NonNullable<MoveData['targetStatChange']>): void {
     for (const change of changes) {
-      if (Math.random() * 100 >= change.chance) continue;
+      if (this.rng.next() * 100 >= change.chance) continue;
       // ミラーアーマー: 相手から受ける能力低下をその相手に反射する。
       if (change.delta < 0 && pokemon.ability === 'mirror-armor') {
         const applied = attacker.modifyStatStage(change.stat, change.delta);
@@ -773,6 +1348,12 @@ export class BattleEngine {
       if (change.delta < 0 && pokemon.item === 'white-herb' && !pokemon.itemUsed) {
         pokemon.itemUsed = true;
         this.log.push(`${pokemon.name}はしろいハーブで能力低下を防いだ`);
+        continue;
+      }
+      // クリアボディ / フラワーヴェール: 相手からの能力低下を防ぐ。
+      if (change.delta < 0 && (pokemon.ability === 'clear-body' || this.flowerVeilProtects(pokemon))) {
+        this.observeAbility(pokemon);
+        this.log.push(`${pokemon.name}の${pokemon.ability}で能力が下がらない`);
         continue;
       }
       const applied = pokemon.modifyStatStage(change.stat, change.delta);
@@ -796,7 +1377,20 @@ export class BattleEngine {
       return { outcome: 'no-effect', reason: 'status-immune', pivot };
     }
 
-    const applied = defender.applyStatus(status);
+    // ミストフィールド: 接地しているポケモンは状態異常にならない（本編仕様）。
+    if (this.field.terrain === 'misty-terrain' && this.isGrounded(defender)) {
+      this.log.push(`${defender.name}はミストフィールドに守られている`);
+      return { outcome: 'no-effect', reason: 'status-immune', pivot };
+    }
+
+    // 特性による無効化（ふみん・じゅなん・ねつこうかん・フラワーヴェール）。
+    if (this.blocksStatusByAbility(defender, status)) {
+      this.observeAbility(defender);
+      this.log.push(`${defender.name}の${defender.ability}で状態異常にならない`);
+      return { outcome: 'no-effect', reason: 'status-immune', pivot };
+    }
+
+    const applied = defender.applyStatus(status, this.rng);
     if (!applied) {
       this.log.push('効果がない');
       return { outcome: 'no-effect', reason: 'status-immune', pivot };
@@ -857,6 +1451,19 @@ export class BattleEngine {
           this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側のリフレクターが消えた`);
         }
       }
+      if (this.field.auroraVeil[key] > 0) {
+        this.field.auroraVeil[key]--;
+        if (this.field.auroraVeil[key] === 0) {
+          this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側のオーロラベールが消えた`);
+        }
+      }
+    }
+
+    // まもる: 防護はそのターン限りなので、ターン開始時に解除する（本編仕様）。
+    // 連続使用のカウント（protectStreak）は次のまもるで参照するため残す。
+    for (const pokemon of [this.activePokemon0, this.activePokemon1]) {
+      if (!pokemon) continue;
+      pokemon.protecting = false;
     }
 
     // ちょうはつ: ターンごとに残りターンを減らし、0になったら解除。
@@ -865,6 +1472,16 @@ export class BattleEngine {
       pokemon.tauntTurnsLeft--;
       if (pokemon.tauntTurnsLeft === 0) {
         this.log.push(`${pokemon.name}の挑発が解けた`);
+      }
+    }
+
+    // アンコール: 期限のターン終了までは固定が続くため、それを過ぎたら解除する。
+    for (const pokemon of [this.activePokemon0, this.activePokemon1]) {
+      if (!pokemon || pokemon.isFainted || !pokemon.isEncored) continue;
+      const until = pokemon.encoredUntilTurn;
+      if (until !== null && this.turn > until) {
+        pokemon.resetEncore();
+        this.log.push(`${pokemon.name}のアンコールが解けた`);
       }
     }
   }
@@ -886,10 +1503,27 @@ export class BattleEngine {
     }
 
     this.applyStatusEffects(statusWeatherTeam);
+    // ねむけ→ねむりは状態異常の処理のあとに回す。同じターンに眠って即座に
+    // 睡眠ターンを消費してしまうのを避けるため。
+    this.applyDrowsySleep(statusWeatherTeam);
     this.applyLeechSeed(teamA, teamB);
     this.applyWeatherDamage(statusWeatherTeam);
+    // ねがいごと: 残りターンを減らし、0になったらその側の場に出ているポケモンを回復する（本編仕様）。
+    for (const side of [0, 1] as const) {
+      const key = this.sideKey(side);
+      if (this.field.wish[key] <= 0) continue;
+      this.field.wish[key]--;
+      if (this.field.wish[key] !== 0) continue;
+      const active = side === 0 ? this.activePokemon0 : this.activePokemon1;
+      if (!active || active.isFainted) continue;
+      const heal = Math.floor(active.maxHP / 2);
+      active.heal(heal);
+      this.log.push(`${active.name}は願い事で${heal}回復した`);
+    }
+
     this.events.emit('end-turn', { team: [...teamA, ...teamB], engine: this });
     this.attackersDealtDamageThisTurn.clear();
+    this.defendersDamagedThisTurn.clear();
   }
 
   // やどりぎのタネ: 吸われている側から吸っている相手（本来のオーナーではなく、
@@ -923,6 +1557,28 @@ export class BattleEngine {
       pokemon.takeDamage(damage, this);
       const weatherName = this.weather === 'sand' ? '砂嵐' : 'あられ';
       this.log.push(`${pokemon.name}は${weatherName}のダメージで${damage}のダメージを受けた`);
+    }
+  }
+
+  // あくび（ねむけ）: ねむけのポケモンは、あくびを使われた次のターンの終了時にねむりになる。
+  // 交代で場を離れるとねむけは解除される（battle-runner の switchTo が resetDrowsy を呼ぶ）。
+  // 「残りターン数」ではなくターン番号で期限を持つのは、あくびを使ったターンの終了では
+  // 眠らず、その次のターンの終了で眠るため（比較だけで判定でき、数え漏れが起きない）。
+  applyDrowsySleep(team: Pokemon[]): void {
+    for (const pokemon of team) {
+      if (pokemon.isFainted || !pokemon.isDrowsy) continue;
+      const dueTurn = pokemon.drowsyUntilTurn;
+      if (dueTurn === null || this.turn < dueTurn) continue;
+
+      // 既に別の状態異常なら眠れない（ねむけは消える）。本編仕様。
+      // ふみん・フラワーヴェールも眠らない（ねむけ自体は消える）。
+      const blocked = this.blocksStatusByAbility(pokemon, 'sleep');
+      const applied = blocked ? false : pokemon.applyStatus('sleep', this.rng);
+      if (blocked) this.observeAbility(pokemon);
+      pokemon.resetDrowsy();
+      this.log.push(applied
+        ? `${pokemon.name}はねむけの効果で眠ってしまった`
+        : `${pokemon.name}はねむけだったが眠れなかった`);
     }
   }
 
@@ -987,6 +1643,8 @@ export class BattleEngine {
 
   switchIn(pokemon: Pokemon, team: Pokemon[], side?: 0 | 1): Pokemon {
     this.log.push(`${pokemon.name}が場に出た！`);
+    // もらいびの吸収状態は場を離れると解除される（volatile）。
+    pokemon.flashFireActive = false;
     this.events.emit('switch-in', { pokemon, team, engine: this });
 
     if (side === undefined || pokemon.isFainted) return pokemon;
@@ -1033,17 +1691,28 @@ export class BattleEngine {
         // はがね/ひこう/ふゆうは無効（何もしない）
       } else if (!pokemon.isFainted && pokemon.status === null) {
         // 状態異常でなければ毒付与（1層= poison, 2層= badly-poisoned）
-        if (this.field.toxicSpikes[key] >= 2) {
-          pokemon.applyStatus('badly-poisoned');
+        const toxicStatus: StatusCondition = this.field.toxicSpikes[key] >= 2 ? 'badly-poisoned' : 'poison';
+        if (this.blocksStatusByAbility(pokemon, toxicStatus)) {
+          this.observeAbility(pokemon);
+          this.log.push(`${pokemon.name}の${pokemon.ability}でどくびしの毒を受けない`);
+        } else if (toxicStatus === 'badly-poisoned') {
+          pokemon.applyStatus('badly-poisoned', this.rng);
           this.log.push(`${pokemon.name}はどくびしの猛毒を受けた`);
         } else {
-          pokemon.applyStatus('poison');
+          pokemon.applyStatus('poison', this.rng);
           this.log.push(`${pokemon.name}はどくびしの毒を受けた`);
         }
       }
     }
 
     return pokemon;
+  }
+
+  // 接地しているか。フィールド（地形）の効果は接地しているポケモンだけが受ける。
+  // ひこうタイプとふゆう特性は地に足がついていないため恩恵を受けない（本編仕様）。
+  // TODO: 出典確認（ふうせん等、接地を打ち消す持ち物は未実装）
+  isGrounded(pokemon: Pokemon): boolean {
+    return !pokemon.types.includes('flying') && pokemon.ability !== 'levitate';
   }
 
   calculateSpeed(pokemon: Pokemon): number {
@@ -1067,6 +1736,16 @@ export class BattleEngine {
       speed *= 2;
     }
 
+    // ようりょくそ: 晴れのとき素早さが2倍になる
+    if (pokemon.ability === 'chlorophyll' && this.weather === 'sun') {
+      speed *= 2;
+    }
+
+    // かるわざ: 持ち物を失うと素早さが2倍になる（この実装では itemUsed を消費とみなす）。
+    if (pokemon.ability === 'unburden' && pokemon.itemUsed) {
+      speed *= 2;
+    }
+
     const side = this.getSide(pokemon);
     if (side !== null && this.field.tailwind[this.sideKey(side)] > 0) {
       speed *= 2;
@@ -1087,7 +1766,7 @@ export class BattleEngine {
   private shuffle<T>(items: T[]): T[] {
     const result = [...items];
     for (let i = result.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(this.rng.next() * (i + 1));
       [result[i], result[j]] = [result[j], result[i]];
     }
     return result;

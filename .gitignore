@@ -3,3 +3,7 @@ dist/
 coverage/
 *.tsbuildinfo
 .env
+
+# PokeAPI の取得キャッシュ（scripts/fetch-pokeapi-catalog.mjs で再生成できる）
+data/pokeapi-catalog.json
+data/pokeapi-move-index.json

@@ -3,6 +3,8 @@ import type { BattleEngine } from './battle-engine.js';
 import type { AbilityName } from './ability-names.js';
 import type { ItemName } from './item-names.js';
 import { createStatusState, statusConditionOf, NO_STATUS } from './status-state.js';
+import { SYSTEM_RANDOM } from './rng.js';
+import type { RandomSource } from './rng.js';
 import type { StatusState } from './status-state.js';
 import type { NatureInput, StatPointsInput } from './rules/stat-point-system.js';
 import { StatPointSystem } from './rules/stat-point-system.js';
@@ -13,6 +15,15 @@ const statPointSystem = new StatPointSystem();
 
 const STAT_STAGE_MIN = -6;
 const STAT_STAGE_MAX = 6;
+
+// Object.create の戻り値は any なので、プロトタイプと同じ型を返す形で型を付ける。
+const createWithPrototype: <T extends object>(prototype: T) => T = Object.create;
+
+// 同じプロトタイプ（メソッド）を持つ浅い複製。フィールドを差し替えても元の個体は変わらない
+// （配列・オブジェクトのフィールドは共有する）。不完全情報モードの伏せた視点や PIMC の決定化で使う。
+export function shallowClonePokemon(pokemon: Pokemon): Pokemon {
+  return Object.assign(createWithPrototype(Pokemon.prototype), pokemon);
+}
 
 function zeroStatStages(): StatStages {
   return { ATK: 0, DEF: 0, SPATK: 0, SPDEF: 0, SPEED: 0 };
@@ -37,11 +48,33 @@ export interface PokémonConstructorData {
   baseName?: string;
   isMega?: boolean;
   itemUsed?: boolean;
+  abilityRevealed?: boolean;
   lockedMove?: number | null;
   statStages?: StatStages;
   isSeeded?: boolean;
   // ちょうはつ: trueの間、攻撃技を使えない（2〜4ターン）。交代で解除。
   tauntTurnsLeft?: number;
+  // あくび（ねむけ）: このターン終了時にねむりになる。交代で解除。
+  drowsyUntilTurn?: number | null;
+  // みがわり: 身代わりの残りHP（0 なら場に出ていない）。
+  substituteHP?: number;
+  // 体重（kg）。くさむすび・けたぐり・ヘビーボンバーの威力計算に使う。
+  weightKg?: number;
+  // ふいうちの判定用: そのターン攻撃技を選んでいるか（BattleRunner が毎ターン設定する）。
+  intendsToAttackThisTurn?: boolean;
+  // ほえる・ドラゴンテール: 控えと強制交代させられたか（BattleRunner が交代を実行する）。
+  forcedOut?: boolean;
+  // まもる: このターン相手の技を防いでいるか。
+  protecting?: boolean;
+  // まもる: 連続で使った回数（成功するたびに増え、成功率が半減していく）。
+  protectStreak?: number;
+  // ばけのかわ: 既に身代わりになったか（バトル中は戻らない。交代しても復活しない）。
+  disguiseBroken?: boolean;
+  // アンコール: 直前に使った技の名前（アンコールの固定対象を決めるのに使う）。
+  lastMoveName?: string | null;
+  // アンコール: 固定中の技のインデックスと、効果が切れるターン番号。交代で解除。
+  encoredMoveIndex?: number | null;
+  encoredUntilTurn?: number | null;
   // フォルムチェンジ（バトルスイッチ等）。現在のフォルム名と、フォルム別種族値。
   form?: FormName;
   formStats?: Record<string, FormDefinition>;
@@ -53,6 +86,12 @@ export class Pokemon {
   ability: AbilityName;
   item: ItemName | null;
   itemUsed: boolean;
+  // 特性が観測されたか（いかくの発動・技の無効化・軽減など、外から見える挙動があったか）。
+  // 不完全情報モードでは、これが false の間は相手の特性を 'none' として伏せる。
+  // 持ち物と違い、特性の効果は双方から観測できるので、viewer ごとではなく個体の属性として持つ。
+  abilityRevealed: boolean;
+  // もらいび: ほのお技を吸収して発動中か（場を離れると解除される volatile）。
+  flashFireActive: boolean;
   lockedMove: number | null;
   baseStats: BaseStats;
   statPoints: StatPointsInput;
@@ -70,6 +109,30 @@ export class Pokemon {
   isSeeded: boolean;
   // ちょうはつ: trueの間、攻撃技を使えない（2〜4ターン）。交代で解除。
   tauntTurnsLeft: number;
+  // あくび（ねむけ）: このターン番号の終了時にねむりになる。null ならねむけではない。
+  // 「残りターン数」ではなくターン番号で持つのは、あくびを使ったターンの終了では
+  // 眠らず、その次のターンの終了で眠るため（比較だけで判定でき、数え漏れが起きない）。
+  drowsyUntilTurn: number | null;
+  // みがわり: 身代わりの残りHP。
+  substituteHP: number;
+  // 体重（kg）。未設定なら0として扱う（くさむすびは威力20になる）。
+  weightKg: number;
+  // ふいうちの判定用: そのターン攻撃技を選んでいるか。
+  intendsToAttackThisTurn: boolean;
+  // ほえる・ドラゴンテール: 控えと強制交代させられたか。
+  forcedOut: boolean;
+  // まもる: このターン相手の技を防いでいるか。
+  protecting: boolean;
+  // まもる: 連続で使った回数。
+  protectStreak: number;
+  // ばけのかわ: 既に身代わりになったか。
+  disguiseBroken: boolean;
+  // アンコール: 直前に使った技の名前。未使用なら null。
+  lastMoveName: string | null;
+  // アンコール: 固定中の技のインデックス。null なら固定されていない。
+  encoredMoveIndex: number | null;
+  // アンコール: 効果が切れるターン番号（このターンの終了までは固定が続く）。
+  encoredUntilTurn: number | null;
   // フォルムチェンジ（バトルスイッチ等）。現在のフォルム名。formStats 未指定なら 'normal'。
   form: FormName;
   // フォルム別定義。例: ギルガルド { shield: { baseStats: {...} }, blade: { baseStats: {...} } }。未指定なら変更不可。
@@ -83,6 +146,8 @@ export class Pokemon {
     this.ability = data.ability;
     this.item = data.item ?? null;
     this.itemUsed = data.itemUsed ?? false;
+    this.abilityRevealed = data.abilityRevealed ?? false;
+    this.flashFireActive = false;
     this.lockedMove = data.lockedMove ?? null;
     this.baseStats = data.baseStats;
     this.moves = data.moves ?? [];
@@ -92,6 +157,17 @@ export class Pokemon {
     this.statStages = data.statStages ? { ...data.statStages } : zeroStatStages();
     this.isSeeded = data.isSeeded ?? false;
     this.tauntTurnsLeft = data.tauntTurnsLeft ?? 0;
+    this.drowsyUntilTurn = data.drowsyUntilTurn ?? null;
+    this.substituteHP = data.substituteHP ?? 0;
+    this.weightKg = data.weightKg ?? 0;
+    this.intendsToAttackThisTurn = data.intendsToAttackThisTurn ?? false;
+    this.forcedOut = data.forcedOut ?? false;
+    this.protecting = data.protecting ?? false;
+    this.protectStreak = data.protectStreak ?? 0;
+    this.disguiseBroken = data.disguiseBroken ?? false;
+    this.lastMoveName = data.lastMoveName ?? null;
+    this.encoredMoveIndex = data.encoredMoveIndex ?? null;
+    this.encoredUntilTurn = data.encoredUntilTurn ?? null;
     this.form = data.form ?? 'normal';
     this.formStats = data.formStats ?? null;
     this.level = data.level ?? 50;
@@ -183,10 +259,16 @@ export class Pokemon {
   }
 
   // 既に別の状態異常なら重複してかからない（本編仕様）。
-  applyStatus(status: StatusCondition): boolean {
+  applyStatus(status: StatusCondition, rng: RandomSource = SYSTEM_RANDOM): boolean {
     if (this.statusState.kind !== 'none') return false;
-    this.statusState = createStatusState(status);
+    this.statusState = createStatusState(status, rng);
     return true;
+  }
+
+  // ねむる: 指定ターン数のねむり状態にする（本編のねむるは2ターン）。
+  // applyStatus はランダムなターン数になるため、ねむる専用に固定値で入れる。
+  applySleep(turns: number): void {
+    this.statusState = { kind: 'sleep', turnsLeft: turns };
   }
 
   removeStatus(): void {
@@ -227,6 +309,56 @@ export class Pokemon {
     this.isSeeded = false;
   }
 
+  // あくび（ねむけ）: 指定ターンの終了時にねむりになる。交代で解除。
+  get isDrowsy(): boolean {
+    return this.drowsyUntilTurn !== null;
+  }
+
+  applyDrowsy(untilTurn: number): void {
+    this.drowsyUntilTurn = untilTurn;
+  }
+
+  resetDrowsy(): void {
+    this.drowsyUntilTurn = null;
+  }
+
+  // ほえる・ドラゴンテール: 強制交代の印を消す（交代を実行した側が呼ぶ）。
+  resetForcedOut(): void {
+    this.forcedOut = false;
+  }
+
+  // まもる: 防護状態と連続使用のカウントを解除する。
+  resetProtect(): void {
+    this.protecting = false;
+    this.protectStreak = 0;
+  }
+
+  // みがわり: 交代で場を離れると消える（本編仕様）。
+  resetSubstitute(): void {
+    this.substituteHP = 0;
+  }
+
+  // アンコール: 直前に使った技を記録する（技を実行したときに BattleEngine が呼ぶ）。
+  recordLastMove(moveName: string): void {
+    this.lastMoveName = moveName;
+  }
+
+  // アンコール: 相手の直前に使った技を untilTurn のターン終了まで固定する。
+  get isEncored(): boolean {
+    return this.encoredMoveIndex !== null;
+  }
+
+  applyEncore(moveIndex: number, untilTurn: number): void {
+    this.encoredMoveIndex = moveIndex;
+    this.encoredUntilTurn = untilTurn;
+  }
+
+  // 交代で場を離れるとアンコールは解除される（本編仕様）。
+  resetEncore(): void {
+    this.encoredMoveIndex = null;
+    this.encoredUntilTurn = null;
+  }
+
   // ちょうはつ: 攻撃技を使えない状態（2〜4ターン）。交代で解除。
   get isTaunted(): boolean {
     return this.tauntTurnsLeft > 0;
@@ -242,6 +374,10 @@ export class Pokemon {
   }
 
   canUseMove(moveIndex: number): boolean {
+    // アンコール: 固定された技以外は選べない（交代は選べる）。
+    if (this.encoredMoveIndex !== null && this.encoredMoveIndex !== moveIndex) {
+      return false;
+    }
     if (this.lockedMove !== null && this.lockedMove !== moveIndex) {
       return false;
     }

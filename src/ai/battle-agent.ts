@@ -1,21 +1,40 @@
 import type { Pokemon } from '../pokemon.js';
 import type { AgentAction, WeatherType } from '../types.js';
+import type { BattleSession } from '../battle-runner.js';
+import { createStruggleMove } from '../move.js';
+import { SYSTEM_RANDOM } from '../rng.js';
+import type { RandomSource } from '../rng.js';
 
 export interface StealthRockView {
   self: boolean;
   opponent: boolean;
 }
 
+// まきびし・どくびしの層数（自分側・相手側の場）。
+// 設置技は「相手の場に置く」ので、self は自分が受ける側の層数になる。
+export interface HazardLayersView {
+  self: number;
+  opponent: number;
+}
+
 export interface BattleFieldView {
   weather: WeatherType | null;
   weatherTurnsLeft: number;
+  // 地形（サイコフィールド等）。エージェントが技の価値を判断するのに必要。
+  terrain: 'psychic-terrain' | 'electric-terrain' | 'grassy-terrain' | 'misty-terrain' | null;
+  terrainTurnsLeft: number;
   trickRoom: boolean;
   trickRoomTurnsLeft: number;
   stealthRock: StealthRockView;
+  spikes: HazardLayersView;
+  toxicSpikes: HazardLayersView;
 }
 
 export interface BattleContext {
   turn: number;
+  // 分岐探索用。エージェントが局面を複製して1手先を試すときに使う（runBattle 経由なら常に入る）。
+  side?: 0 | 1;
+  session?: BattleSession;
   self: Pokemon;
   selfTeam: Pokemon[];
   opponent: Pokemon;
@@ -54,6 +73,13 @@ export function getLegalActions(context: BattleContext): LegalActions {
         .filter(({ move, index }) => move.pp > 0 && context.self.canUseMove(index))
         .map(({ move, index }) => ({ index, move }));
 
+  // わるあがき: 技のPPがすべて尽きたときの最後の手段。
+  // index = -1 がその印で、runner 側がわるあがきに差し替える。
+  // 交代できる場合にこれを選ぶかは方策の判断に任せる（ヒューリスティックは交代を優先する）。
+  if (!context.mustSwitch && moves.length === 0) {
+    moves.push({ index: -1, move: createStruggleMove() });
+  }
+
   const switches = context.selfTeam
     .map((pokemon, index) => ({ pokemon, index }))
     .filter(({ pokemon }) => !pokemon.isFainted && pokemon !== context.self);
@@ -64,6 +90,9 @@ export function getLegalActions(context: BattleContext): LegalActions {
 // PP切れ・こだわり系拘束を踏まえて合法手からランダムに選ぶ既定のエージェント。
 // 高速・決定論的な検証用途（大量のアーキタイプ対戦など）にはこちらを使う。
 export class RandomBattleAgent implements BattleAgent {
+  // 行動選択の乱数も外から差し替える（seed 固定で対戦全体を再現するため）。
+  constructor(private readonly rng: RandomSource = SYSTEM_RANDOM) {}
+
   async selectLead(team: Pokemon[]): Promise<Pokemon> {
     return team[0];
   }
@@ -78,7 +107,7 @@ export class RandomBattleAgent implements BattleAgent {
       return { action: { type: 'switch', pokemonIndex: switches[0].index } };
     }
 
-    const { index } = moves[Math.floor(Math.random() * moves.length)];
+    const { index } = moves[Math.floor(this.rng.next() * moves.length)];
     // メガシンカできるならまず進化しておく、というシンプルな既定方針
     // （高速・決定論的な検証用途のためタイミングの駆け引きまでは考慮しない）。
     return { action: { type: 'move', moveIndex: index, target: 0, megaEvolve: canMegaEvolve || undefined } };

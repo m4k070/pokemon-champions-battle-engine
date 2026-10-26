@@ -25,7 +25,10 @@ import { ITEM_NAMES } from './item-names.js';
 const TypeNameSchema = z.enum(TYPE_NAMES);
 const MoveCategorySchema = z.enum(MOVE_CATEGORIES);
 const StatusConditionSchema = z.enum(['sleep', 'poison', 'burn', 'paralysis', 'freeze', 'badly-poisoned']);
-const FieldEffectSchema = z.enum(['tailwind', 'trick-room', 'reflect', 'stealth-rock', 'spikes', 'toxic-spikes']);
+const FieldEffectSchema = z.enum([
+  'tailwind', 'trick-room', 'reflect', 'stealth-rock', 'spikes', 'toxic-spikes',
+  'psychic-terrain', 'misty-terrain', 'aurora-veil',
+]);
 const StatStageKeySchema = z.enum(['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED']);
 
 const BaseStatsSchema = z.object({
@@ -73,6 +76,29 @@ const MoveInputSchema = z.object({
   restoresShieldForm: z.boolean().optional(),
   inflictsSpikes: z.boolean().optional(),
   weather: z.enum(['sand', 'rain', 'sun', 'hail']).nullable().optional(),
+  // T1〜T7 と現環境構築の対応で増えた効果（MCP 経由でも指定できるようにする）。
+  inflictsDrowsy: z.boolean().optional(),
+  selfHealPercent: z.number().min(0).max(1).nullable().optional(),
+  usesDefenseForAttack: z.boolean().optional(),
+  inflictsEncore: z.boolean().optional(),
+  boostedByPsychicTerrain: z.boolean().optional(),
+  drainPercent: z.number().min(0).max(1).nullable().optional(),
+  resetsStatStages: z.boolean().optional(),
+  createsSubstitute: z.boolean().optional(),
+  protects: z.boolean().optional(),
+  rests: z.boolean().optional(),
+  recoilPercent: z.number().min(0).max(1).nullable().optional(),
+  recoilMaxHpPercent: z.number().min(0).max(1).nullable().optional(),
+  usesTargetAttack: z.boolean().optional(),
+  weightBasedPower: z.boolean().optional(),
+  knockOff: z.boolean().optional(),
+  failsIfNoItem: z.boolean().optional(),
+  doublesIfTargetDamaged: z.boolean().optional(),
+  alwaysCrit: z.boolean().optional(),
+  failsUnlessTargetAttacks: z.boolean().optional(),
+  wishes: z.boolean().optional(),
+  forcesSwitch: z.boolean().optional(),
+  terrainPulse: z.boolean().optional(),
 }).refine(
   (data) => {
     if (data.multiHitPowers && data.maxHits && data.multiHitPowers.length !== data.maxHits) {

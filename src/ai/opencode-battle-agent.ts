@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { AgentAction, WeatherType } from '../types.js';
 import type { Pokemon } from '../pokemon.js';
@@ -39,6 +40,10 @@ export interface OpenCodeBattleAgentOptions {
   baseURL?: string;
   fetchFn?: FetchLike;
   maxRetries?: number;
+  // OpenCode Go は x-opencode-session ヘッダが無いと 400 (MissingSessionID) を返す。
+  sessionId?: string;
+  // 1回のAPI呼び出しの上限時間。無いと応答が返らないリクエストで対戦が永久に止まる。
+  timeoutMs?: number;
 }
 
 function describePokemon(pokemon: Pokemon, legalMoveIndices: Set<number> | null): string {
@@ -169,6 +174,8 @@ export class OpenCodeBattleAgent implements BattleAgent {
   private readonly baseURL: string;
   private readonly fetchFn: FetchLike;
   private readonly maxRetries: number;
+  private readonly sessionId: string;
+  private readonly timeoutMs: number;
   private readonly fallback = new RandomBattleAgent();
 
   constructor(options: OpenCodeBattleAgentOptions = {}) {
@@ -184,6 +191,8 @@ export class OpenCodeBattleAgent implements BattleAgent {
     this.baseURL = options.baseURL ?? DEFAULT_BASE_URL;
     this.fetchFn = options.fetchFn ?? fetch;
     this.maxRetries = options.maxRetries ?? 1;
+    this.sessionId = options.sessionId ?? `pokebattle-${randomUUID()}`;
+    this.timeoutMs = options.timeoutMs ?? 45_000;
   }
 
   async selectLead(team: Pokemon[]): Promise<Pokemon> {
@@ -221,9 +230,11 @@ export class OpenCodeBattleAgent implements BattleAgent {
     const response = await this.fetchFn(`${this.baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${this.apiKey}`,
+      'x-opencode-session': this.sessionId,
       },
+      signal: AbortSignal.timeout(this.timeoutMs),
       body: JSON.stringify({
         model: this.model,
         messages: [

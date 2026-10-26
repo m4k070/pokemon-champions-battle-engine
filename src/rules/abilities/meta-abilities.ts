@@ -1,5 +1,5 @@
 import type { AbilityDefinition } from './types.js';
-import { isDamageMove, isPhysicalMove, isStatusMove } from '../../move.js';
+import { isDamageMove, isPhysicalMove, isStatusMove, targetsOpponent } from '../../move.js';
 import type { MoveData } from '../../types.js';
 import type { AbilityName } from '../../ability-names.js';
 
@@ -102,9 +102,10 @@ export const NO_GUARD: AbilityDefinition = {
   name: 'no-guard',
 };
 
-// シェルアーマー: 急所に当たらない（エンジンに急所判定が無いため現状は定義のみ）。
+// シェルアーマー: 急所に当たらない（急所判定をスキップする）。
 export const SHELL_ARMOR: AbilityDefinition = {
   name: 'shell-armor',
+  preventsCriticalHits: () => true,
 };
 
 // ふみん: ねむりにならない。
@@ -188,11 +189,11 @@ export const INNER_FOCUS: AbilityDefinition = {
 // やけど状態の相手・ほのおタイプの相手には発動しない。
 export const SPICY_SPRAY: AbilityDefinition = {
   name: 'spicy-spray',
-  onDamaged: ({ attacker, move }) => {
+  onDamaged: ({ attacker, move, engine }) => {
     if (isStatusMove(move)) return;
     if (attacker.status) return;
     if (attacker.types.includes('fire')) return;
-    attacker.applyStatus('burn');
+    attacker.applyStatus('burn', engine.rng);
   },
 };
 
@@ -211,6 +212,50 @@ export const ELECTRIC_SURGE: AbilityDefinition = {
       return Math.floor(value * 1.3);
     }
     return value;
+  },
+};
+
+// ばけのかわ: 受けた技のダメージを1回だけ無効化し、代わりに最大HPの1/8を受ける（第8世代以降）。
+// 本編のフォルムチェンジは種族値が変わらないため、ここでは無効化とログだけを扱う。
+// 1/8でHPが0になればそのままひんしになる（本編仕様。Bulbapedia "Disguise" を 2026-10-19 に確認）。
+// 一度割れるとバトル中は元に戻らない（交代しても復活しない）。
+// タイプ無効の技では発動しない（battle-engine 側が実ダメージ > 0 のときだけ onDamaged を呼ぶ）。
+// TODO: こんらんの自傷ダメージも無効化する（こんらん自体が未実装）。
+//       実装時は自傷経路からもこのフックを通すこと。
+export const DISGUISE: AbilityDefinition = {
+  name: 'disguise',
+  onDamaged: ({ defender, damage, engine }) => {
+    if (defender.disguiseBroken) return damage;
+    defender.disguiseBroken = true;
+    engine.log.push(`${defender.name}のばけのかわが身代わりになった！`);
+    // 切り捨て、最低1。端数は本編どおり切り捨てる。
+    return Math.max(1, Math.floor(defender.maxHP / 8));
+  },
+};
+
+// おうごんのからだ: 相手からの変化技を無効化する（ダメージ技は通る）。
+// TODO: 出典確認（ステルスロック等フィールドを対象にする変化技を無効化するかは未確認）
+export const GOOD_AS_GOLD: AbilityDefinition = {
+  name: 'good-as-gold',
+  blocksMove: (move) => isStatusMove(move) && targetsOpponent(move),
+};
+
+// はどうのぼうご: 接触技で受けるダメージを半減する（メガルカリオZの特性）。
+// チャンピオンズ固有の特性で公式の英語名は未確認のため、エンジン名を aura-guard とする。
+export const AURA_GUARD: AbilityDefinition = {
+  name: 'aura-guard',
+  onDamaged: ({ move, damage }) => (isDamageMove(move) && move.contact ? Math.floor(damage / 2) : damage),
+};
+
+// サイコメイカー: 入場時にサイコフィールドを展開する（5ターン。グランドコート持ちなら8ターン）。
+// フィールドの効果（エスパー技1.3倍・先制技の無効化）は battle-engine 側が field.terrain を見て行う。
+export const PSYCHIC_SURGE: AbilityDefinition = {
+  name: 'psychic-surge',
+  onSwitchIn: ({ pokemon, engine }) => {
+    const turns = pokemon.item === 'terrain-extender' ? 8 : 5;
+    engine.field.terrain = 'psychic-terrain';
+    engine.field.terrainTurnsLeft = turns;
+    engine.log.push(`${pokemon.name}のサイコメイカーでサイコフィールドが発動した！`);
   },
 };
 
@@ -347,6 +392,124 @@ export const POISON_POINT: AbilityDefinition = {
   },
 };
 
+// ---- 2026-10-24 追加: 名前だけだった特性の実装 ----
+// エンジン本体（battle-engine）から名前で参照するもの（プレッシャー・クリアボディ・
+// フラワーヴェール・ふみん・じゅなん・ようりょくそ・かるわざ）は、ここでは宣言だけ持つ。
+// 判定の一元化のため、状態異常・能力低下・素早さの計算は battle-engine 側に集約している。
+
+// プレッシャー: 相手のPP消費が2倍になる（battle-engine の技使用時に判定）。
+export const PRESSURE: AbilityDefinition = {
+  name: 'pressure',
+};
+
+// クリアボディ: 相手からの能力低下を防ぐ（applyTargetStatChange 側で判定）。
+export const CLEAR_BODY: AbilityDefinition = {
+  name: 'clear-body',
+};
+
+// フラワーヴェール: くさタイプの自分・味方を能力低下と状態異常から守る（engine.flowerVeilProtects）。
+export const FLOWER_VEIL: AbilityDefinition = {
+  name: 'flower-veil',
+};
+
+// じゅなん: まひにならない（blocksStatusByAbility）。
+export const LIMBER: AbilityDefinition = {
+  name: 'limber',
+};
+
+// ようりょくそ: 晴れのとき素早さ2倍（calculateSpeed）。
+export const CHLOROPHYLL: AbilityDefinition = {
+  name: 'chlorophyll',
+};
+
+// かるわざ: 持ち物を失うと素早さ2倍（calculateSpeed が itemUsed を見る）。
+export const UNBURDEN: AbilityDefinition = {
+  name: 'unburden',
+};
+
+// そうだいしょう: 場に出たとき、倒れた味方1体につき攻撃・特攻が1段階上がる。
+export const SUPREME_OVERLORD: AbilityDefinition = {
+  name: 'supreme-overlord',
+  onSwitchIn: ({ pokemon, engine }) => {
+    const faintedAllies = engine.teamOf(pokemon).filter((ally) => ally !== pokemon && ally.isFainted).length;
+    if (faintedAllies === 0) return;
+    const attack = pokemon.modifyStatStage('ATK', faintedAllies);
+    const spAtk = pokemon.modifyStatStage('SPATK', faintedAllies);
+    if (attack !== 0 || spAtk !== 0) {
+      engine.log.push(`${pokemon.name}のそうだいしょうで攻撃・特攻が上がった（倒れた味方 ${faintedAllies}体）`);
+      engine.observeAbility(pokemon);
+    }
+  },
+};
+
+// あめうけざら: 雨のときターン終了時に最大HPの1/16回復する。
+export const RAIN_DISH: AbilityDefinition = {
+  name: 'rain-dish',
+  onEndTurn: ({ pokemon, engine }) => {
+    if (engine.weather !== 'rain' || pokemon.isFainted) return;
+    const heal = Math.floor(pokemon.maxHP / 16);
+    if (heal <= 0 || pokemon.currentHP >= pokemon.maxHP) return;
+    pokemon.heal(heal);
+    engine.log.push(`${pokemon.name}はあめうけざらで${heal}回復した`);
+    engine.observeAbility(pokemon);
+  },
+};
+
+// どくげしょう: 物理技でダメージを受けると、相手の場にどくびしを1層置く。
+export const TOXIC_DEBRIS: AbilityDefinition = {
+  name: 'toxic-debris',
+  onDamaged: ({ defender, attacker, move, engine }) => {
+    if (!isPhysicalMove(move)) return;
+    engine.addToxicSpikes(attacker, 1);
+    engine.observeAbility(defender);
+  },
+};
+
+// ねつこうかん: ほのお技を受けると攻撃が1段階上がる（やけど無効は blocksStatusByAbility）。
+export const THERMAL_EXCHANGE: AbilityDefinition = {
+  name: 'thermal-exchange',
+  onDamaged: ({ defender, move, engine }) => {
+    if (move.type !== 'fire') return;
+    const changed = defender.modifyStatStage('ATK', 1);
+    engine.observeAbility(defender);
+    if (changed !== 0) {
+      engine.log.push(`${defender.name}はねつこうかんで攻撃が上がった`);
+    }
+  },
+};
+
+// こぼれダネ: くさ技を受けるとグラスフィールドを展開する。
+export const SEED_SOWER: AbilityDefinition = {
+  name: 'seed-sower',
+  onDamaged: ({ defender, move, engine }) => {
+    if (move.type !== 'grass') return;
+    if (engine.field.terrain === 'grassy-terrain') return;
+    engine.setTerrainFromAbility('grassy-terrain', 5);
+    engine.log.push(`${defender.name}のこぼれダネでグラスフィールドが広がった`);
+    engine.observeAbility(defender);
+  },
+};
+
+// ちくでん: でんき技を無効化し特攻を上げる（無効化は blocksMove、上昇は battle-engine 側）。
+export const VOLT_ABSORB: AbilityDefinition = {
+  name: 'volt-absorb',
+  blocksMove: (move) => move.type === 'electric',
+};
+
+// おみとおし: 場に出たとき相手の持ち物がわかる（battle-runner の switchTo 側で処理）。
+export const FRISK: AbilityDefinition = {
+  name: 'frisk',
+};
+
+// もらいび: ほのお技を無効化し、以後じぶんのほのお技の威力が1.5倍になる。
+// 発動中のフラグは Pokemon.flashFireActive（場を離れると解除）。
+export const FLASH_FIRE: AbilityDefinition = {
+  name: 'flash-fire',
+  blocksMove: (move) => move.type === 'fire',
+  modifyMovePower: ({ pokemon, move, value }) =>
+    pokemon.flashFireActive && move.type === 'fire' ? Math.floor(value * 1.5) : value,
+};
+
 export const META_ABILITIES: AbilityDefinition[] = [
   UNAWARE,
   REGENERATOR,
@@ -372,6 +535,10 @@ export const META_ABILITIES: AbilityDefinition[] = [
   INNER_FOCUS,
   SPICY_SPRAY,
   ELECTRIC_SURGE,
+  PSYCHIC_SURGE,
+  DISGUISE,
+  GOOD_AS_GOLD,
+  AURA_GUARD,
   SWIFT_SWIM,
   PARENTAL_BOND,
   MULTISCALE,
@@ -387,4 +554,18 @@ export const META_ABILITIES: AbilityDefinition[] = [
   WEAK_ARMOR,
   SCRAPPY,
   POISON_POINT,
+  PRESSURE,
+  CLEAR_BODY,
+  FLOWER_VEIL,
+  LIMBER,
+  CHLOROPHYLL,
+  UNBURDEN,
+  SUPREME_OVERLORD,
+  RAIN_DISH,
+  TOXIC_DEBRIS,
+  THERMAL_EXCHANGE,
+  SEED_SOWER,
+  VOLT_ABSORB,
+  FLASH_FIRE,
+  FRISK,
 ];

@@ -316,6 +316,95 @@ describe('MegaEvolutionSystem', () => {
     expect(garchomp.baseStats.SPEED).toBe(102 - 10);
   });
 
+  test('メガガブリアスZ: ドラゴン単・ふゆう・素早さ151（本編メガガブリアスとは別物）', () => {
+    const system = new MegaEvolutionSystem();
+    const garchomp = new Pokemon({
+      name: 'garchomp',
+      baseName: 'garchomp',
+      types: ['dragon', 'ground'],
+      ability: 'rough-skin',
+      item: 'garchompite-z',
+      baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+    });
+
+    expect(system.canMegaEvolve(garchomp)).toBe(true);
+    system.megaEvolve(garchomp);
+
+    expect(garchomp.name).toBe('mega-garchomp-z');
+    expect(garchomp.types).toEqual(['dragon']); // ドラゴン単（本編は dragon/ground）
+    expect(garchomp.ability).toBe('levitate');  // ふゆう
+    expect(garchomp.baseStats).toEqual({
+      HP: 108, ATK: 130, DEF: 85, SPATK: 141, SPDEF: 85, SPEED: 151,
+    });
+  });
+
+
+  test('メガグソクムシャ: グソクムシャナイトで むし/はがね・かたいツメになる', () => {
+    const system = new MegaEvolutionSystem();
+    const golisopod = new Pokemon({
+      name: 'golisopod', baseName: 'golisopod', types: ['bug', 'water'], ability: 'emergency-exit',
+      item: 'golisopodite', baseStats: { HP: 75, ATK: 125, DEF: 140, SPATK: 60, SPDEF: 90, SPEED: 40 },
+    });
+    expect(system.canMegaEvolve(golisopod)).toBe(true);
+    system.megaEvolve(golisopod);
+    expect(golisopod.name).toBe('mega-golisopod');
+    expect(golisopod.types).toEqual(['bug', 'steel']);
+    expect(golisopod.ability).toBe('tough-claws');
+    expect(golisopod.baseStats).toEqual({ HP: 75, ATK: 150, DEF: 175, SPATK: 70, SPDEF: 120, SPEED: 40 });
+  });
+
+  test('メガルカリオZ: ルカリオナイトZで かくとう/はがね・はどうのぼうごになる（本編メガとは別物）', () => {
+    const system = new MegaEvolutionSystem();
+    const lucario = new Pokemon({
+      name: 'lucario', baseName: 'lucario', types: ['fighting', 'steel'], ability: 'inner-focus',
+      item: 'lucarionite-z', baseStats: { HP: 70, ATK: 110, DEF: 70, SPATK: 115, SPDEF: 70, SPEED: 90 },
+    });
+    system.megaEvolve(lucario);
+    expect(lucario.name).toBe('mega-lucario-z');
+    expect(lucario.types).toEqual(['fighting', 'steel']);
+    expect(lucario.ability).toBe('aura-guard');
+    expect(lucario.baseStats).toEqual({ HP: 70, ATK: 100, DEF: 70, SPATK: 164, SPDEF: 70, SPEED: 151 });
+
+    // 本編のルカリオナイトは物理型のまま（取り違え防止）
+    const plain = new Pokemon({
+      name: 'lucario', baseName: 'lucario', types: ['fighting', 'steel'], ability: 'inner-focus',
+      item: 'lucarionite', baseStats: { HP: 70, ATK: 110, DEF: 70, SPATK: 115, SPDEF: 70, SPEED: 90 },
+    });
+    system.megaEvolve(plain);
+    expect(plain.name).toBe('mega-lucario');
+    expect(plain.baseStats).toEqual({ HP: 70, ATK: 145, DEF: 88, SPATK: 140, SPDEF: 70, SPEED: 112 });
+  });
+
+  test('メガピクシー: ピクシナイトで フェアリー/ひこう・マジックミラーになる', () => {
+    const system = new MegaEvolutionSystem();
+    const clefable = new Pokemon({
+      name: 'clefable', baseName: 'clefable', types: ['fairy'], ability: 'magic-guard',
+      item: 'clefablite', baseStats: { HP: 95, ATK: 70, DEF: 73, SPATK: 95, SPDEF: 90, SPEED: 60 },
+    });
+    system.megaEvolve(clefable);
+    expect(clefable.name).toBe('mega-clefable');
+    expect(clefable.types).toEqual(['fairy', 'flying']);
+    expect(clefable.ability).toBe('magic-bounce');
+    expect(clefable.baseStats).toEqual({ HP: 95, ATK: 80, DEF: 93, SPATK: 135, SPDEF: 110, SPEED: 70 });
+  });
+  test('本編のガブリアスナイトは従来どおり dragon/ground・すなのちから', () => {
+    const system = new MegaEvolutionSystem();
+    const garchomp = new Pokemon({
+      name: 'garchomp',
+      baseName: 'garchomp',
+      types: ['dragon', 'ground'],
+      ability: 'rough-skin',
+      item: 'garchompite',
+      baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
+    });
+
+    system.megaEvolve(garchomp);
+
+    expect(garchomp.name).toBe('mega-garchomp');
+    expect(garchomp.types).toEqual(['dragon', 'ground']);
+    expect(garchomp.ability).toBe('sand-force');
+  });
+
   test('性格補正持ちは上昇後の種族値から再計算される（補正後に加算しない）', () => {
     const system = new MegaEvolutionSystem();
     const charizard = new Pokemon({

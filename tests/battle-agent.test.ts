@@ -32,9 +32,13 @@ function makeContext(overrides: Partial<BattleContext> = {}): BattleContext {
     field: overrides.field ?? {
       weather: null,
       weatherTurnsLeft: 0,
+      terrain: null,
+      terrainTurnsLeft: 0,
       trickRoom: false,
       trickRoomTurnsLeft: 0,
       stealthRock: { self: false, opponent: false },
+      spikes: { self: 0, opponent: 0 },
+      toxicSpikes: { self: 0, opponent: 0 },
     },
     recentLog: overrides.recentLog ?? [],
   };
@@ -65,7 +69,9 @@ describe('RandomBattleAgent', () => {
     expect(decision.action).toEqual({ type: 'move', moveIndex: 1, target: 0 });
   });
 
-  test('switches to a healthy teammate when every move is out of PP', async () => {
+  // 2026-10-24: PP切れのわるあがきは合法手に残る（交代できるかは方策の判断）。
+  // ヒューリスティックは控えがいれば交代を優先する（heuristic-battle-agent 側の分岐）。
+  test('keeps struggle legal even when a healthy teammate is available', async () => {
     const agent = new RandomBattleAgent();
     const self = makePokemon({
       moves: [
@@ -77,10 +83,10 @@ describe('RandomBattleAgent', () => {
 
     const decision = await agent.selectAction(makeContext({ self, selfTeam: [self, bench] }));
 
-    expect(decision.action).toEqual({ type: 'switch', pokemonIndex: 1 });
+    expect(decision.action).toEqual({ type: 'move', moveIndex: -1, target: 0 });
   });
 
-  test('forfeits when out of PP and no healthy teammate remains', async () => {
+  test('uses struggle (not forfeit) when out of PP and no healthy teammate remains', async () => {
     const agent = new RandomBattleAgent();
     const self = makePokemon({
       moves: [createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 0 })],
@@ -88,7 +94,7 @@ describe('RandomBattleAgent', () => {
 
     const decision = await agent.selectAction(makeContext({ self, selfTeam: [self] }));
 
-    expect(decision.action).toEqual({ type: 'forfeit' });
+    expect(decision.action).toEqual({ type: 'move', moveIndex: -1, target: 0 });
   });
 
   test('respects a choice-item move lock', async () => {

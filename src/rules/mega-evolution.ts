@@ -49,6 +49,7 @@ export const MEGA_STONE_SEEDS: Partial<Record<ItemName, MegaStoneSeed>> = {
   'lopunnite': { pokemon: 'lopunny', megaApiName: 'lopunny-mega', megaName: 'mega-lopunny' },
 };
 
+// メガストーンか（はたきおとすで落とせない持ち物の判定に使う）。
 // Poke APIから取得できない場合のデフォルト値（2026-07時点でPoke API実データと突合済み）。
 const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
   'charizardite-x': {
@@ -99,7 +100,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'raichu',
     megaName: 'mega-raichu-x',
     typeChange: ['electric'],
-    abilityChange: 'electric-surge', // エレキメイカー（未実装・効果調査待ち）
+    abilityChange: 'electric-surge', // エレキメイカー（battle-engine のフィールド展開とでんき技1.3倍で実装済み）
     statBoosts: { ATK: 45, DEF: 40, SPATK: 0, SPDEF: 15, SPEED: 0 },
   },
   'raichunite-y': {
@@ -108,6 +109,70 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     typeChange: ['electric'],
     abilityChange: 'no-guard',
     statBoosts: { ATK: 10, DEF: 0, SPATK: 70, SPDEF: 0, SPEED: 20 },
+  },
+  // メガガブリアスZ: 本編のメガガブリアス（garchompite）とは別物。混同しないこと。
+  // ドラゴン単・ふゆう・108-130-85-141-85-151（A0/D-10/SA+61/SD0/S+49 = +100）。
+  // 出典: やっくんチャンピオンズ図鑑（2026-08-19 確認）／試作PT_カバルドン二軸デュアルメガ
+  'garchompite-z': {
+    pokemon: 'garchomp',
+    megaName: 'mega-garchomp-z',
+    typeChange: ['dragon'],
+    abilityChange: 'levitate',
+    statBoosts: { ATK: 0, DEF: -10, SPATK: 61, SPDEF: 0, SPEED: 49 },
+  },
+  // メガグソクムシャ: むし/はがね・かたいツメ・75-150-175-70-120-40（A+25/D+35/SA+10/SD+30/S0 = +100）。
+  // 出典: やっくんチャンピオンズ図鑑 n768m（2026-10-19 確認）
+  'golisopodite': {
+    pokemon: 'golisopod',
+    megaName: 'mega-golisopod',
+    typeChange: ['bug', 'steel'],
+    abilityChange: 'tough-claws',
+    statBoosts: { ATK: 25, DEF: 35, SPATK: 10, SPDEF: 30, SPEED: 0 },
+  },
+  // メガルカリオZ: かくとう/はがね・はどうのぼうご・70-100-70-164-70-151（A-10/SA+49/S+61 = +100）。
+  // 出典: やっくんチャンピオンズ図鑑 n448z（2026-10-19 確認）
+  'lucarionite-z': {
+    pokemon: 'lucario',
+    megaName: 'mega-lucario-z',
+    typeChange: ['fighting', 'steel'],
+    abilityChange: 'aura-guard',
+    statBoosts: { ATK: -10, DEF: 0, SPATK: 49, SPDEF: 0, SPEED: 61 },
+  },
+  // メガピクシー: フェアリー/ひこう・マジックミラー・95-80-93-135-110-70（A+10/D+20/SA+40/SD+20/S+10 = +100）。
+  // 出典: やっくんチャンピオンズ図鑑 n36m（2026-10-19 確認）
+  'clefablite': {
+    pokemon: 'clefable',
+    megaName: 'mega-clefable',
+    typeChange: ['fairy', 'flying'],
+    abilityChange: 'magic-bounce',
+    statBoosts: { ATK: 10, DEF: 20, SPATK: 40, SPDEF: 20, SPEED: 10 },
+  },
+  // メガフラエッテ（えいえんのはな）: フェアリー単・フェアリーオーラ・74-85-87-155-148-102（A+20/D+20/SA+30/SD+20/S+10 = +100）。
+  // 出典: gamewith.jp/pokemon-champions/555537 の構築カード（メガフラエッテ）2026-10-19 取得
+  'floettite': {
+    pokemon: 'floette-eternal',
+    megaName: 'mega-floette-eternal',
+    typeChange: ['fairy'],
+    abilityChange: 'fairy-aura',
+    statBoosts: { ATK: 20, DEF: 20, SPATK: 30, SPDEF: 20, SPEED: 10 },
+  },
+  // メガジュペッタ: ゴースト単・いたずらごころ・64-165-75-93-83-75（A+50/D+10/SA+10/SD+20/S+10 = +100）。
+  // 出典: 同上（メガジュペッタ）
+  'banettite': {
+    pokemon: 'banette',
+    megaName: 'mega-banette',
+    typeChange: ['ghost'],
+    abilityChange: 'prankster',
+    statBoosts: { ATK: 50, DEF: 10, SPATK: 10, SPDEF: 20, SPEED: 10 },
+  },
+  // メガウツボット: くさ/どく・とびだすなかみ・80-125-85-135-95-70（A+20/D+20/SA+35/SD+25/S+0 = +100）。
+  // 出典: 同上（メガウツボット）。特性「とびだすなかみ」は Champions 独自で英語名が未公開。
+  'victreebelite': {
+    pokemon: 'victreebel',
+    megaName: 'mega-victreebel',
+    typeChange: ['grass', 'poison'],
+    abilityChange: 'tobidasu-nakami',
+    statBoosts: { ATK: 20, DEF: 20, SPATK: 35, SPDEF: 25, SPEED: 0 },
   },
   // ---- 標準メガ（Poke API実データに基づく）----
   'venusaurite': {
@@ -157,7 +222,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'kangaskhan',
     megaName: 'mega-kangaskhan',
     typeChange: ['normal'],
-    abilityChange: 'parental-bond', // おやこあい（未実装）
+    abilityChange: 'parental-bond', // おやこあい（battle-engine で2回ヒット・2回目1/4威力として実装済み）
     statBoosts: { ATK: 30, DEF: 20, SPATK: 20, SPDEF: 20, SPEED: 10 },
   },
   'scizorite': {
@@ -197,7 +262,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'gyarados',
     megaName: 'mega-gyarados',
     typeChange: ['water', 'dark'],
-    abilityChange: 'mold-breaker', // かたやぶり（未実装）
+    abilityChange: 'mold-breaker', // かたやぶり（battle-engine で防御側特性の無視として実装済み）
     // ギャラドス A125/D79/SA60/SD100/S81 → メガ A155/D109/SA70/SD130/S81
     statBoosts: { ATK: 30, DEF: 30, SPATK: 10, SPDEF: 30, SPEED: 0 },
   },
@@ -221,7 +286,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'salamence',
     megaName: 'mega-salamence',
     typeChange: ['dragon', 'flying'],
-    abilityChange: 'aerilate', // スカイスキン（未実装）
+    abilityChange: 'aerilate', // スカイスキン（battle-engine のノーマル技タイプ変更で実装済み）
     // ボーマンダ A135/D80/SA110/SD80/S100 → メガ A145/D130/SA120/SD90/S120
     statBoosts: { ATK: 10, DEF: 50, SPATK: 10, SPDEF: 10, SPEED: 20 },
   },
@@ -229,7 +294,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'gardevoir',
     megaName: 'mega-gardevoir',
     typeChange: ['psychic', 'fairy'],
-    abilityChange: 'pixilate', // フェアリースキン（未実装）
+    abilityChange: 'pixilate', // フェアリースキン（battle-engine のノーマル技タイプ変更で実装済み）
     // サーナイト A65/D65/SA125/SD115/S80 → メガ A85/D65/SA165/SD135/S100
     statBoosts: { ATK: 20, DEF: 0, SPATK: 40, SPDEF: 20, SPEED: 20 },
   },
@@ -237,7 +302,7 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     pokemon: 'sableye',
     megaName: 'mega-sableye',
     typeChange: ['dark', 'ghost'],
-    abilityChange: 'magic-bounce', // マジックミラー（未実装）
+    abilityChange: 'magic-bounce', // マジックミラー（battle-engine の変化技の跳ね返しで実装済み）
     // ヤミラミ A75/D75/SA65/SD65/S50 → メガ A85/D125/SA85/SD115/S20
     statBoosts: { ATK: 10, DEF: 50, SPATK: 20, SPDEF: 50, SPEED: -30 },
   },
@@ -385,4 +450,14 @@ export class MegaEvolutionSystem {
 
     return true;
   }
+}
+
+// メガストーンか（はたきおとすで落とせない持ち物の判定に使う）。
+export const MEGA_STONE_ITEMS: ReadonlySet<string> = new Set([
+  ...Object.keys(DEFAULT_MEGA_STONES),
+  ...Object.keys(MEGA_STONE_SEEDS),
+]);
+
+export function isMegaStone(item: string): boolean {
+  return MEGA_STONE_ITEMS.has(item);
 }

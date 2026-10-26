@@ -102,3 +102,46 @@ describe('snapshotBattle / restoreBattle', () => {
     expect(engine.weather).toBeNull();
   });
 });
+
+describe('snapshotPokemon / restorePokemon: 揮発状態とフォルム', () => {
+  function makeSwitchable(): Pokemon {
+    return new Pokemon({
+      name: 'ギルガルド',
+      types: ['steel', 'ghost'],
+      ability: 'battle-switch',
+      item: 'leftovers',
+      baseStats: { HP: 60, ATK: 50, DEF: 150, SPATK: 50, SPDEF: 150, SPEED: 60 },
+      moves: [createMove({ name: 'shadow-ball', type: 'ghost', power: 80, accuracy: 100, pp: 15 })],
+      formStats: {
+        normal: { baseStats: { HP: 60, ATK: 50, DEF: 150, SPATK: 50, SPDEF: 150, SPEED: 60 } },
+        blade: { baseStats: { HP: 60, ATK: 150, DEF: 50, SPATK: 150, SPDEF: 50, SPEED: 60 } },
+      },
+    });
+  }
+
+  test('ちょうはつ・フォルム・レベルを保持する', () => {
+    const original = makeSwitchable();
+    original.setForm('blade');
+    original.applyTaunt(3);
+    original.level = 50;
+
+    const restored = restorePokemon(snapshotPokemon(original));
+
+    expect(restored.form).toBe('blade');
+    expect(restored.formStats).not.toBeNull();
+    expect(restored.tauntTurnsLeft).toBe(3);
+    expect(restored.isTaunted).toBe(true);
+    expect(restored.level).toBe(50);
+    expect(restored.stats).toEqual(original.stats);
+    expect(restored.item).toBe('leftovers');
+  });
+
+  test('formStats は参照を共有しない', () => {
+    const original = makeSwitchable();
+
+    const restored = restorePokemon(snapshotPokemon(original));
+    restored.formStats!.blade.baseStats.ATK = 1;
+
+    expect(original.formStats!.blade.baseStats.ATK).toBe(150);
+  });
+});
