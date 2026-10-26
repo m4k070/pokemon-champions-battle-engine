@@ -81,6 +81,7 @@ const MoveInputSchema = z.object({
   selfHealPercent: z.number().min(0).max(1).nullable().optional(),
   usesDefenseForAttack: z.boolean().optional(),
   inflictsEncore: z.boolean().optional(),
+  inflictsTaunt: z.boolean().optional(),
   boostedByPsychicTerrain: z.boolean().optional(),
   drainPercent: z.number().min(0).max(1).nullable().optional(),
   resetsStatStages: z.boolean().optional(),

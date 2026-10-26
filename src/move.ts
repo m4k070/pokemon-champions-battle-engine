@@ -99,6 +99,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   selfHealPercent: number | null;
   usesDefenseForAttack: boolean;
   inflictsEncore: boolean;
+  inflictsTaunt: boolean;
   boostedByPsychicTerrain: boolean;
   resetsStatStages: boolean;
   createsSubstitute: boolean;
@@ -152,6 +153,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.selfHealPercent = data.selfHealPercent ?? null;
     this.usesDefenseForAttack = data.usesDefenseForAttack ?? false;
     this.inflictsEncore = data.inflictsEncore ?? false;
+    this.inflictsTaunt = data.inflictsTaunt ?? false;
     this.boostedByPsychicTerrain = data.boostedByPsychicTerrain ?? false;
     this.resetsStatStages = data.resetsStatStages ?? false;
     this.createsSubstitute = data.createsSubstitute ?? false;
@@ -211,6 +213,7 @@ export class StatusMove implements StatusMoveData {
   inflictsDrowsy: boolean;
   selfHealPercent: number | null;
   inflictsEncore: boolean;
+  inflictsTaunt: boolean;
   boostedByPsychicTerrain: boolean;
   resetsStatStages: boolean;
   createsSubstitute: boolean;
@@ -240,6 +243,7 @@ export class StatusMove implements StatusMoveData {
     this.inflictsDrowsy = data.inflictsDrowsy ?? false;
     this.selfHealPercent = data.selfHealPercent ?? null;
     this.inflictsEncore = data.inflictsEncore ?? false;
+    this.inflictsTaunt = data.inflictsTaunt ?? false;
     this.boostedByPsychicTerrain = data.boostedByPsychicTerrain ?? false;
     this.resetsStatStages = data.resetsStatStages ?? false;
     this.createsSubstitute = data.createsSubstitute ?? false;

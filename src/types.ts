@@ -83,6 +83,8 @@ export interface CommonMoveEffects {
   selfHealPercent?: number | null;
   // アンコール: 相手が直前に使った技を3ターンの間使い続けさせる（交代で解除）。
   inflictsEncore?: boolean;
+  // ちょうはつ: 相手を3ターンの間、変化技を使えなくする（交代で解除）。
+  inflictsTaunt?: boolean;
   // バトンタッチ: 交代先に能力変化（能力ランク）を引き継ぐ。
   passStats?: boolean;
   // アシストパワー: 自分の能力上昇の合計で威力が上がる（20 + 20×段数、上限860）。

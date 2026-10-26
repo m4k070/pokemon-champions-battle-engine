@@ -114,6 +114,7 @@
 | ねがいごと | 2ターン後に場に出ているポケモンを最大HPの半分回復 | `wishes` / `BattleField.wish` |
 | ミストフィールド | 5ターン展開。接地側は状態異常無効＋ドラゴン技半減 | `fieldEffect: 'misty-terrain'` |
 | ほえる・ドラゴンテール | 相手を控えと強制交代させる（無作為） | `forcesSwitch` / `BattleRunner.applyForcedOutSwitch` |
+| ちょうはつ | 相手を3ターンの間、変化技を使えなくする（選べない・出しても失敗）。みがわりを貫通。メンタルハーブで1回解除。以前は攻撃技を封じる逆の判定で、かける技も無かった | `inflictsTaunt` / `Pokemon.canUseMove` |
 | おはかまいり | 倒れている味方1体につき威力+50 | `powerPerFaintedAlly` / `BattleEngine.teamOf` |
 | グラスフィールド | 5ターン展開（グラスメイカー・こぼれダネ）。接地側のくさ技1.3倍、接地している相手へのじしん・じならし半減、ターン終了時に接地側を1/16回復 | `BattleEngine.applyGrassyTerrainHeal` / `GRASSY_SURGE` |
 | グラススライダー | グラスフィールドで使用者が接地していれば優先度+1 | `priorityInGrassyTerrain` / `BattleEngine.movePriority` |

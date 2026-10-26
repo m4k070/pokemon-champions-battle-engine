@@ -108,3 +108,33 @@ describe('追加したメガシンカ', () => {
     expect(pokemon.ability).toBe(ability);
   });
 });
+
+describe('ちょうはつ（技）', () => {
+  const taunt = () => createMove({ name: 'ちょうはつ', type: 'dark', power: 0, accuracy: 100, pp: 20, category: 'status', inflictsTaunt: true });
+  const swordsDance = () =>
+    createMove({ name: 'つるぎのまい', type: 'normal', power: 0, accuracy: 100, pp: 20, category: 'status', selfStatChange: [{ stat: 'ATK', delta: 2 }] });
+
+  test('相手を3ターン挑発し、変化技を選べなくする', () => {
+    const user = mon('グソクムシャ');
+    const target = new Pokemon({ name: 'カバルドン', types: ['ground'], ability: 'none', item: null, baseStats: stats, moves: [swordsDance(), move('じしん', 'ground', 'physical')] });
+    const engine = new BattleEngine({ rng: new SeededRandom(1) });
+    engine.setActivePokemon(0, user);
+    engine.setActivePokemon(1, target);
+    engine.useMove(user, target, taunt());
+    expect(target.tauntTurnsLeft).toBe(3);
+    expect(target.canUseMove(0)).toBe(false);
+    expect(target.canUseMove(1)).toBe(true);
+    expect(engine.useMove(target, user, target.moves[0]!)).toEqual({ outcome: 'failed', reason: 'taunted' });
+  });
+
+  test('みがわりを貫通する', () => {
+    const user = mon('グソクムシャ');
+    const target = mon('相手');
+    target.substituteHP = 50;
+    const engine = new BattleEngine({ rng: new SeededRandom(1) });
+    engine.setActivePokemon(0, user);
+    engine.setActivePokemon(1, target);
+    engine.useMove(user, target, taunt());
+    expect(target.isTaunted).toBe(true);
+  });
+});

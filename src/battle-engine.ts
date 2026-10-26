@@ -28,6 +28,9 @@ const TOXIC_MAX_COUNTER = 15;
 
 // アンコール: 相手の直前の技を固定するターン数（本編仕様）。
 const ENCORE_TURNS = 3;
+// ちょうはつの持続。ターン終了時に1減るので、相手がまだ動いていないターンに当てると、そのターンを含めて3回の行動を封じる。
+// 本編は相手が先に動いた後に当てると4ターンになるが、そこは区別していない。
+const TAUNT_TURNS = 3;
 
 // ターン終了時の割合ダメージの分母（やけどは最大HPの1/16、どくは1/8）。
 // 猛毒は経過ターン数 n に対して maxHP * n / 16。
@@ -642,9 +645,9 @@ export class BattleEngine {
       });
     }
 
-    // ちょうはつ: 攻撃技（category !== 'status'）の使用を阻止する。
+    // ちょうはつ: 変化技の使用を阻止する（本編仕様）。
     // メンタルハーブ: ちょうはつを1回だけ解除して技を通す（消費される）。
-    if (attacker.isTaunted && isDamageMove(move)) {
+    if (attacker.isTaunted && isStatusMove(move)) {
       if (attacker.item === 'mental-herb' && !attacker.itemUsed) {
         attacker.resetTaunt();
         attacker.itemUsed = true;
@@ -1012,6 +1015,17 @@ export class BattleEngine {
       }
       defender.applyEncore(lastIndex, this.turn + ENCORE_TURNS);
       this.log.push(`${defender.name}はアンコールで${defender.moves[lastIndex].name}を選び続ける`);
+      return effectApplied();
+    }
+
+    // ちょうはつ: 相手を変化技が使えない状態にする。みがわりは貫通する（本編仕様）。
+    if (move.inflictsTaunt) {
+      if (defender.isTaunted) {
+        this.log.push(`${defender.name}はすでに挑発されている`);
+        return noEffect('no-applicable-effect');
+      }
+      defender.applyTaunt(TAUNT_TURNS);
+      this.log.push(`${defender.name}は挑発に乗ってしまった`);
       return effectApplied();
     }
 

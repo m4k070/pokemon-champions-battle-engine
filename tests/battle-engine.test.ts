@@ -1506,7 +1506,7 @@ describe('Taunt (ちょうはつ)', () => {
     });
   }
 
-  test('taunted pokemon cannot use attacking moves', () => {
+  test('taunted pokemon cannot use status moves', () => {
     const engine = new BattleEngine();
     const attacker = makeAttacker();
     const defender = makeDefender();
@@ -1514,21 +1514,22 @@ describe('Taunt (ちょうはつ)', () => {
     attacker.applyTaunt(3);
     expect(attacker.isTaunted).toBe(true);
 
-    const result = engine.useMove(attacker, defender, attacker.moves[0]); // earthquake (physical)
+    const result = engine.useMove(attacker, defender, attacker.moves[1]); // swords-dance (status)
     expect(isMoveSuccessful(result)).toBe(false);
-    expect(defender.currentHP).toBe(defender.maxHP); // no damage dealt
+    expect(attacker.statStages.ATK).toBe(0);
+    expect(attacker.canUseMove(1)).toBe(false);
   });
 
-  test('taunted pokemon can use status moves', () => {
+  test('taunted pokemon can use attacking moves', () => {
     const engine = new BattleEngine();
     const attacker = makeAttacker();
     const defender = makeDefender();
 
     attacker.applyTaunt(3);
 
-    const result = engine.useMove(attacker, defender, attacker.moves[1]); // swords-dance (status)
+    const result = engine.useMove(attacker, defender, attacker.moves[0]); // earthquake (physical)
     expect(isMoveSuccessful(result)).toBe(true);
-    expect(attacker.statStages.ATK).toBe(2);
+    expect(defender.currentHP).toBeLessThan(defender.maxHP);
   });
 
   test('taunt duration decrements each startTurn', () => {
@@ -1573,13 +1574,13 @@ describe('Taunt (ちょうはつ)', () => {
 });
 
 describe('Mental Herb (メンタルハーブ)', () => {
-  test('cures taunt on first attacking move attempt', () => {
+  test('cures taunt on first status move attempt', () => {
     const engine = new BattleEngine();
     const attacker = new Pokemon({
       name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'mental-herb', itemUsed: false,
       baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
       moves: [
-        createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+        createMove({ name: 'swords-dance', type: 'normal', power: 0, accuracy: 100, pp: 20, category: 'status', selfStatChange: [{ stat: 'ATK', delta: 2 }] }),
       ],
     });
     const defender = new Pokemon({
@@ -1592,7 +1593,7 @@ describe('Mental Herb (メンタルハーブ)', () => {
 
     const result = engine.useMove(attacker, defender, attacker.moves[0]);
     expect(isMoveSuccessful(result)).toBe(true);
-    expect(asDamageResult(result).damage).toBeGreaterThan(0);
+    expect(attacker.statStages.ATK).toBe(2);
     expect(attacker.isTaunted).toBe(false); // taunt cured
     expect(attacker.itemUsed).toBe(true); // herb consumed
   });
@@ -1603,7 +1604,7 @@ describe('Mental Herb (メンタルハーブ)', () => {
       name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'mental-herb', itemUsed: false,
       baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
       moves: [
-        createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+        createMove({ name: 'swords-dance', type: 'normal', power: 0, accuracy: 100, pp: 20, category: 'status', selfStatChange: [{ stat: 'ATK', delta: 2 }] }),
       ],
     });
     const defender = new Pokemon({
@@ -1633,7 +1634,7 @@ describe('Mental Herb (メンタルハーブ)', () => {
       name: 'Garchomp', types: ['dragon', 'ground'], ability: 'rough-skin', item: 'mental-herb', itemUsed: true,
       baseStats: { HP: 108, ATK: 130, DEF: 95, SPATK: 80, SPDEF: 85, SPEED: 102 },
       moves: [
-        createMove({ name: 'earthquake', type: 'ground', power: 100, accuracy: 100, pp: 10, category: 'physical' }),
+        createMove({ name: 'swords-dance', type: 'normal', power: 0, accuracy: 100, pp: 20, category: 'status', selfStatChange: [{ stat: 'ATK', delta: 2 }] }),
       ],
     });
     const defender = new Pokemon({
