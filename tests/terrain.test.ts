@@ -269,11 +269,10 @@ describe('だいちのはどう（フィールドでタイプと威力が変わ�
   }
 
   test.each([
-    // サイコフィールドは接地したエスパー技をさらに1.3倍するため 50→100→130 になる。
-    // グラスフィールドのくさ技1.5倍は未実装なので、だいちのはどうの2倍だけが乗る。
+    // サイコフィールド・グラスフィールドは接地したエスパー技・くさ技をさらに1.3倍するため 50→100→130 になる。
     ['psychic-terrain', 'psychic', 130],
     ['electric-terrain', 'electric', 100],
-    ['grassy-terrain', 'grass', 100],
+    ['grassy-terrain', 'grass', 130],
     ['misty-terrain', 'fairy', 100],
   ] as const)('%s では %s タイプ・威力が2倍になる', (terrain, expectedType, expectedPower) => {
     const captured = useAndCapture(terrain);

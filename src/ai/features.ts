@@ -51,7 +51,7 @@ export const FEATURE_NAMES: readonly string[] = [
   'weather_rain',
   'weather_sun',
   'weather_sand',
-  'weather_hail',
+  'weather_snow',
   'weather_turns_left',
   'status_burn_self',
   'status_burn_opp',
@@ -178,13 +178,13 @@ function itemFlags(item: Pokemon['item']): { leftover: number; choice: number; s
   };
 }
 
-function weatherFlags(context: BattleContext): { rain: number; sun: number; sand: number; hail: number } {
+function weatherFlags(context: BattleContext): { rain: number; sun: number; sand: number; snow: number } {
   const weather = context.field.weather;
   return {
     rain: weather === 'rain' ? 1 : 0,
     sun: weather === 'sun' ? 1 : 0,
     sand: weather === 'sand' ? 1 : 0,
-    hail: weather === 'hail' ? 1 : 0,
+    snow: weather === 'snow' ? 1 : 0,
   };
 }
 
@@ -241,7 +241,7 @@ export function extractFeatures(context: BattleContext): FeatureVector {
     weather_rain: weather.rain,
     weather_sun: weather.sun,
     weather_sand: weather.sand,
-    weather_hail: weather.hail,
+    weather_snow: weather.snow,
     weather_turns_left: context.field.weather === null ? 0 : context.field.weatherTurnsLeft,
 
     // --- 状態異常の種類 ---

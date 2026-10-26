@@ -359,7 +359,7 @@ export class Pokemon {
     this.encoredUntilTurn = null;
   }
 
-  // ちょうはつ: 攻撃技を使えない状態（2〜4ターン）。交代で解除。
+  // ちょうはつ: 変化技を使えない状態。交代で解除。
   get isTaunted(): boolean {
     return this.tauntTurnsLeft > 0;
   }
@@ -374,6 +374,11 @@ export class Pokemon {
   }
 
   canUseMove(moveIndex: number): boolean {
+    // ちょうはつ: 変化技は選べない。メンタルハーブが残っていれば解除して出せるので選べる。
+    const move = this.moves[moveIndex];
+    if (this.isTaunted && move?.category === 'status' && !(this.item === 'mental-herb' && !this.itemUsed)) {
+      return false;
+    }
     // アンコール: 固定された技以外は選べない（交代は選べる）。
     if (this.encoredMoveIndex !== null && this.encoredMoveIndex !== moveIndex) {
       return false;

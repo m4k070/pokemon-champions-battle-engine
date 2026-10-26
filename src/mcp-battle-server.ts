@@ -27,7 +27,7 @@ const MoveCategorySchema = z.enum(MOVE_CATEGORIES);
 const StatusConditionSchema = z.enum(['sleep', 'poison', 'burn', 'paralysis', 'freeze', 'badly-poisoned']);
 const FieldEffectSchema = z.enum([
   'tailwind', 'trick-room', 'reflect', 'stealth-rock', 'spikes', 'toxic-spikes',
-  'psychic-terrain', 'misty-terrain', 'aurora-veil',
+  'psychic-terrain', 'misty-terrain', 'aurora-veil', 'sticky-web',
 ]);
 const StatStageKeySchema = z.enum(['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED']);
 
@@ -75,12 +75,13 @@ const MoveInputSchema = z.object({
   contact: z.boolean().optional(),
   restoresShieldForm: z.boolean().optional(),
   inflictsSpikes: z.boolean().optional(),
-  weather: z.enum(['sand', 'rain', 'sun', 'hail']).nullable().optional(),
+  weather: z.enum(['sand', 'rain', 'sun', 'snow']).nullable().optional(),
   // T1〜T7 と現環境構築の対応で増えた効果（MCP 経由でも指定できるようにする）。
   inflictsDrowsy: z.boolean().optional(),
   selfHealPercent: z.number().min(0).max(1).nullable().optional(),
   usesDefenseForAttack: z.boolean().optional(),
   inflictsEncore: z.boolean().optional(),
+  inflictsTaunt: z.boolean().optional(),
   boostedByPsychicTerrain: z.boolean().optional(),
   drainPercent: z.number().min(0).max(1).nullable().optional(),
   resetsStatStages: z.boolean().optional(),
@@ -94,6 +95,13 @@ const MoveInputSchema = z.object({
   knockOff: z.boolean().optional(),
   failsIfNoItem: z.boolean().optional(),
   doublesIfTargetDamaged: z.boolean().optional(),
+  powerPerFaintedAlly: z.boolean().optional(),
+  flinchChance: z.number().min(0).max(100).optional(),
+  reflectsSpecialDamage: z.boolean().optional(),
+  doublesIfHitFirst: z.boolean().optional(),
+  superEffectiveOnWater: z.boolean().optional(),
+  healingWish: z.boolean().optional(),
+  priorityInGrassyTerrain: z.boolean().optional(),
   alwaysCrit: z.boolean().optional(),
   failsUnlessTargetAttacks: z.boolean().optional(),
   wishes: z.boolean().optional(),

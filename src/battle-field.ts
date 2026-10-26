@@ -1,6 +1,6 @@
 // フィールド（地形）。サイコフィールドは先制技の無効化とエスパー技の強化を持つ。
-// グラスフィールドは だいちのはどう のタイプ変化のためだけに定義している
-// （展開する技・毎ターン回復・くさ技1.5倍は未実装）。
+// グラスフィールドの効果（くさ技1.3倍・じしん半減・毎ターン回復）は BattleEngine が持つ。
+// グラスフィールドを展開する技は未実装（グラスメイカーとこぼれダネだけが展開する）。
 export type TerrainType = 'electric-terrain' | 'psychic-terrain' | 'misty-terrain' | 'grassy-terrain' | null;
 
 export interface SideHazards {
@@ -17,6 +17,9 @@ export interface SideFlags {
 // （このクラスは設置技など「陣営ごとの」フィールド状態のみを扱う）。
 export class BattleField {
   stealthRock: SideFlags;
+  stickyWeb: SideFlags;
+  // いやしのねがい: 次にその側の場に出たポケモンを回復する。
+  healingWish: SideFlags;
   spikes: SideHazards;
   toxicSpikes: SideHazards;
   auroraVeil: SideHazards;
@@ -30,6 +33,8 @@ export class BattleField {
 
   constructor() {
     this.stealthRock = { playerA: false, playerB: false };
+    this.stickyWeb = { playerA: false, playerB: false };
+    this.healingWish = { playerA: false, playerB: false };
     this.spikes = { playerA: 0, playerB: 0 };
     this.toxicSpikes = { playerA: 0, playerB: 0 };
     this.auroraVeil = { playerA: 0, playerB: 0 };

@@ -7,7 +7,8 @@ export type MoveCategory = 'physical' | 'special' | 'status';
 
 export type StatusCondition = 'sleep' | 'poison' | 'burn' | 'paralysis' | 'freeze' | 'badly-poisoned';
 
-export type WeatherType = 'sand' | 'rain' | 'sun' | 'hail';
+// 'snow' はチャンピオンズの「ゆき」（SV 以降と同じ。毎ターンのダメージは無く、こおりタイプのぼうぎょ1.5倍）。
+export type WeatherType = 'sand' | 'rain' | 'sun' | 'snow';
 
 export type StatKey = 'HP' | 'ATK' | 'DEF' | 'SPATK' | 'SPDEF' | 'SPEED';
 
@@ -27,7 +28,7 @@ export const STAT_STAGE_KEYS: readonly StatStageKey[] = ['ATK', 'DEF', 'SPATK', 
 export type FieldEffect =
   | 'tailwind' | 'trick-room' | 'reflect'
   | 'stealth-rock' | 'spikes' | 'toxic-spikes'
-  | 'psychic-terrain' | 'misty-terrain' | 'aurora-veil';
+  | 'psychic-terrain' | 'misty-terrain' | 'aurora-veil' | 'sticky-web';
 
 // ダメージ技に追加効果として付随する状態異常（例: れいとうパンチの10%こおり）。
 // status(ダメージ0の状態異常専用技)とは別概念のため独立したフィールドとして持つ。
@@ -83,6 +84,8 @@ export interface CommonMoveEffects {
   selfHealPercent?: number | null;
   // アンコール: 相手が直前に使った技を3ターンの間使い続けさせる（交代で解除）。
   inflictsEncore?: boolean;
+  // ちょうはつ: 相手を3ターンの間、変化技を使えなくする（交代で解除）。
+  inflictsTaunt?: boolean;
   // バトンタッチ: 交代先に能力変化（能力ランク）を引き継ぐ。
   passStats?: boolean;
   // アシストパワー: 自分の能力上昇の合計で威力が上がる（20 + 20×段数、上限860）。
@@ -99,6 +102,8 @@ export interface CommonMoveEffects {
   rests?: boolean;
   // ねがいごと: 次のターンの終了時に、その側の場に出ているポケモンを最大HPの半分回復する。
   wishes?: boolean;
+  // いやしのねがい: 自分が倒れ、次にその場に出たポケモンのHPと状態異常を回復する（本編仕様）。
+  healingWish?: boolean;
   // ほえる・ドラゴンテール: 相手を控えと強制交代させる（本編仕様）。
   forcesSwitch?: boolean;
 }
@@ -107,6 +112,14 @@ export interface CommonMoveEffects {
 // 多段ヒット・反動・接触判定といった概念そのものを持たない。
 export interface DamageOnlyEffects {
   secondaryEffect?: SecondaryStatusEffect | null;
+  // ひるみ: 先に当てたとき、相手をそのターン動けなくする確率（%）。
+  flinchChance?: number;
+  // ミラーコート: そのターンに受けた特殊技のダメージの2倍を返す（本編仕様）。
+  reflectsSpecialDamage?: boolean;
+  // ゆきなだれ: そのターン先に相手から攻撃を受けていれば威力2倍（本編仕様）。
+  doublesIfHitFirst?: boolean;
+  // フリーズドライ: みずタイプに効果抜群（本編仕様）。
+  superEffectiveOnWater?: boolean;
   multiHit?: boolean;
   maxHits?: number;
   multiHitPowers?: number[];
@@ -131,6 +144,10 @@ export interface DamageOnlyEffects {
   failsIfNoItem?: boolean;
   // ダメおし: そのターン既に相手がダメージを受けていれば威力2倍（本編仕様）。
   doublesIfTargetDamaged?: boolean;
+  // おはかまいり: 倒れている味方1体につき威力+50（本編仕様）。
+  powerPerFaintedAlly?: boolean;
+  // グラススライダー: グラスフィールドで使用者が接地していれば優先度+1（本編仕様）。
+  priorityInGrassyTerrain?: boolean;
   // トリックフラワー等: 必ず急所に当たる（本編仕様）。
   alwaysCrit?: boolean;
   // ふいうち: 相手がそのターン攻撃技を選んでいなければ失敗する（本編仕様）。

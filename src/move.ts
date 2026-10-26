@@ -99,12 +99,14 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   selfHealPercent: number | null;
   usesDefenseForAttack: boolean;
   inflictsEncore: boolean;
+  inflictsTaunt: boolean;
   boostedByPsychicTerrain: boolean;
   resetsStatStages: boolean;
   createsSubstitute: boolean;
   protects: boolean;
   rests: boolean;
   wishes: boolean;
+  healingWish: boolean;
   forcesSwitch: boolean;
   drainPercent: number | null;
   ignoresTypeEffectiveness: boolean;
@@ -115,6 +117,12 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   knockOff: boolean;
   failsIfNoItem: boolean;
   doublesIfTargetDamaged: boolean;
+  powerPerFaintedAlly: boolean;
+  flinchChance: number;
+  reflectsSpecialDamage: boolean;
+  doublesIfHitFirst: boolean;
+  superEffectiveOnWater: boolean;
+  priorityInGrassyTerrain: boolean;
   alwaysCrit: boolean;
   failsUnlessTargetAttacks: boolean;
   terrainPulse: boolean;
@@ -150,12 +158,14 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.selfHealPercent = data.selfHealPercent ?? null;
     this.usesDefenseForAttack = data.usesDefenseForAttack ?? false;
     this.inflictsEncore = data.inflictsEncore ?? false;
+    this.inflictsTaunt = data.inflictsTaunt ?? false;
     this.boostedByPsychicTerrain = data.boostedByPsychicTerrain ?? false;
     this.resetsStatStages = data.resetsStatStages ?? false;
     this.createsSubstitute = data.createsSubstitute ?? false;
     this.protects = data.protects ?? false;
     this.rests = data.rests ?? false;
     this.wishes = data.wishes ?? false;
+    this.healingWish = data.healingWish ?? false;
     this.forcesSwitch = data.forcesSwitch ?? false;
     this.drainPercent = data.drainPercent ?? null;
     this.ignoresTypeEffectiveness = data.ignoresTypeEffectiveness ?? false;
@@ -166,6 +176,12 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.knockOff = data.knockOff ?? false;
     this.failsIfNoItem = data.failsIfNoItem ?? false;
     this.doublesIfTargetDamaged = data.doublesIfTargetDamaged ?? false;
+    this.powerPerFaintedAlly = data.powerPerFaintedAlly ?? false;
+    this.flinchChance = data.flinchChance ?? 0;
+    this.reflectsSpecialDamage = data.reflectsSpecialDamage ?? false;
+    this.doublesIfHitFirst = data.doublesIfHitFirst ?? false;
+    this.superEffectiveOnWater = data.superEffectiveOnWater ?? false;
+    this.priorityInGrassyTerrain = data.priorityInGrassyTerrain ?? false;
     this.alwaysCrit = data.alwaysCrit ?? false;
     this.failsUnlessTargetAttacks = data.failsUnlessTargetAttacks ?? false;
     this.terrainPulse = data.terrainPulse ?? false;
@@ -207,12 +223,14 @@ export class StatusMove implements StatusMoveData {
   inflictsDrowsy: boolean;
   selfHealPercent: number | null;
   inflictsEncore: boolean;
+  inflictsTaunt: boolean;
   boostedByPsychicTerrain: boolean;
   resetsStatStages: boolean;
   createsSubstitute: boolean;
   protects: boolean;
   rests: boolean;
   wishes: boolean;
+  healingWish: boolean;
   forcesSwitch: boolean;
 
   constructor(data: StatusMoveInput) {
@@ -236,12 +254,14 @@ export class StatusMove implements StatusMoveData {
     this.inflictsDrowsy = data.inflictsDrowsy ?? false;
     this.selfHealPercent = data.selfHealPercent ?? null;
     this.inflictsEncore = data.inflictsEncore ?? false;
+    this.inflictsTaunt = data.inflictsTaunt ?? false;
     this.boostedByPsychicTerrain = data.boostedByPsychicTerrain ?? false;
     this.resetsStatStages = data.resetsStatStages ?? false;
     this.createsSubstitute = data.createsSubstitute ?? false;
     this.protects = data.protects ?? false;
     this.rests = data.rests ?? false;
     this.wishes = data.wishes ?? false;
+    this.healingWish = data.healingWish ?? false;
     this.forcesSwitch = data.forcesSwitch ?? false;
   }
 }

@@ -46,6 +46,14 @@ function setup(a: Pokemon, b: Pokemon): BattleEngine {
 }
 
 describe('オーロラベール', () => {
+  test('ゆきでなければ張れない', () => {
+    const guarded = makePokemon({ name: 'Guarded' });
+    const foe = makePokemon({ name: 'Foe' });
+    const engine = setup(guarded, foe);
+    engine.useMove(guarded, foe, auroraVeil());
+    expect(engine.field.auroraVeil.playerA).toBe(0);
+  });
+
   test('5ターン張られ、受けるダメージが半減する', () => {
     // Arrange
     const guarded = makePokemon({ name: 'Guarded' });
@@ -54,6 +62,9 @@ describe('オーロラベール', () => {
     const foe2 = makePokemon({ name: 'Foe' });
     const engine1 = setup(guarded, foe1);
     const engine2 = setup(bare, foe2);
+    // オーロラベールはゆきの間しか張れない。
+    engine1.weather = 'snow';
+    engine2.weather = 'snow';
 
     // Act
     engine1.useMove(guarded, foe1, auroraVeil());
@@ -71,6 +82,7 @@ describe('オーロラベール', () => {
     const guarded = makePokemon({ name: 'Guarded' });
     const foe = makePokemon({ name: 'Foe' });
     const engine = setup(guarded, foe);
+    engine.weather = 'snow';
     engine.useMove(guarded, foe, auroraVeil());
 
     // Act

@@ -12,7 +12,7 @@ const WEATHER_NAMES: Record<WeatherType, string> = {
   sand: '砂嵐',
   rain: '雨',
   sun: '晴れ',
-  hail: 'あられ',
+  snow: 'ゆき',
 };
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
