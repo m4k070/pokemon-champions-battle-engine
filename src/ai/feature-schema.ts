@@ -21,7 +21,7 @@ export function schemaHash(names: readonly string[]): string {
 export const FEATURE_SCHEMA_HASH = schemaHash(FEATURE_NAMES);
 
 // 抽出に存在しないが、旧 V が参照する列。ここに書いたものだけ 0 を供給する。
-// weather: run3 の木（src/ai/value-trees.json）は 0/1 の weather を使うが、77列の抽出では
+// weather: run3 系の木（29列）は 0/1 の weather を使うが、77列の抽出では
 //   種類別 one-hot（weather_rain/sun/sand/hail）+ 残りターンに置換済み。
 //   現在は LEGACY_FEATURE_COMPUTERS が実値を供給するので、この 0 は
 //   「ベクトルに列が無いときの最終フォールバック」としてのみ働く。

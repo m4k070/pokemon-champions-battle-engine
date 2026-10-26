@@ -2,15 +2,12 @@ import type { BaseStats, FormDefinition, FormName, MoveData, TypeName } from '..
 import type { NatureInput, StatPointsInput } from '../rules/stat-point-system.js';
 import type { AbilityName } from '../ability-names.js';
 import type { ItemName } from '../item-names.js';
+import { readFileSync } from 'node:fs';
 import { createMove, cloneMove } from '../move.js';
+import type { MoveInput } from '../move.js';
 import { Pokemon } from '../pokemon.js';
 
-// 現環境PTカタログ。上位構築をエンジンに投入して「1試合を最後まで走らせる」ためのデータ。
-//
-// 数値の出典:
-//   - 種族値・タイプ: PokeAPI（2026-10-19 取得）
-//   - 技のタイプ・威力・分類: PokeAPI（マジカルフレイムのみ yakkun.com/ch/zukan/search/?move=572）
-//   - 構築（6体・持ち物・性格・能力ポイント・技）: 下記 source のとおり
+// 構築カタログの型と、カタログの1体・1構築を Pokemon にする変換。
 export interface MetaTeamMember {
   // エンジンが使う名前（PokeAPI の英語名）。メガシンカの照合は baseName と一致する必要がある。
   name: string;
@@ -61,4 +58,38 @@ export function teamToPokemons(entry: MetaTeamEntry): Pokemon[] {
   return entry.members.map(toPokemon);
 }
 
-export const META_TEAMS: MetaTeamEntry[] = [];
+type RawMember = Omit<MetaTeamMember, 'moves'> & { moves: MoveInput[] };
+type RawEntry = Omit<MetaTeamEntry, 'members'> & { members: RawMember[] };
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+// 形だけ確かめる（6体・4技の数や値の妥当性はカタログ側のテストで固定する）。
+function isRawCatalog(value: unknown): value is RawEntry[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (entry) =>
+        isRecord(entry) &&
+        typeof entry.name === 'string' &&
+        Array.isArray(entry.members) &&
+        entry.members.every(
+          (member) =>
+            isRecord(member) &&
+            typeof member.name === 'string' &&
+            Array.isArray(member.moves) &&
+            member.moves.every((move) => isRecord(move) && typeof move.name === 'string' && typeof move.type === 'string'),
+        ),
+    )
+  );
+}
+
+// カタログ（構築データ）はエンジンに含めない。研究用リポジトリが JSON で持ち、
+// 使う側が loadMetaTeams で読み込む。技は JSON の MoveData から作り直す。
+export function loadMetaTeams(path: string): MetaTeamEntry[] {
+  const raw: unknown = JSON.parse(readFileSync(path, 'utf8'));
+  if (!isRawCatalog(raw)) throw new Error(`構築カタログの形式が不正: ${path}`);
+  return raw.map((entry) => ({
+    ...entry,
+    members: entry.members.map((member) => ({ ...member, moves: member.moves.map((move) => createMove(move)) })),
+  }));
+}

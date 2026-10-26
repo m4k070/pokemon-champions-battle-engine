@@ -3,7 +3,6 @@ import type { Pokemon } from '../pokemon.js';
 import { getLegalActions } from './battle-agent.js';
 import type { BattleSession } from '../battle-runner.js';
 import type { AgentAction } from '../types.js';
-import { evaluateValue } from './value-function.js';
 import { compatibleSets, defaultBelief } from './opponent-belief.js';
 import type { Belief } from './opponent-belief.js';
 import { HeuristicV1BattleAgent } from './baselines/heuristic-v1.js';
@@ -58,14 +57,15 @@ export interface ValueSearchOptions {
   // 学習した V は「ベースラインが訪れる状態」でしか較正されていないため、貪欲に最大化すると
   // 分布外の状態に踏み込み、過大評価された手を選び続ける（クエスピクシー構築で実測）。
   trustMargin?: number; // 既定 0.05（学習分布を広げた V での実測最良）
-  // 局面の勝率関数。既定は value-trees.json の V（別の木との直接対戦で差し替える）。
-  evaluate?: (context: BattleContext) => number;
+  // 局面の勝率関数（学習した V）。エンジンは学習済みの木を持たないので必須。
+  // 木の JSON からは makeValueEvaluator で作る。
+  evaluate: (context: BattleContext) => number;
 }
 
 export class ValueSearchBattleAgent implements BattleAgent {
   private readonly opponentModel: BattleAgent;
 
-  constructor(_rng: SeededRandom = new SeededRandom(1), private readonly options: ValueSearchOptions = {}) {
+  constructor(_rng: SeededRandom, private readonly options: ValueSearchOptions) {
     this.opponentModel = options.opponentModel ?? new HeuristicV1BattleAgent(new SeededRandom(7));
   }
 
@@ -207,7 +207,7 @@ export class ValueSearchBattleAgent implements BattleAgent {
       return -Infinity; // 不正な手は選ばない
     }
     if (fork.isFinished()) return fork.winner() === side ? 1 : 0;
-    return (this.options.evaluate ?? evaluateValue)(fork.getContext(side));
+    return this.options.evaluate(fork.getContext(side));
   }
 }
 

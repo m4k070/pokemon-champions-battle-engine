@@ -11,7 +11,14 @@ import {
   schemaHash,
   unresolvedFeatures,
 } from '../src/ai/feature-schema.js';
-import { evaluateVector, valueInputs } from '../src/ai/value-function.js';
+import { makeVectorEvaluator, valueInputs } from '../src/ai/value-function.js';
+
+// 学習済みの木はエンジンに含めないので、旧列 weather を参照する小さな木で確かめる。
+// type_advantage <= 0.5 なら logit -0.5、そうでなければ +0.5。
+const evaluateVector = makeVectorEvaluator(
+  { features: ['turn', 'weather', 'type_advantage'], trees: [[{ f: 2, t: 0.5, l: 1, r: 2 }, { v: -0.5 }, { v: 0.5 }]] },
+  'テスト用の木',
+);
 
 // 特徴量スキーマのガード。29列で学習した木を77列の抽出に当てたとき、存在しない列
 // （weather）が黙って 0 で埋められていた事故（2026-10-25）を二度と通さないための固定。
@@ -52,7 +59,7 @@ describe('特徴量スキーマ', () => {
 });
 
 describe('木と抽出の突き合わせ', () => {
-  test('現行の V が参照する旧列 weather は宣言済みで、未解決列は無い', () => {
+  test('旧 V が参照する旧列 weather は宣言済みで、未解決列は無い', () => {
     // run3 の木は 0/1 の weather を使う。抽出は種類別 one-hot に置換済みなので、
     // 0 を供給することを DECLARED_FEATURE_DEFAULTS で明示している。
     expect(DECLARED_FEATURE_DEFAULTS.weather).toBe(0);
@@ -74,6 +81,11 @@ describe('木と抽出の突き合わせ', () => {
 
     // 抽出から列ごと消えた状態（旧 V を新しい抽出に当てた場合と同じ形）
     expect(() => evaluateVector({})).toThrow();
+  });
+
+  test('木の走査は葉の値の和をシグモイドに通す', () => {
+    expect(evaluateVector({ turn: 1, weather: 0, type_advantage: 1 })).toBeCloseTo(1 / (1 + Math.exp(-0.5)), 12);
+    expect(evaluateVector({ turn: 1, weather: 0, type_advantage: 0 })).toBeCloseTo(1 / (1 + Math.exp(0.5)), 12);
   });
 
   test('宣言済みの列だけが 0 で補われる', async () => {

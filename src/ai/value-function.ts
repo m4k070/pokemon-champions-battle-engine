@@ -5,15 +5,12 @@
 // 交互作用で、手で設計した交互作用を足しても 0.004 しか詰まらなかった。
 // そこで木を JSON に書き出し、TS 側で走査する（外部依存なし）。
 //
-// 生成元: ~/data/pokemon-decisions/make_ensemble.py（ens-29norun3、2026-10-26 昇格）
-//   29列・200本×31葉の LightGBM 7本の木をつなげ、葉の値を 1/7 にしたもの（logit の平均）。
-//   構成: run3b・run8b それぞれ「全試合 ×1 + 試合の9割抜き取り ×2」、run8 の全試合 ×1。
-//   docs/AI_PIPELINE.md の「アンサンブル」節を参照。
+// 学習済みの木（JSON）はエンジンに含めない。学習・評価用のリポジトリが持ち、
+// makeVectorEvaluator / makeValueEvaluator で勝率関数にして ValueSearchBattleAgent に渡す。
 import type { BattleContext } from './battle-agent.js';
 import { extractFeatures } from './features.js';
 import type { FeatureVector } from './features.js';
 import { assertTreeSchema, DECLARED_FEATURE_DEFAULTS, LEGACY_FEATURE_COMPUTERS, FEATURE_SCHEMA_HASH } from './feature-schema.js';
-import treeData from './value-trees.json' with { type: 'json' };
 
 export type TreeNode = { f: number; t: number; l: number; r: number } | { v: number };
 
@@ -22,8 +19,7 @@ export interface TreeModel {
   trees: TreeNode[][];
 }
 
-// 木の JSON から勝率関数を作る。既定の V（value-trees.json）のほか、
-// 別の木どうしを直接対戦させる評価でも使う。
+// 木の JSON から、特徴量ベクトル → 勝率 の関数を作る。
 export function makeVectorEvaluator(model: TreeModel, source: string): (features: FeatureVector) => number {
   const features = model.features;
   const trees = model.trees;
@@ -57,9 +53,6 @@ export function makeVectorEvaluator(model: TreeModel, source: string): (features
   };
 }
 
-// 特徴量のベクトルから勝率を出す（木の走査）。evaluateValue の本体。
-export const evaluateVector = makeVectorEvaluator(treeData, 'src/ai/value-trees.json');
-
 // 木に入力するベクトル。77列の抽出に、木が参照する旧列（context から計算）を足す。
 // ここを飛ばすと旧 V は「天候を常に0と見る」専門家になり、天候下で手を誤る
 // （run4/run5 の maximin がその状態だった）。
@@ -71,6 +64,8 @@ export function valueInputs(context: BattleContext): FeatureVector {
   return features;
 }
 
-export function evaluateValue(context: BattleContext): number {
-  return evaluateVector(valueInputs(context));
+// 木の JSON から、局面 → 勝率 の関数を作る（ValueSearchBattleAgent の evaluate に渡す形）。
+export function makeValueEvaluator(model: TreeModel, source: string): (context: BattleContext) => number {
+  const vector = makeVectorEvaluator(model, source);
+  return (context) => vector(valueInputs(context));
 }

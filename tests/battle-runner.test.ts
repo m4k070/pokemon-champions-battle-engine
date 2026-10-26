@@ -7,7 +7,6 @@ import type { ItemName } from '../src/item-names.js';
 import type { AgentDecision } from '../src/ai/battle-agent.js';
 import type { BattleAgent, BattleContext } from '../src/ai/battle-agent.js';
 import { SeededRandom } from '../src/rng.js';
-import { META_TEAMS, teamToPokemons } from '../src/data/meta-teams.js';
 
 // 素早いAttacker(単一技・確定OHKO)とのろまなDefenderで、
 // 「先攻が必ず勝つ」決定論的なシナリオを作る（Randomでも選択肢が1つしかないため揺れない）。
@@ -1010,29 +1009,4 @@ describe('瀕死交代が1ターンで終わらないケース', () => {
     expect(frail.isFainted).toBe(true);
     expect(session.activeA).toBe(healthy);
   });
-
-  test('以前に例外が出たクロス対戦ペアが最後まで走る', async () => {
-    // カタログ構築のクロス対戦（seed固定）。修正前はこの条件で例外が出ていた。
-    const cases: [string, string, number][] = [
-      ['メガグソクムシャ構築', 'カバマンダ構築', 101],
-      ['カバルカ構築', 'メガラグラージ構築', 202],
-      ['メガライチュウY構築', 'カバルカ構築', 303],
-    ];
-
-    for (const [nameA, nameB, seed] of cases) {
-      const entryA = META_TEAMS.find((entry) => entry.name === nameA)!;
-      const entryB = META_TEAMS.find((entry) => entry.name === nameB)!;
-
-      const result = await runBattle(
-        teamToPokemons(entryA),
-        teamToPokemons(entryB),
-        new RandomBattleAgent(new SeededRandom(seed * 31 + 1)),
-        new RandomBattleAgent(new SeededRandom(seed * 31 + 2)),
-        { rng: new SeededRandom(seed * 31 + 3) },
-      );
-
-      expect(`${nameA} vs ${nameB}: turns=${result.turns > 0}`).toContain('turns=true');
-      expect(result.log.length).toBeGreaterThan(0);
-    }
-  }, 60000);
 });

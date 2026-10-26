@@ -6,7 +6,8 @@
 
 -- **Poke API連携**: 最新のポケモンデータを自動取得・キャッシュ（`src/api/pokemon-api.ts`）
 - **Champions固有ルール**: 能力ポイント、Lv.50固定、メガシンカ対応（`src/rules/`）
-- **メタチームテンプレート**: 主要アーキタイプの定義済みチーム（`src/data/meta-teams.ts`）
+- **構築カタログの読み込み**: 構築の JSON を `loadMetaTeams(path)` で読み、`Pokemon` に変換する（`src/data/meta-teams.ts`）。構築データそのものはエンジンに含めない
+- **学習した勝率予測（V）による1手先読み**: `ValueSearchBattleAgent` に `evaluate`（局面 → 勝率）を渡して使う。LightGBM の木の JSON からは `makeValueEvaluator` で作る（`src/ai/value-function.ts`）。学習済みの木と学習・評価のパイプラインはエンジンに含めない
 - **選出AI**: アーキタイプ判定と最適選出ロジック（`src/ai/selection-ai.ts`）
 - **BattleAgent / BattleSession**: LLM・ランダム・人間など、行動選択の方式を差し替え可能。1ターンずつ進行・undo/redo・分岐（fork）に対応
 - **MCPサーバー**: バトルのルール適用をMCPツールとして公開。行動の決定はMCPクライアント側が担う
@@ -181,7 +182,7 @@ src/
 ├── api/
 │   └── pokemon-api.ts    # Poke API連携・キャッシュ
 ├── data/
-│   ├── meta-teams.ts     # メタチームテンプレート
+│   ├── meta-teams.ts     # 構築カタログの型と読み込み（データは含めない）
 │   ├── move-cache.json   # 技キャッシュ（自動生成）
 │   └── learnset-cache.json # 習得キャッシュ（自動生成）
 ├── docs/
