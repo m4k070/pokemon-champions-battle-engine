@@ -101,5 +101,6 @@ export { TYPE_NAMES, isTypeName } from './type-names.js';
 export { PokemonDataCache, PokemonAPI, PokeApiError } from './api/pokemon-api.js';
 export type { PokeApiPokemonData, PokeApiMoveData } from './api/pokemon-api.js';
 
-export { META_TEAMS } from './data/meta-teams.js';
-export type { MetaTeamEntry } from './data/meta-teams.js';
+export { loadMetaTeams, toPokemon, teamToPokemons } from './data/meta-teams.js';
+export type { MetaTeamEntry, MetaTeamMember } from './data/meta-teams.js';
+export { setDefaultBeliefTeams } from './ai/opponent-belief.js';

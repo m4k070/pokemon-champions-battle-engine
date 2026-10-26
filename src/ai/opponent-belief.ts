@@ -1,5 +1,4 @@
 import type { Pokemon } from '../pokemon.js';
-import { META_TEAMS, teamToPokemons } from '../data/meta-teams.js';
 
 // 相手の「型」に対する信念（belief）。
 // 不完全情報では、まだ見えていない技・持ち物・特性を「無い」と扱うと判断が歪む。
@@ -32,13 +31,22 @@ export function buildBelief(members: Pokemon[][]): Belief {
   return belief;
 }
 
+let defaultTeams: Pokemon[][] = [];
 let cachedBelief: Belief | null = null;
 let cachedBaseRate: number | null = null;
 
-// メタの構築プールから既定の信念を作る（初回のみ構築）。
+// 既定の信念の元になる構築プールを登録する。カタログはエンジンに含めないので、
+// 使う側（研究用リポジトリ）がカタログを読み込んだときに呼ぶ。未登録なら信念は空。
+export function setDefaultBeliefTeams(teams: Pokemon[][]): void {
+  defaultTeams = teams;
+  cachedBelief = null;
+  cachedBaseRate = null;
+}
+
+// 登録された構築プールから既定の信念を作る（初回のみ構築）。
 export function defaultBelief(): Belief {
   if (cachedBelief === null) {
-    cachedBelief = buildBelief(META_TEAMS.map((entry) => teamToPokemons(entry)));
+    cachedBelief = buildBelief(defaultTeams);
   }
   return cachedBelief;
 }

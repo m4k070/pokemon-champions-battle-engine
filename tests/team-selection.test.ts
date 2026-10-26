@@ -1,6 +1,5 @@
 import { Pokemon } from '../src/pokemon.js';
 import { createMove } from '../src/move.js';
-import { META_TEAMS, teamToPokemons } from '../src/data/meta-teams.js';
 import { selectTeam, resolveBasicSelection, selectTeamWithPlan } from '../src/ai/team-selection.js';
 import { runBattle } from '../src/battle-runner.js';
 import { RandomBattleAgent } from '../src/ai/battle-agent.js';
@@ -61,53 +60,4 @@ describe('選出ロジック', () => {
     expect(selection.members[1]!.name).toBe('Mega');
   });
 
-  test('同じチームなら常に同じ選出（乱数を使わない）', () => {
-    const entry = META_TEAMS.find((team) => team.name === 'メガカメックス構築')!;
-    const first = selectTeam(teamToPokemons(entry)).members.map((pokemon) => pokemon.name);
-    const second = selectTeam(teamToPokemons(entry)).members.map((pokemon) => pokemon.name);
-    expect(first).toEqual(second);
-  });
-
-  test('メガカメックス構築はイエッサン初手・メガカメックスを含む', () => {
-    const entry = META_TEAMS.find((team) => team.name === 'メガカメックス構築')!;
-    const names = selectTeam(teamToPokemons(entry)).members.map((pokemon) => pokemon.name);
-    expect(names[0]).toBe('indeedee-male');
-    expect(names).toContain('blastoise');
-  });
-
-describe('基本選出テキストの解決', () => {
-  test('イエッサン初手／オオニューラ／メガカメックス を順に解決する', () => {
-    const entry = META_TEAMS.find((team) => team.name === 'メガカメックス構築')!;
-    const members = resolveBasicSelection(entry, teamToPokemons(entry)).map((pokemon) => pokemon.name);
-    expect(members).toEqual(['indeedee-male', 'sneasler', 'blastoise']);
-  });
-
-  test('「〜選出:」のラベルが付いていても解決する（メガラグラージ構築）', () => {
-    const entry = META_TEAMS.find((team) => team.name === 'メガラグラージ構築')!;
-    const members = resolveBasicSelection(entry, teamToPokemons(entry)).map((pokemon) => pokemon.name);
-    expect(members[0]).toBe('pelipper');
-    expect(members).toContain('swampert');
-  });
-
-  test('解決できないチームでも3体を返す（ルールで補完）', () => {
-    const entry = META_TEAMS.find((team) => team.name === 'メガガブリアスZ構築')!;
-    const selection = selectTeamWithPlan(entry, teamToPokemons(entry));
-    expect(selection.members).toHaveLength(3);
-  });
-});
-
-  test('選出した3体で対戦が決着する', async () => {
-    const entry = META_TEAMS.find((team) => team.name === 'メガガブリアスZ構築')!;
-    const foe = META_TEAMS.find((team) => team.name === 'メガラグラージ構築')!;
-    const mine = selectTeam(teamToPokemons(entry)).members;
-    const theirs = selectTeam(teamToPokemons(foe)).members;
-    const result = await runBattle(
-      mine, theirs,
-      new RandomBattleAgent(new SeededRandom(1)),
-      new RandomBattleAgent(new SeededRandom(2)),
-      { maxTurns: 300, rng: new SeededRandom(3), leadA: mine[0], leadB: theirs[0] },
-    );
-    expect(mine).toHaveLength(3);
-    expect(result.turns).toBeGreaterThan(0);
-  });
 });
