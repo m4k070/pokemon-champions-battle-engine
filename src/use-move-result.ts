@@ -6,6 +6,7 @@ export type MoveFailureReason =
   | 'asleep'             // ねむりで動けない
   | 'frozen'             // こおりで動けない
   | 'paralyzed'          // まひで動けない
+  | 'flinched'           // ひるんで動けない
   | 'taunted'            // ちょうはつで攻撃技を出せない
   | 'encored'            // アンコールで直前の技以外を出せない
   | 'blocked-by-terrain' // フィールド（サイコフィールド）に先制技を阻まれた

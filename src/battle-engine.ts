@@ -138,6 +138,9 @@ export class BattleEngine {
   private attackersDealtDamageThisTurn: Set<Pokemon> = new Set();
   // そのターンにダメージを受けたポケモン（ダメおしの威力2倍判定に使う）。
   private defendersDamagedThisTurn: Set<Pokemon> = new Set();
+  // ひるみの判定用: そのターン既に行動したポケモンと、ひるんだポケモン。
+  private actedThisTurn: Set<Pokemon> = new Set();
+  private flinchedThisTurn: Set<Pokemon> = new Set();
 
   constructor(options: BattleEngineOptions = {}) {
     this.rng = options.rng ?? SYSTEM_RANDOM;
@@ -584,6 +587,7 @@ export class BattleEngine {
   }
 
   useMove(attacker: Pokemon, defender: Pokemon, move: MoveData): UseMoveResult {
+    this.actedThisTurn.add(attacker);
     if (move.pp <= 0) {
       this.log.push(`${attacker.name}は${move.name}を出そうとしたが、PPが残っていない！`);
       return { outcome: 'failed', reason: 'no-pp' };
@@ -602,6 +606,10 @@ export class BattleEngine {
         this.log.push(`${attacker.name}はこごえて動けない`);
         return { outcome: 'failed', reason: 'frozen' };
       }
+    }
+    if (this.flinchedThisTurn.has(attacker)) {
+      this.log.push(`${attacker.name}はひるんで技がだせない`);
+      return { outcome: 'failed', reason: 'flinched' };
     }
     if (attacker.status === 'paralysis') {
       if (this.rng.next() < 0.25) {
@@ -1368,6 +1376,12 @@ export class BattleEngine {
       if (move.targetStatChange) {
         this.applyTargetStatChange(attacker, defender, move.targetStatChange);
       }
+      // ひるみ: 相手がまだ動いていないターンに当てたときだけ効く。みがわり・せいしんりょくで防ぐ（本編仕様）。
+      const flinchChance = isDamageMove(move) ? move.flinchChance ?? 0 : 0;
+      if (flinchChance > 0 && !substituteAbsorbed && !this.actedThisTurn.has(defender)
+          && defender.ability !== 'inner-focus' && this.rng.next() * 100 < flinchChance) {
+        this.flinchedThisTurn.add(defender);
+      }
       // ひけんちえなみ等: 命中時に相手側にまきびしを設置する追加効果。
       if (move.inflictsSpikes) {
         const defenderSide = this.getSide(defender);
@@ -1484,6 +1498,8 @@ export class BattleEngine {
 
   startTurn(): void {
     this.turn++;
+    this.actedThisTurn.clear();
+    this.flinchedThisTurn.clear();
     this.log.push(`\n===== ターン${this.turn}開始 =====`);
 
     if (this.weatherTurnsLeft > 0) {
@@ -1598,6 +1614,8 @@ export class BattleEngine {
     this.events.emit('end-turn', { team: [...teamA, ...teamB], engine: this });
     this.attackersDealtDamageThisTurn.clear();
     this.defendersDamagedThisTurn.clear();
+    this.actedThisTurn.clear();
+    this.flinchedThisTurn.clear();
   }
 
   // やどりぎのタネ: 吸われている側から吸っている相手（本来のオーナーではなく、

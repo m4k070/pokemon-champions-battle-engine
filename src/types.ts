@@ -110,6 +110,8 @@ export interface CommonMoveEffects {
 // 多段ヒット・反動・接触判定といった概念そのものを持たない。
 export interface DamageOnlyEffects {
   secondaryEffect?: SecondaryStatusEffect | null;
+  // ひるみ: 先に当てたとき、相手をそのターン動けなくする確率（%）。
+  flinchChance?: number;
   multiHit?: boolean;
   maxHits?: number;
   multiHitPowers?: number[];

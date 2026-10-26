@@ -117,6 +117,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   failsIfNoItem: boolean;
   doublesIfTargetDamaged: boolean;
   powerPerFaintedAlly: boolean;
+  flinchChance: number;
   priorityInGrassyTerrain: boolean;
   alwaysCrit: boolean;
   failsUnlessTargetAttacks: boolean;
@@ -171,6 +172,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.failsIfNoItem = data.failsIfNoItem ?? false;
     this.doublesIfTargetDamaged = data.doublesIfTargetDamaged ?? false;
     this.powerPerFaintedAlly = data.powerPerFaintedAlly ?? false;
+    this.flinchChance = data.flinchChance ?? 0;
     this.priorityInGrassyTerrain = data.priorityInGrassyTerrain ?? false;
     this.alwaysCrit = data.alwaysCrit ?? false;
     this.failsUnlessTargetAttacks = data.failsUnlessTargetAttacks ?? false;
