@@ -45,6 +45,9 @@ const WEATHER_BALL_TYPE: Partial<Record<WeatherType, TypeName>> = {
 
 // だいちのはどう: フィールドの種類に応じてタイプが変わる（威力は2倍）。
 // 使用者が接地しているときだけ適用する（ふゆう・ひこうは変化しない）。
+// グラスフィールドで威力が半減する地面技（本編仕様。マグニチュードも対象だがチャンピオンズに無い）。
+const GRASSY_HALVED_MOVE_NAMES = new Set(['じしん', 'じならし', 'earthquake', 'bulldoze']);
+
 const TERRAIN_PULSE_TYPE: Record<NonNullable<TerrainType>, TypeName> = {
   'electric-terrain': 'electric',
   'psychic-terrain': 'psychic',
@@ -656,7 +659,7 @@ export class BattleEngine {
 
     // サイコフィールド: 接地している相手には先制技（優先度+1以上）が効かない（本編仕様）。
     // 相手が接地していなければ（ひこう・ふゆう）通常どおり効く。
-    if (this.field.terrain === 'psychic-terrain' && move.priority > 0
+    if (this.field.terrain === 'psychic-terrain' && this.movePriority(attacker, move) > 0
         && targetsOpponent(move) && this.isGrounded(defender)) {
       this.log.push(`${defender.name}はサイコフィールドに守られている！`);
       return { outcome: 'failed', reason: 'blocked-by-terrain' };
@@ -697,6 +700,12 @@ export class BattleEngine {
       this.observeAbility(defender);
       this.log.push(`${defender.name}の${defender.ability}で効果がないようだ`);
       return { outcome: 'failed', reason: 'blocked-by-ability' };
+    }
+
+    // ふうせん: 割れるまでじめん技が当たらない（本編仕様。かたやぶりでも当たらない）。
+    if (move.type === 'ground' && isDamageMove(move) && this.hasAirBalloon(defender)) {
+      this.log.push(`${defender.name}はふうせんで浮いているので、${move.name}は当たらない`);
+      return { outcome: 'failed', reason: 'blocked-by-item' };
     }
 
     // 変化技が成立したときに使用者が退場するか（バトンタッチ等）。
@@ -1065,6 +1074,15 @@ export class BattleEngine {
 
     let power = move.power;
 
+    // おはかまいり: 倒れている味方1体につき威力+50（本編仕様）。
+    if (isDamageMove(move) && move.powerPerFaintedAlly) {
+      const fainted = this.teamOf(attacker).filter((ally) => ally !== attacker && ally.isFainted).length;
+      if (fainted > 0) {
+        power += 50 * fainted;
+        this.log.push(`${move.name}の威力が${power}になった`);
+      }
+    }
+
     // だいちのはどう: フィールド下ではタイプが変わり威力2倍。使用者が接地している場合のみ。
     if (move.terrainPulse === true && this.field.terrain !== null && this.isGrounded(attacker)) {
       effectiveType = TERRAIN_PULSE_TYPE[this.field.terrain];
@@ -1123,6 +1141,16 @@ export class BattleEngine {
     if (this.field.terrain === 'psychic-terrain' && effectiveType === 'psychic'
         && this.isGrounded(attacker)) {
       power = Math.floor(power * 1.3);
+    }
+
+    // グラスフィールド: 接地している側のくさ技は威力1.3倍。接地している相手へのじしん・じならしは半減（本編仕様）。
+    if (this.field.terrain === 'grassy-terrain') {
+      if (effectiveType === 'grass' && this.isGrounded(attacker)) {
+        power = Math.floor(power * 1.3);
+      }
+      if (GRASSY_HALVED_MOVE_NAMES.has(move.name) && this.isGrounded(defender)) {
+        power = Math.floor(power * 0.5);
+      }
     }
 
     // ミストフィールド: 接地している側が受けるドラゴン技は威力が半減する（本編仕様）。
@@ -1207,6 +1235,12 @@ export class BattleEngine {
         this.attackersDealtDamageThisTurn.add(attacker);
         this.defendersDamagedThisTurn.add(defender);
       }
+    }
+
+    // ふうせん: ダメージ技を受けると割れる（みがわりが受けた場合は割れない。本編仕様）。
+    if (totalDamage > 0 && !substituteAbsorbed && this.hasAirBalloon(defender)) {
+      defender.itemUsed = true;
+      this.log.push(`${defender.name}のふうせんが割れた`);
     }
 
     if (move.multiHit) {
@@ -1508,6 +1542,7 @@ export class BattleEngine {
     this.applyDrowsySleep(statusWeatherTeam);
     this.applyLeechSeed(teamA, teamB);
     this.applyWeatherDamage(statusWeatherTeam);
+    this.applyGrassyTerrainHeal(statusWeatherTeam);
     // ねがいごと: 残りターンを減らし、0になったらその側の場に出ているポケモンを回復する（本編仕様）。
     for (const side of [0, 1] as const) {
       const key = this.sideKey(side);
@@ -1539,6 +1574,17 @@ export class BattleEngine {
       pokemon.takeDamage(drained, this);
       opponent.heal(drained);
       this.log.push(`${pokemon.name}はやどりぎのタネで${drained}のダメージを受け、${opponent.name}のHPが回復した`);
+    }
+  }
+
+  // グラスフィールド: 接地しているポケモンはターン終了時に最大HPの1/16回復する（本編仕様）。
+  applyGrassyTerrainHeal(team: Pokemon[]): void {
+    if (this.field.terrain !== 'grassy-terrain') return;
+    for (const pokemon of team) {
+      if (pokemon.isFainted || !this.isGrounded(pokemon) || pokemon.currentHP >= pokemon.maxHP) continue;
+      const heal = Math.max(1, Math.floor(pokemon.maxHP / 16));
+      pokemon.heal(heal);
+      this.log.push(`${pokemon.name}はグラスフィールドで${heal}回復した`);
     }
   }
 
@@ -1663,9 +1709,7 @@ export class BattleEngine {
 
     // まきびし: 飛行タイプは無効。層数に応じてダメージ。
     if (this.field.spikes[key] > 0) {
-      const isFlying = pokemon.types.includes('flying');
-      const hasLevitate = pokemon.ability === 'levitate';
-      if (!isFlying && !hasLevitate) {
+      if (this.isGrounded(pokemon)) {
         const spikesLayers = this.field.spikes[key];
         // 1層=1/8, 2層=1/6, 3層=1/4
         const denoms = [0, 8, 6, 4];
@@ -1680,15 +1724,14 @@ export class BattleEngine {
       const isImmune =
         pokemon.types.includes('poison')
         || pokemon.types.includes('steel')
-        || pokemon.types.includes('flying')
-        || pokemon.ability === 'levitate';
+        || !this.isGrounded(pokemon);
       if (isImmune) {
         if (pokemon.types.includes('poison')) {
           // 毒タイプはどくびしを吸収して解除
           this.field.toxicSpikes[key] = 0;
           this.log.push(`${pokemon.name}はどくびしを吸収して消した`);
         }
-        // はがね/ひこう/ふゆうは無効（何もしない）
+        // はがね・接地していないポケモン（ひこう・ふゆう・ふうせん）は無効（何もしない）
       } else if (!pokemon.isFainted && pokemon.status === null) {
         // 状態異常でなければ毒付与（1層= poison, 2層= badly-poisoned）
         const toxicStatus: StatusCondition = this.field.toxicSpikes[key] >= 2 ? 'badly-poisoned' : 'poison';
@@ -1709,10 +1752,23 @@ export class BattleEngine {
   }
 
   // 接地しているか。フィールド（地形）の効果は接地しているポケモンだけが受ける。
-  // ひこうタイプとふゆう特性は地に足がついていないため恩恵を受けない（本編仕様）。
-  // TODO: 出典確認（ふうせん等、接地を打ち消す持ち物は未実装）
+  // ひこうタイプ・ふゆう特性・割れていないふうせんは地に足がついていない（本編仕様）。
   isGrounded(pokemon: Pokemon): boolean {
-    return !pokemon.types.includes('flying') && pokemon.ability !== 'levitate';
+    return !pokemon.types.includes('flying') && pokemon.ability !== 'levitate' && !this.hasAirBalloon(pokemon);
+  }
+
+  // 割れていないふうせんを持っているか。
+  hasAirBalloon(pokemon: Pokemon): boolean {
+    return pokemon.item === 'air-balloon' && !pokemon.itemUsed;
+  }
+
+  // 技の実効優先度。グラススライダーはグラスフィールドで接地していれば+1（本編仕様）。
+  movePriority(pokemon: Pokemon, move: MoveData): number {
+    if (isDamageMove(move) && move.priorityInGrassyTerrain
+        && this.field.terrain === 'grassy-terrain' && this.isGrounded(pokemon)) {
+      return move.priority + 1;
+    }
+    return move.priority;
   }
 
   calculateSpeed(pokemon: Pokemon): number {

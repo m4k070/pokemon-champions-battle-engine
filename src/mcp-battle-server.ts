@@ -94,6 +94,8 @@ const MoveInputSchema = z.object({
   knockOff: z.boolean().optional(),
   failsIfNoItem: z.boolean().optional(),
   doublesIfTargetDamaged: z.boolean().optional(),
+  powerPerFaintedAlly: z.boolean().optional(),
+  priorityInGrassyTerrain: z.boolean().optional(),
   alwaysCrit: z.boolean().optional(),
   failsUnlessTargetAttacks: z.boolean().optional(),
   wishes: z.boolean().optional(),

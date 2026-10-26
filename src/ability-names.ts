@@ -50,6 +50,7 @@ export const ABILITY_NAMES = [
   'unburden',
   'unnerve',
   'psychic-surge',
+  'grassy-surge',
   'lightning-rod',
   'magic-bounce',
   'magician',

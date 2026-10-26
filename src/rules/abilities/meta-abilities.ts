@@ -259,6 +259,18 @@ export const PSYCHIC_SURGE: AbilityDefinition = {
   },
 };
 
+// グラスメイカー: 入場時にグラスフィールドを展開する（5ターン。グランドコート持ちなら8ターン）。
+// フィールドの効果（くさ技1.3倍・じしん等の半減・毎ターンの回復・グラススライダーの先制）は
+// battle-engine 側が field.terrain を見て行う。
+export const GRASSY_SURGE: AbilityDefinition = {
+  name: 'grassy-surge',
+  onSwitchIn: ({ pokemon, engine }) => {
+    const turns = pokemon.item === 'terrain-extender' ? 8 : 5;
+    engine.setTerrainFromAbility('grassy-terrain', turns);
+    engine.log.push(`${pokemon.name}のグラスメイカーでグラスフィールドが発動した！`);
+  },
+};
+
 // すいすい: 雨のとき素早さが2倍になる（速度計算は battle-engine の calculateSpeed 側で判定）。
 export const SWIFT_SWIM: AbilityDefinition = {
   name: 'swift-swim',
@@ -536,6 +548,7 @@ export const META_ABILITIES: AbilityDefinition[] = [
   SPICY_SPRAY,
   ELECTRIC_SURGE,
   PSYCHIC_SURGE,
+  GRASSY_SURGE,
   DISGUISE,
   GOOD_AS_GOLD,
   AURA_GUARD,

@@ -131,6 +131,10 @@ export interface DamageOnlyEffects {
   failsIfNoItem?: boolean;
   // ダメおし: そのターン既に相手がダメージを受けていれば威力2倍（本編仕様）。
   doublesIfTargetDamaged?: boolean;
+  // おはかまいり: 倒れている味方1体につき威力+50（本編仕様）。
+  powerPerFaintedAlly?: boolean;
+  // グラススライダー: グラスフィールドで使用者が接地していれば優先度+1（本編仕様）。
+  priorityInGrassyTerrain?: boolean;
   // トリックフラワー等: 必ず急所に当たる（本編仕様）。
   alwaysCrit?: boolean;
   // ふいうち: 相手がそのターン攻撃技を選んでいなければ失敗する（本編仕様）。

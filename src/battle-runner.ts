@@ -494,11 +494,11 @@ export class BattleSession {
     const attackers: { side: 0 | 1; pokemon: Pokemon; priority: number }[] = [];
     if (actionA.type === 'move') {
       const moveA = this.activeA.moves[actionA.moveIndex];
-      attackers.push({ side: 0, pokemon: this.activeA, priority: moveA?.priority ?? 0 });
+      attackers.push({ side: 0, pokemon: this.activeA, priority: moveA ? this.engine.movePriority(this.activeA, moveA) : 0 });
     }
     if (actionB.type === 'move') {
       const moveB = this.activeB.moves[actionB.moveIndex];
-      attackers.push({ side: 1, pokemon: this.activeB, priority: moveB?.priority ?? 0 });
+      attackers.push({ side: 1, pokemon: this.activeB, priority: moveB ? this.engine.movePriority(this.activeB, moveB) : 0 });
     }
 
     // ふいうちの判定材料: そのターン攻撃技を選んでいるかを両者に記録する（本編仕様）。

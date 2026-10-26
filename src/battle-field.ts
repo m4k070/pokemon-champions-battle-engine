@@ -1,6 +1,6 @@
 // フィールド（地形）。サイコフィールドは先制技の無効化とエスパー技の強化を持つ。
-// グラスフィールドは だいちのはどう のタイプ変化のためだけに定義している
-// （展開する技・毎ターン回復・くさ技1.5倍は未実装）。
+// グラスフィールドの効果（くさ技1.3倍・じしん半減・毎ターン回復）は BattleEngine が持つ。
+// グラスフィールドを展開する技は未実装（グラスメイカーとこぼれダネだけが展開する）。
 export type TerrainType = 'electric-terrain' | 'psychic-terrain' | 'misty-terrain' | 'grassy-terrain' | null;
 
 export interface SideHazards {
