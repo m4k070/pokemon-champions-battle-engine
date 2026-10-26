@@ -11,7 +11,7 @@ import type { AgentAction } from './types.js';
 import { STAT_STAGE_KEYS } from './types.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './ai/battle-agent.js';
 import { snapshotBattle, restoreBattle } from './battle-snapshot.js';
-import type { BattleSnapshot, PendingTurn } from './battle-snapshot.js';
+import type { BattleSnapshot, KnownInfoSnapshot, PendingTurn } from './battle-snapshot.js';
 import { shouldPivotAfterMove } from './use-move-result.js';
 
 export interface TurnReasoning {
@@ -180,7 +180,22 @@ export class BattleSession {
       session: {
         turnBegun: this.turnBegun,
         pendingTurn: this.pendingTurn === null ? null : structuredClone(this.pendingTurn),
+        megaUsed: [...this.megaUsed],
+        known: [this.snapshotKnown(0), this.snapshotKnown(1)],
       },
+    };
+  }
+
+  // viewer から見えている相手チームの情報を、相手チームの添字で書き出す。
+  private snapshotKnown(viewer: 0 | 1): KnownInfoSnapshot {
+    const team = viewer === 0 ? this.teamB : this.teamA;
+    const indexOf = (pokemon: Pokemon) => team.indexOf(pokemon);
+    return {
+      moves: [...this.knownMoves[viewer].entries()]
+        .filter(([pokemon]) => indexOf(pokemon) >= 0)
+        .map(([pokemon, moves]) => ({ index: indexOf(pokemon), moveIndices: [...moves] })),
+      items: [...this.knownItems[viewer]].map(indexOf).filter((index) => index >= 0),
+      abilities: [...this.knownAbilities[viewer]].map(indexOf).filter((index) => index >= 0),
     };
   }
 
@@ -201,6 +216,22 @@ export class BattleSession {
     this.turnBegun = snapshot.session?.turnBegun ?? false;
     const pendingTurn = snapshot.session?.pendingTurn ?? null;
     this.pendingTurn = pendingTurn === null ? null : structuredClone(pendingTurn);
+    this.megaUsed = [...(snapshot.session?.megaUsed ?? [false, false])];
+    // 見えた情報は Pokemon の実体に紐づくので、復元した実体へ付け直す。
+    for (const viewer of [0, 1] as const) {
+      const known = snapshot.session?.known?.[viewer];
+      const team = viewer === 0 ? this.teamB : this.teamA;
+      this.knownMoves[viewer] = new Map();
+      this.knownItems[viewer] = new Set();
+      this.knownAbilities[viewer] = new Set();
+      if (known === undefined) continue;
+      for (const entry of known.moves) {
+        const pokemon = team[entry.index];
+        if (pokemon !== undefined) this.knownMoves[viewer].set(pokemon, new Set(entry.moveIndices));
+      }
+      for (const index of known.items) if (team[index] !== undefined) this.knownItems[viewer].add(team[index]);
+      for (const index of known.abilities) if (team[index] !== undefined) this.knownAbilities[viewer].add(team[index]);
+    }
   }
 
   // 現在の状態から独立した別セッションを作る（分岐探索用）。

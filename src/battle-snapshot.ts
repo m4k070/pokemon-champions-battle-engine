@@ -1,4 +1,5 @@
 import { BattleEngine } from './battle-engine.js';
+import type { MoveLogEntry } from './battle-engine.js';
 import { SeededRandom } from './rng.js';
 import { Pokemon } from './pokemon.js';
 import type { BattleField, SideFlags, SideHazards } from './battle-field.js';
@@ -47,6 +48,11 @@ export interface PokemonSnapshot {
   form: FormName;
   formStats: Record<string, FormDefinition> | null;
   level: number;
+  // あくびの眠気・アンコール・最後に使った技。無い古いスナップショットは「なし」として復元する。
+  drowsyUntilTurn?: number | null;
+  encoredMoveIndex?: number | null;
+  encoredUntilTurn?: number | null;
+  lastMoveName?: string | null;
 }
 
 export interface FieldSnapshot {
@@ -60,6 +66,9 @@ export interface FieldSnapshot {
   reflect: SideHazards;
   lightScreen: SideHazards;
   tailwind: SideHazards;
+  // フィールド（グラスフィールド等）。無い古いスナップショットは「なし」として復元する。
+  terrain?: BattleField['terrain'];
+  terrainTurnsLeft?: number;
 }
 
 // ターンの技フェーズの進行状態。pivot技で「交代先の入力待ち」に入ったとき、
@@ -82,9 +91,21 @@ export type PendingTurn =
 
 // BattleSessionが持つターン進行状態。盤面（BattleEngine/Pokemon）とは別に保存しないと、
 // ターン途中でsnapshot/restore/forkしたときに進行状態が失われる。
+// 不完全情報で「相手から見えた情報」（BattleSession の knownMoves 等）。Pokemon の参照ではなく、
+// 見られた側のチームの添字で持つ（復元すると Pokemon の実体が作り直されるため）。
+export interface KnownInfoSnapshot {
+  moves: { index: number; moveIndices: number[] }[];
+  items: number[];
+  abilities: number[];
+}
+
 export interface SessionSnapshot {
   turnBegun: boolean;
   pendingTurn: PendingTurn | null;
+  // 無い古いスナップショットは「メガシンカ未使用・何も見えていない」として復元する。
+  megaUsed?: [boolean, boolean];
+  // [side 0 から見た side 1 の情報, side 1 から見た side 0 の情報]
+  known?: [KnownInfoSnapshot, KnownInfoSnapshot];
 }
 
 export interface BattleSnapshot {
@@ -97,6 +118,8 @@ export interface BattleSnapshot {
   // この項目が無い古いスナップショットは、システム乱数として復元する。
   rng?: number | null;
   log: string[];
+  // 技の使用履歴（無い古いスナップショットは空）。
+  moveLog?: MoveLogEntry[];
   field: FieldSnapshot;
   teamA: PokemonSnapshot[];
   teamB: PokemonSnapshot[];
@@ -151,6 +174,10 @@ export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
     form: pokemon.form,
     formStats: cloneFormStats(pokemon.formStats),
     level: pokemon.level,
+    drowsyUntilTurn: pokemon.drowsyUntilTurn,
+    encoredMoveIndex: pokemon.encoredMoveIndex,
+    encoredUntilTurn: pokemon.encoredUntilTurn,
+    lastMoveName: pokemon.lastMoveName,
   };
 }
 
@@ -188,6 +215,10 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
     // コンストラクタ側の約束は undefined = フォルム定義なし（内部で null に正規化される）。
     formStats: cloneFormStats(snapshot.formStats) ?? undefined,
     level: snapshot.level,
+    drowsyUntilTurn: snapshot.drowsyUntilTurn ?? null,
+    encoredMoveIndex: snapshot.encoredMoveIndex ?? null,
+    encoredUntilTurn: snapshot.encoredUntilTurn ?? null,
+    lastMoveName: snapshot.lastMoveName ?? null,
   });
 }
 
@@ -203,6 +234,8 @@ function snapshotField(field: BattleField): FieldSnapshot {
     reflect: { ...field.reflect },
     lightScreen: { ...field.lightScreen },
     tailwind: { ...field.tailwind },
+    terrain: field.terrain,
+    terrainTurnsLeft: field.terrainTurnsLeft,
   };
 }
 
@@ -217,6 +250,8 @@ function restoreField(field: BattleField, snapshot: FieldSnapshot): void {
   field.reflect = { ...snapshot.reflect };
   field.lightScreen = { ...snapshot.lightScreen };
   field.tailwind = { ...snapshot.tailwind };
+  field.terrain = snapshot.terrain ?? null;
+  field.terrainTurnsLeft = snapshot.terrainTurnsLeft ?? 0;
 }
 
 export function snapshotBattle(
@@ -234,6 +269,7 @@ export function snapshotBattle(
     trickRoomTurnsLeft: engine.trickRoomTurnsLeft,
     rng: engine.rng.getState(),
     log: [...engine.log],
+    moveLog: structuredClone(engine.moveLog),
     field: snapshotField(engine.field),
     teamA: teamA.map(snapshotPokemon),
     teamB: teamB.map(snapshotPokemon),
@@ -271,6 +307,9 @@ export function restoreBattle(snapshot: BattleSnapshot): RestoredBattle {
 
   engine.setActivePokemon(0, activeA);
   engine.setActivePokemon(1, activeB);
+  // 味方の状態を見る特性・技（フラワーヴェール・おはかまいり等）のためのチーム登録も作り直す。
+  engine.registerTeams(teamA, teamB);
+  engine.moveLog = structuredClone(snapshot.moveLog ?? []);
 
   return { engine, teamA, teamB, activeA, activeB };
 }
