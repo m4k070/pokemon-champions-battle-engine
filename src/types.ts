@@ -28,7 +28,7 @@ export const STAT_STAGE_KEYS: readonly StatStageKey[] = ['ATK', 'DEF', 'SPATK', 
 export type FieldEffect =
   | 'tailwind' | 'trick-room' | 'reflect'
   | 'stealth-rock' | 'spikes' | 'toxic-spikes'
-  | 'psychic-terrain' | 'misty-terrain' | 'aurora-veil';
+  | 'psychic-terrain' | 'misty-terrain' | 'aurora-veil' | 'sticky-web';
 
 // ダメージ技に追加効果として付随する状態異常（例: れいとうパンチの10%こおり）。
 // status(ダメージ0の状態異常専用技)とは別概念のため独立したフィールドとして持つ。
@@ -102,6 +102,8 @@ export interface CommonMoveEffects {
   rests?: boolean;
   // ねがいごと: 次のターンの終了時に、その側の場に出ているポケモンを最大HPの半分回復する。
   wishes?: boolean;
+  // いやしのねがい: 自分が倒れ、次にその場に出たポケモンのHPと状態異常を回復する（本編仕様）。
+  healingWish?: boolean;
   // ほえる・ドラゴンテール: 相手を控えと強制交代させる（本編仕様）。
   forcesSwitch?: boolean;
 }
@@ -112,6 +114,12 @@ export interface DamageOnlyEffects {
   secondaryEffect?: SecondaryStatusEffect | null;
   // ひるみ: 先に当てたとき、相手をそのターン動けなくする確率（%）。
   flinchChance?: number;
+  // ミラーコート: そのターンに受けた特殊技のダメージの2倍を返す（本編仕様）。
+  reflectsSpecialDamage?: boolean;
+  // ゆきなだれ: そのターン先に相手から攻撃を受けていれば威力2倍（本編仕様）。
+  doublesIfHitFirst?: boolean;
+  // フリーズドライ: みずタイプに効果抜群（本編仕様）。
+  superEffectiveOnWater?: boolean;
   multiHit?: boolean;
   maxHits?: number;
   multiHitPowers?: number[];

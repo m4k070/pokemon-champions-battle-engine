@@ -17,6 +17,9 @@ export interface SideFlags {
 // （このクラスは設置技など「陣営ごとの」フィールド状態のみを扱う）。
 export class BattleField {
   stealthRock: SideFlags;
+  stickyWeb: SideFlags;
+  // いやしのねがい: 次にその側の場に出たポケモンを回復する。
+  healingWish: SideFlags;
   spikes: SideHazards;
   toxicSpikes: SideHazards;
   auroraVeil: SideHazards;
@@ -30,6 +33,8 @@ export class BattleField {
 
   constructor() {
     this.stealthRock = { playerA: false, playerB: false };
+    this.stickyWeb = { playerA: false, playerB: false };
+    this.healingWish = { playerA: false, playerB: false };
     this.spikes = { playerA: 0, playerB: 0 };
     this.toxicSpikes = { playerA: 0, playerB: 0 };
     this.auroraVeil = { playerA: 0, playerB: 0 };

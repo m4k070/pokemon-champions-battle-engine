@@ -141,6 +141,8 @@ export class BattleEngine {
   // ひるみの判定用: そのターン既に行動したポケモンと、ひるんだポケモン。
   private actedThisTurn: Set<Pokemon> = new Set();
   private flinchedThisTurn: Set<Pokemon> = new Set();
+  // ミラーコート用: そのターンに受けた特殊技のダメージ。
+  private specialDamageTakenThisTurn: Map<Pokemon, number> = new Map();
 
   constructor(options: BattleEngineOptions = {}) {
     this.rng = options.rng ?? SYSTEM_RANDOM;
@@ -461,7 +463,11 @@ export class BattleEngine {
   resolveTypeEffectiveness(attacker: Pokemon, defender: Pokemon, move: MoveData): number {
     // わるあがきはタイプ相性を受けない（本編仕様。無タイプ扱い）。
     if (move.ignoresTypeEffectiveness) return 1;
-    const baseEffectiveness = this.getTypeEffectiveness(move.type, defender.types);
+    let baseEffectiveness = this.getTypeEffectiveness(move.type, defender.types);
+    // フリーズドライ: みずタイプへの相性を半減ではなく抜群として扱う（0.5 → 2 なので4倍）。
+    if (isDamageMove(move) && move.superEffectiveOnWater && defender.types.includes('water')) {
+      baseEffectiveness *= 4;
+    }
     // 攻撃側の特性によるタイプ相性補正（きもったま: Normal/Fighting→Ghost 有効化等）
     const attackerAbility = getAbilityDefinition(attacker.ability);
     if (!attackerAbility?.modifyTypeEffectiveness) return baseEffectiveness;
@@ -583,6 +589,14 @@ export class BattleEngine {
     // apply-damage イベントでダメージをさらに削る場合、その分は戻り値に反映されない
     // （ログ・反動の従来挙動を変えないため）。
     defender.takeDamage(effectiveDamage, this);
+
+    // ゴツゴツメット: 接触技を受けたとき、攻撃者に攻撃者の最大HPの1/6ダメージ（本編仕様）。
+    if (defender.item === 'rocky-helmet' && attacker && attacker !== defender && move
+        && isDamageMove(move) && move.contact && effectiveDamage > 0 && !attacker.isFainted) {
+      const recoil = Math.max(1, Math.floor(attacker.maxHP / 6));
+      attacker.takeDamage(recoil, this);
+      this.log.push(`${attacker.name}は${defender.name}のゴツゴツメットで${recoil}のダメージを受けた`);
+    }
     return effectiveDamage;
   }
 
@@ -846,6 +860,21 @@ export class BattleEngine {
       return effectApplied();
     }
 
+    // ねばねばネット: 相手の場に設置する（重ねられない）。
+    if (move.fieldEffect === 'sticky-web') {
+      const side = this.getSide(attacker);
+      if (side !== null) {
+        const key = this.sideKey(this.opposingSide(side));
+        if (this.field.stickyWeb[key]) {
+          this.log.push('ねばねばネットは既に張られている');
+        } else {
+          this.field.stickyWeb[key] = true;
+          this.log.push(`${defender.name}側の場にねばねばネットが張られた`);
+        }
+      }
+      return effectApplied();
+    }
+
     if (move.fieldEffect === 'toxic-spikes') {
       const side = this.getSide(attacker);
       if (side !== null) {
@@ -892,6 +921,20 @@ export class BattleEngine {
     if (isStatusMove(move) && move.forcesSwitch) {
       defender.forcedOut = true;
       this.log.push(`${defender.name}は場を追い出された`);
+      return effectApplied();
+    }
+
+    // いやしのねがい: 自分は倒れ、次にその側の場に出たポケモンを全回復する。控えがいなければ失敗（本編仕様）。
+    if (move.healingWish) {
+      const side = this.getSide(attacker);
+      const hasReserve = this.teamOf(attacker).some((ally) => ally !== attacker && !ally.isFainted);
+      if (side === null || !hasReserve) {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('no-applicable-effect');
+      }
+      this.field.healingWish[this.sideKey(side)] = true;
+      attacker.takeDamage(attacker.currentHP, this);
+      this.log.push(`${attacker.name}はいやしのねがいで倒れた`);
       return effectApplied();
     }
 
@@ -1111,6 +1154,24 @@ export class BattleEngine {
     // --- ここから先、move は DamageMoveData（物理・特殊）に絞り込まれている ---
 
     // ウェザーボールは天候下でタイプが変化する。
+    // ミラーコート: そのターンに受けた特殊技のダメージの2倍を返す。受けていなければ失敗。
+    // エスパー技なのであくタイプには効かない（本編仕様）。
+    if (isDamageMove(move) && move.reflectsSpecialDamage) {
+      const taken = this.specialDamageTakenThisTurn.get(attacker) ?? 0;
+      if (taken <= 0) {
+        this.log.push('しかし うまくきまらなかった');
+        return { outcome: 'no-effect', reason: 'no-applicable-effect', pivot: false };
+      }
+      if (this.getTypeEffectiveness(move.type, defender.types) === 0) {
+        this.log.push('効果がなかった');
+        return { outcome: 'no-effect', reason: 'type-immune', pivot: false };
+      }
+      const dealt = this.applyDamage(defender, taken * 2, attacker, move);
+      this.log.push(`${defender.name}に${dealt}のダメージ`);
+      if (defender.isFainted) this.log.push(`${defender.name}は戦闘不能になった`);
+      return { outcome: 'damaged', damage: dealt, effectiveness: 1, pivot: false };
+    }
+
     let effectiveType = move.name === 'weather-ball' && this.weather && WEATHER_BALL_TYPE[this.weather]
       ? WEATHER_BALL_TYPE[this.weather]!
       : move.type;
@@ -1222,6 +1283,11 @@ export class BattleEngine {
       power = Math.floor(power * 1.5);
     }
 
+    // ゆきなだれ: そのターン先に攻撃を受けていれば威力2倍（本編仕様）。
+    if (isDamageMove(move) && move.doublesIfHitFirst && this.defendersDamagedThisTurn.has(attacker)) {
+      power *= 2;
+    }
+
     // ダメおし: そのターン既に相手がダメージを受けていれば威力2倍（本編仕様）。
     if (isDamageMove(move) && move.doublesIfTargetDamaged && this.defendersDamagedThisTurn.has(defender)) {
       power *= 2;
@@ -1281,6 +1347,9 @@ export class BattleEngine {
       if (dealtDamage > 0) {
         this.attackersDealtDamageThisTurn.add(attacker);
         this.defendersDamagedThisTurn.add(defender);
+        if (isSpecialMove(move) && !hadSubstitute) {
+          this.specialDamageTakenThisTurn.set(defender, (this.specialDamageTakenThisTurn.get(defender) ?? 0) + dealtDamage);
+        }
       }
     }
 
@@ -1500,6 +1569,7 @@ export class BattleEngine {
     this.turn++;
     this.actedThisTurn.clear();
     this.flinchedThisTurn.clear();
+    this.specialDamageTakenThisTurn.clear();
     this.log.push(`\n===== ターン${this.turn}開始 =====`);
 
     if (this.weatherTurnsLeft > 0) {
@@ -1616,6 +1686,7 @@ export class BattleEngine {
     this.defendersDamagedThisTurn.clear();
     this.actedThisTurn.clear();
     this.flinchedThisTurn.clear();
+    this.specialDamageTakenThisTurn.clear();
   }
 
   // やどりぎのタネ: 吸われている側から吸っている相手（本来のオーナーではなく、
@@ -1753,6 +1824,14 @@ export class BattleEngine {
 
     const key = this.sideKey(side);
 
+    // いやしのねがい: 設置技より先に回復する（本編仕様）。
+    if (this.field.healingWish[key]) {
+      this.field.healingWish[key] = false;
+      pokemon.heal(pokemon.maxHP - pokemon.currentHP);
+      pokemon.removeStatus();
+      this.log.push(`${pokemon.name}はいやしのねがいで回復した`);
+    }
+
     // ステルスロック: 岩タイプ有効度に基づくダメージ（1/8 HP）
     if (this.field.stealthRock[key]) {
       const effectiveness = this.getTypeEffectiveness('rock', pokemon.types);
@@ -1773,6 +1852,12 @@ export class BattleEngine {
         pokemon.takeDamage(damage, this);
         this.log.push(`${pokemon.name}はまきびしのダメージで${damage}のダメージを受けた`);
       }
+    }
+
+    // ねばねばネット: 接地しているポケモンの素早さを1段階下げる（本編仕様）。
+    if (this.field.stickyWeb[key] && this.isGrounded(pokemon) && !pokemon.isFainted) {
+      const changed = pokemon.modifyStatStage('SPEED', -1);
+      if (changed !== 0) this.log.push(`${pokemon.name}はねばねばネットに引っかかった`);
     }
 
     // どくびし: どく/はがね/ひこうタイプ、ふゆう特性は無効。毒タイプは吸収して解除。

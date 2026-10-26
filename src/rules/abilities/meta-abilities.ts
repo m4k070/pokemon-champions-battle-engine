@@ -25,14 +25,15 @@ export const REGENERATOR: AbilityDefinition = {
   },
 };
 
-// さめはだ: 接触技を受けたとき、攻撃者に最大HPの1/8ダメージ。
+// さめはだ: 接触技を受けたとき、攻撃者に「攻撃者の」最大HPの1/8ダメージ（本編仕様）。
 export const ROUGH_SKIN: AbilityDefinition = {
   name: 'rough-skin',
-  onDamaged: ({ defender, attacker, move }) => {
-    if (isDamageMove(move) && move.contact) {
-      const damage = Math.floor(defender.maxHP / 8);
-      attacker.takeDamage(Math.max(1, damage));
+  onDamaged: ({ defender, attacker, move, engine }) => {
+    if (isDamageMove(move) && move.contact && attacker !== defender) {
+      const damage = Math.max(1, Math.floor(attacker.maxHP / 8));
+      attacker.takeDamage(damage);
       // takeDamage は engine なしで呼ぶためログはこちらで出す。
+      engine.log.push(`${attacker.name}は${defender.name}のさめはだで${damage}のダメージを受けた`);
     }
   },
 };

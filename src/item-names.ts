@@ -18,6 +18,7 @@ export const ITEM_NAMES = [
   'lum-berry',
   'mental-herb',
   'mystic-water',
+  'rocky-helmet',
   'shed-shell',
   'shuca-berry',
   'sitrus-berry',
@@ -73,7 +74,6 @@ export const ITEM_NAMES = [
   'haban-berry',
   'psychic-seed',
   'red-card',
-  'rocky-helmet',
 ] as const;
 
 export type ItemName = (typeof ITEM_NAMES)[number];

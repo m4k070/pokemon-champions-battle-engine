@@ -27,7 +27,7 @@ const MoveCategorySchema = z.enum(MOVE_CATEGORIES);
 const StatusConditionSchema = z.enum(['sleep', 'poison', 'burn', 'paralysis', 'freeze', 'badly-poisoned']);
 const FieldEffectSchema = z.enum([
   'tailwind', 'trick-room', 'reflect', 'stealth-rock', 'spikes', 'toxic-spikes',
-  'psychic-terrain', 'misty-terrain', 'aurora-veil',
+  'psychic-terrain', 'misty-terrain', 'aurora-veil', 'sticky-web',
 ]);
 const StatStageKeySchema = z.enum(['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED']);
 
@@ -97,6 +97,10 @@ const MoveInputSchema = z.object({
   doublesIfTargetDamaged: z.boolean().optional(),
   powerPerFaintedAlly: z.boolean().optional(),
   flinchChance: z.number().min(0).max(100).optional(),
+  reflectsSpecialDamage: z.boolean().optional(),
+  doublesIfHitFirst: z.boolean().optional(),
+  superEffectiveOnWater: z.boolean().optional(),
+  healingWish: z.boolean().optional(),
   priorityInGrassyTerrain: z.boolean().optional(),
   alwaysCrit: z.boolean().optional(),
   failsUnlessTargetAttacks: z.boolean().optional(),

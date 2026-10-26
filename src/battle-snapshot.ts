@@ -51,6 +51,8 @@ export interface PokemonSnapshot {
 
 export interface FieldSnapshot {
   stealthRock: SideFlags;
+  stickyWeb: SideFlags;
+  healingWish: SideFlags;
   spikes: SideHazards;
   toxicSpikes: SideHazards;
   auroraVeil: SideHazards;
@@ -192,6 +194,8 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
 function snapshotField(field: BattleField): FieldSnapshot {
   return {
     stealthRock: { ...field.stealthRock },
+    stickyWeb: { ...field.stickyWeb },
+    healingWish: { ...field.healingWish },
     spikes: { ...field.spikes },
     toxicSpikes: { ...field.toxicSpikes },
     auroraVeil: { ...field.auroraVeil },
@@ -204,6 +208,8 @@ function snapshotField(field: BattleField): FieldSnapshot {
 
 function restoreField(field: BattleField, snapshot: FieldSnapshot): void {
   field.stealthRock = { ...snapshot.stealthRock };
+  field.stickyWeb = { ...snapshot.stickyWeb };
+  field.healingWish = { ...snapshot.healingWish };
   field.spikes = { ...snapshot.spikes };
   field.toxicSpikes = { ...snapshot.toxicSpikes };
   field.auroraVeil = { ...snapshot.auroraVeil };

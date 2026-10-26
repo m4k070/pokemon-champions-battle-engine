@@ -106,6 +106,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   protects: boolean;
   rests: boolean;
   wishes: boolean;
+  healingWish: boolean;
   forcesSwitch: boolean;
   drainPercent: number | null;
   ignoresTypeEffectiveness: boolean;
@@ -118,6 +119,9 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   doublesIfTargetDamaged: boolean;
   powerPerFaintedAlly: boolean;
   flinchChance: number;
+  reflectsSpecialDamage: boolean;
+  doublesIfHitFirst: boolean;
+  superEffectiveOnWater: boolean;
   priorityInGrassyTerrain: boolean;
   alwaysCrit: boolean;
   failsUnlessTargetAttacks: boolean;
@@ -161,6 +165,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.protects = data.protects ?? false;
     this.rests = data.rests ?? false;
     this.wishes = data.wishes ?? false;
+    this.healingWish = data.healingWish ?? false;
     this.forcesSwitch = data.forcesSwitch ?? false;
     this.drainPercent = data.drainPercent ?? null;
     this.ignoresTypeEffectiveness = data.ignoresTypeEffectiveness ?? false;
@@ -173,6 +178,9 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.doublesIfTargetDamaged = data.doublesIfTargetDamaged ?? false;
     this.powerPerFaintedAlly = data.powerPerFaintedAlly ?? false;
     this.flinchChance = data.flinchChance ?? 0;
+    this.reflectsSpecialDamage = data.reflectsSpecialDamage ?? false;
+    this.doublesIfHitFirst = data.doublesIfHitFirst ?? false;
+    this.superEffectiveOnWater = data.superEffectiveOnWater ?? false;
     this.priorityInGrassyTerrain = data.priorityInGrassyTerrain ?? false;
     this.alwaysCrit = data.alwaysCrit ?? false;
     this.failsUnlessTargetAttacks = data.failsUnlessTargetAttacks ?? false;
@@ -222,6 +230,7 @@ export class StatusMove implements StatusMoveData {
   protects: boolean;
   rests: boolean;
   wishes: boolean;
+  healingWish: boolean;
   forcesSwitch: boolean;
 
   constructor(data: StatusMoveInput) {
@@ -252,6 +261,7 @@ export class StatusMove implements StatusMoveData {
     this.protects = data.protects ?? false;
     this.rests = data.rests ?? false;
     this.wishes = data.wishes ?? false;
+    this.healingWish = data.healingWish ?? false;
     this.forcesSwitch = data.forcesSwitch ?? false;
   }
 }
