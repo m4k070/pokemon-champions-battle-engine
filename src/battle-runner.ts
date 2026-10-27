@@ -724,6 +724,8 @@ export class BattleSession {
     const pivotAction = side === 0 ? pending.actionA : pending.actionB;
     const pivotMove = pivotAction.type === 'move' ? active.moves[pivotAction.moveIndex] : null;
     const carriedStages = pivotMove?.passStats ? { ...active.statStages } : null;
+    // しっぽきり: 身代わりを交代先に引き継ぐ（switchTo が退場側の身代わりを消すため先に控える）。
+    const carriedSubstitute = pivotMove?.shedTail ? active.substituteHP : 0;
 
     this.reasoningLog.push({ turn: this.engine.turn, side, pokemonName: active.name, reasoning: decision.reasoning });
     this.switchTo(side, replacement, team);
@@ -734,6 +736,11 @@ export class BattleSession {
         incoming.statStages[key] = carriedStages[key];
       }
       this.engine.log.push(`${incoming.name}は能力変化を引き継いだ`);
+    }
+    if (carriedSubstitute > 0) {
+      const incoming = side === 0 ? this.activeA : this.activeB;
+      incoming.substituteHP = carriedSubstitute;
+      this.engine.log.push(`${incoming.name}は身代わりを引き継いだ`);
     }
 
     // 交代が済んだので、残りの技を解決できる状態へ戻す。

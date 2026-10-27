@@ -983,6 +983,22 @@ export class BattleEngine {
       return effectApplied();
     }
 
+    // しっぽきり: HPを最大HPの半分（切り上げ）払って身代わり（最大HPの1/4）を出し、控えと交代する。
+    // 身代わりは交代先が引き継ぐ（BattleRunner.applyPivotSwitch）。控えがいない・HPが半分以下・
+    // 既に身代わりがあるときは失敗し、交代もしない（本編仕様）。
+    if (move.shedTail) {
+      const cost = Math.ceil(attacker.maxHP / 2);
+      const hasReserve = this.teamOf(attacker).some((ally) => ally !== attacker && !ally.isFainted);
+      if (!hasReserve || attacker.substituteHP > 0 || attacker.currentHP <= cost) {
+        this.log.push('しかし うまくきまらなかった');
+        return { outcome: 'no-effect', reason: hasReserve && attacker.substituteHP === 0 ? 'not-enough-hp' : 'no-applicable-effect', pivot: false };
+      }
+      attacker.currentHP -= cost;
+      attacker.substituteHP = Math.floor(attacker.maxHP / 4);
+      this.log.push(`${attacker.name}はしっぽを切って身代わりを出した`);
+      return effectApplied();
+    }
+
     // くろいきり: 場に出ている全員の能力変化をリセットする（本編仕様）。
     if (move.resetsStatStages) {
       for (const pokemon of [attacker, defender]) {

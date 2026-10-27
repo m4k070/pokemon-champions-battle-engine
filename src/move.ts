@@ -103,6 +103,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   boostedByPsychicTerrain: boolean;
   resetsStatStages: boolean;
   createsSubstitute: boolean;
+  shedTail: boolean;
   protects: boolean;
   rests: boolean;
   wishes: boolean;
@@ -162,6 +163,7 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.boostedByPsychicTerrain = data.boostedByPsychicTerrain ?? false;
     this.resetsStatStages = data.resetsStatStages ?? false;
     this.createsSubstitute = data.createsSubstitute ?? false;
+    this.shedTail = data.shedTail ?? false;
     this.protects = data.protects ?? false;
     this.rests = data.rests ?? false;
     this.wishes = data.wishes ?? false;
@@ -227,6 +229,7 @@ export class StatusMove implements StatusMoveData {
   boostedByPsychicTerrain: boolean;
   resetsStatStages: boolean;
   createsSubstitute: boolean;
+  shedTail: boolean;
   protects: boolean;
   rests: boolean;
   wishes: boolean;
@@ -258,6 +261,7 @@ export class StatusMove implements StatusMoveData {
     this.boostedByPsychicTerrain = data.boostedByPsychicTerrain ?? false;
     this.resetsStatStages = data.resetsStatStages ?? false;
     this.createsSubstitute = data.createsSubstitute ?? false;
+    this.shedTail = data.shedTail ?? false;
     this.protects = data.protects ?? false;
     this.rests = data.rests ?? false;
     this.wishes = data.wishes ?? false;

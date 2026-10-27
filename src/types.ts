@@ -96,6 +96,8 @@ export interface CommonMoveEffects {
   resetsStatStages?: boolean;
   // みがわり: 自分のHPを1/4払って身代わりを出す（本編仕様）。
   createsSubstitute?: boolean;
+  // しっぽきり: 自分のHPを半分払って身代わりを出し、控えと交代して身代わりを引き継ぐ（本編仕様。pivot と併用する）。
+  shedTail?: boolean;
   // まもる: そのターンの間、相手から受ける技を無効化する（本編仕様）。
   protects?: boolean;
   // ねむる: HPを全回復し、2ターンのねむり状態になる（本編仕様）。
