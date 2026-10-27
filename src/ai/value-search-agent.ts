@@ -3,7 +3,7 @@ import type { Pokemon } from '../pokemon.js';
 import { getLegalActions } from './battle-agent.js';
 import type { BattleSession } from '../battle-runner.js';
 import type { AgentAction } from '../types.js';
-import { compatibleSets, defaultBelief } from './opponent-belief.js';
+import { applyEstimatedStats, compatibleSets, defaultBelief } from './opponent-belief.js';
 import type { Belief } from './opponent-belief.js';
 import { HeuristicV1BattleAgent } from './baselines/heuristic-v1.js';
 import { SeededRandom } from '../rng.js';
@@ -208,6 +208,10 @@ export class ValueSearchBattleAgent implements BattleAgent {
     scenario: OpponentScenario,
   ): Promise<number> {
     const opponent = side === 0 ? fork.activeB : fork.activeA;
+    // 複製の中の相手は実物なので、能力値も見積もりに置き換える（先読みのダメージ・素早さの順番に実際の配分を使わない）。
+    for (const pokemon of side === 0 ? fork.teamB : fork.teamA) {
+      applyEstimatedStats(pokemon, fork.opponentStats, this.options.belief ?? defaultBelief());
+    }
     if (scenario.moves !== null) {
       opponent.moves = scenario.moves.map((move) => ({ ...move }));
     }

@@ -7,6 +7,8 @@ import { getAbilityDefinition } from './rules/abilities/registry.js';
 import { createStruggleMove } from './move.js';
 import type { Pokemon } from './pokemon.js';
 import { shallowClonePokemon } from './pokemon.js';
+import { applyEstimatedStats } from './ai/opponent-belief.js';
+import type { OpponentStatsEstimate } from './ai/opponent-belief.js';
 import type { AgentAction } from './types.js';
 import { STAT_STAGE_KEYS } from './types.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './ai/battle-agent.js';
@@ -91,6 +93,8 @@ export interface StartSessionOptions {
   rng?: RandomSource;
   // 既定は 'full'（これまでの挙動）。'partial' で相手の未公開情報を伏せる。
   information?: InformationLevel;
+  // 'partial' のとき相手の能力値をどう見せるか。既定 'exact'（実際の値。実戦では見えない）。
+  opponentStats?: OpponentStatsEstimate;
 }
 
 // 1ターンずつ進められるバトルの実行単位。snapshot()/restore()/fork()により
@@ -107,6 +111,8 @@ export class BattleSession {
   private megaUsed: [boolean, boolean] = [false, false];
   // 不完全情報モード用の「見えた情報」。viewer → (相手ポケモン → 見えた技index / 持ち物 / 特性)。
   readonly information: InformationLevel;
+  // 'partial' のときの相手の能力値の見せ方（StartSessionOptions.opponentStats）。fork に引き継ぐ。
+  opponentStats: OpponentStatsEstimate = 'exact';
   private knownMoves: [Map<Pokemon, Set<number>>, Map<Pokemon, Set<number>>] = [new Map<Pokemon, Set<number>>(), new Map<Pokemon, Set<number>>()];
   private knownItems: [Set<Pokemon>, Set<Pokemon>] = [new Set(), new Set()];
   private knownAbilities: [Set<Pokemon>, Set<Pokemon>] = [new Set(), new Set()];
@@ -160,7 +166,9 @@ export class BattleSession {
       engine.switchIn(entry.pokemon, entry.team, entry.side);
     }
 
-    return new BattleSession(engine, teamA, teamB, leadA, leadB, megaEvolutionSystem, options.information ?? 'full');
+    const session = new BattleSession(engine, teamA, teamB, leadA, leadB, megaEvolutionSystem, options.information ?? 'full');
+    session.opponentStats = options.opponentStats ?? 'exact';
+    return session;
   }
 
   static fromSnapshot(
@@ -247,6 +255,7 @@ export class BattleSession {
       this.information,
     );
     session.reasoningLog = [...this.reasoningLog];
+    session.opponentStats = this.opponentStats;
     if (options.rngSeed !== undefined) session.engine.rng = new SeededRandom(options.rngSeed);
     return session;
   }
@@ -327,6 +336,8 @@ export class BattleSession {
     clone.ability = this.knownAbilities[viewer].has(pokemon) || pokemon.abilityRevealed
       ? pokemon.ability
       : 'none';
+    // 能力値は実戦では見えない（見えるのは HP の割合）。見積もりで置き換える。
+    applyEstimatedStats(clone, this.opponentStats);
     return clone;
   }
 
