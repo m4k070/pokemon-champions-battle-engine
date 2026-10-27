@@ -371,6 +371,7 @@ export class BattleSession {
     effectiveness: number,
     hpBefore: number,
     logStart: number,
+    stagesBefore: { attack: number; defense: number },
   ): void {
     if (move.category === 'status') return;
     const attackerTeam = side === 0 ? this.teamA : this.teamB;
@@ -390,6 +391,8 @@ export class BattleSession {
       fraction: Math.max(0, hpBefore - hpAfter),
       critical: this.engine.log.slice(logStart).some((line) => line.includes('急所に当たった')),
       knockedOut: defender.isFainted,
+      attackStage: stagesBefore.attack,
+      defenseStage: stagesBefore.defense,
     });
   }
 
@@ -647,9 +650,14 @@ export class BattleSession {
       const hpBefore = defender.maxHP === 0 ? 0 : defender.currentHP / defender.maxHP;
       const hadSubstitute = defender.substituteHP > 0;
       const logStart = this.engine.log.length;
+      const physicalMove = chosenMove.category === 'physical';
+      const stagesBefore = {
+        attack: attacker.statStages[physicalMove ? 'ATK' : 'SPATK'],
+        defense: defender.statStages[physicalMove ? 'DEF' : 'SPDEF'],
+      };
       const result = this.engine.useMove(attacker, defender, chosenMove);
       if (isDamageResult(result) && !hadSubstitute && chosenMove.category !== 'status') {
-        this.recordObservedDamage(side, attacker, defender, chosenMove, result.effectiveness, hpBefore, logStart);
+        this.recordObservedDamage(side, attacker, defender, chosenMove, result.effectiveness, hpBefore, logStart, stagesBefore);
       }
       // こだわり系は「技を出した時点」で固定される（外した場合も固定される）。わるあがきは固定しない。
       if (action.moveIndex >= 0) attacker.lockMove(action.moveIndex);

@@ -131,6 +131,9 @@ export interface ObservedDamage {
   critical: boolean;
   // 倒した（減った割合は下限でしかない）。
   knockedOut: boolean;
+  // 撃ったときの攻撃側の攻撃（特攻）ランクと、受けた側の防御（特防）ランク。逆算のときにランクの分を割り引く。
+  attackStage?: number;
+  defenseStage?: number;
 }
 
 export interface BattleSnapshot {

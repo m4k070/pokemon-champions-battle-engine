@@ -2,6 +2,7 @@ import type { Pokemon } from '../pokemon.js';
 import type { BattleContext } from './battle-agent.js';
 import { damageRatio, typeMultiplier } from './heuristic-battle-agent.js';
 import { ABILITY_CLASSES, abilityClassFlags } from './ability-classes.js';
+import { playerDamage } from './player-damage.js';
 
 // 状態の特徴量。学習用（自己対戦ログ → 勝敗）に使う数値だけを返す。
 // 構築IDや種族名は入れない（構築への過学習を避ける）。すべて「自分から見た値」で、
@@ -97,6 +98,15 @@ export const FEATURE_NAMES: readonly string[] = [
   'ability_contact_opp',
   'ability_recovery_self',
   'ability_recovery_opp',
+  'est_out',
+  'est_out_ko',
+  'est_in',
+  'est_in_ko',
+  'est_matchup',
+  'eff_out',
+  'eff_in',
+  'obs_out',
+  'obs_in',
 ];
 
 function hpRatio(pokemon: Pokemon): number {
@@ -295,6 +305,20 @@ export function extractFeatures(context: BattleContext): FeatureVector {
     features[`ability_${cls}_self`] = selfAbility[cls];
     features[`ability_${cls}_opp`] = oppAbility[cls];
   }
+
+  // --- プレイヤーの視点でのダメージの見積もり（2026-10-27。player-damage.ts） ---
+  // est_*: エンジンと同じ計算の期待ダメージ（最大 HP に対する割合）と KO 率。相手の能力値は見えている値（見積もり）を使い、
+  // 前に当てた（受けた）ときの減り方で補正する。obs_* はその補正があったか。eff_* は相性の区分（4・2・1・0.5・0.25・0）。
+  const view = playerDamage(context);
+  features.est_out = view.out.fraction;
+  features.est_out_ko = view.out.koChance;
+  features.est_in = view.in.fraction;
+  features.est_in_ko = view.in.koChance;
+  features.est_matchup = view.out.fraction - view.in.fraction;
+  features.eff_out = view.out.effectiveness;
+  features.eff_in = view.in.effectiveness;
+  features.obs_out = view.outCalibrated ? 1 : 0;
+  features.obs_in = view.inCalibrated ? 1 : 0;
 
   return features;
 }
