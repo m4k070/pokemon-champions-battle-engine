@@ -9,7 +9,7 @@ import type { DamageEnvironment } from '../src/ai/damage-estimate.js';
 
 const stats = { HP: 100, ATK: 120, DEF: 80, SPATK: 80, SPDEF: 80, SPEED: 100 };
 const environment: DamageEnvironment = { weather: null, terrain: null, reflect: 0, auroraVeil: 0, faintedAllies: 0 };
-const mon = (name: string, types: Pokemon['types'], ability = 'none', item: Pokemon['item'] = null) =>
+const mon = (name: string, types: Pokemon['types'], ability: Pokemon['ability'] = 'none', item: Pokemon['item'] = null) =>
   new Pokemon({ name, types, ability, item, baseStats: stats, moves: [] });
 
 function monteCarlo(attacker: () => Pokemon, defender: () => Pokemon, move: () => ReturnType<typeof createMove>, trials = 4000) {
