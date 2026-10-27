@@ -307,8 +307,11 @@ export function fairOpponentScenarios(context: BattleContext, belief: Belief = d
       scenarios.push({ moves, action: { type: 'move', moveIndex: index, target: 0 } });
     }
   }
+  // 不完全情報では、相手の選出のうちまだ場に出ていない控えは分からない（見えるのは6体の見せ合いまで）。交代先は場に出たものだけ。
+  const hideUnseen = context.session?.information === 'partial';
   context.opponentTeam.forEach((pokemon, index) => {
     if (pokemon.isFainted || pokemon.name === opponent.name) return;
+    if (hideUnseen && !pokemon.hasAppeared) return;
     scenarios.push({ moves: null, action: { type: 'switch', pokemonIndex: index } });
   });
   return scenarios;

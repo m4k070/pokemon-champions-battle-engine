@@ -1820,6 +1820,7 @@ export class BattleEngine {
 
   switchIn(pokemon: Pokemon, team: Pokemon[], side?: 0 | 1): Pokemon {
     this.log.push(`${pokemon.name}が場に出た！`);
+    pokemon.hasAppeared = true;
     // もらいびの吸収状態は場を離れると解除される（volatile）。
     pokemon.flashFireActive = false;
     this.events.emit('switch-in', { pokemon, team, engine: this });

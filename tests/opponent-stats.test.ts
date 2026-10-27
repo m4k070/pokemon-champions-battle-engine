@@ -3,6 +3,7 @@ import { createMove } from '../src/move.js';
 import { BattleSession } from '../src/battle-runner.js';
 import { SeededRandom } from '../src/rng.js';
 import { buildBelief, compatibleSets, estimateStats } from '../src/ai/opponent-belief.js';
+import { fairOpponentScenarios } from '../src/ai/value-search-agent.js';
 
 // 相手の能力値（配分・性格）は実戦では見えない。opponentStats で見積もりに置き換えることを固定する。
 
@@ -64,5 +65,36 @@ describe('相手の能力値の見積もり', () => {
     mega.baseName = 'opp';
     mega.name = 'opp-mega';
     expect(compatibleSets(mega, belief)).toHaveLength(1);
+  });
+});
+
+describe('相手の選出の控えと、観察したダメージ', () => {
+  const strong = () => createMove({ name: 'すてみタックル', type: 'normal', power: 120, accuracy: 100, pp: 15, category: 'physical' });
+  async function session() {
+    const mine = [makePokemon('own')];
+    mine[0]!.moves = [strong()];
+    const theirs = [makePokemon('lead'), makePokemon('bench')];
+    const s = await BattleSession.start(mine, theirs, { rng: new SeededRandom(3), information: 'partial' });
+    return s;
+  }
+
+  test('場に出た控えだけを交代先の候補にする（不完全情報）', async () => {
+    const s = await session();
+    const context = s.getContext(0);
+    expect(context.opponentTeam.map((pokemon) => pokemon.hasAppeared)).toEqual([true, false]);
+    const switches = fairOpponentScenarios(context, new Map()).filter((scenario) => scenario.action.type === 'switch');
+    expect(switches).toHaveLength(0);
+  });
+
+  test('与えたダメージを HP の割合で記録し、fork に引き継ぐ', async () => {
+    const s = await session();
+    const act = { type: 'move' as const, moveIndex: 0, target: 0 };
+    await s.playTurn({ selectLead: async (team) => team[0]!, selectAction: async () => ({ action: act }) },
+      { selectLead: async (team) => team[0]!, selectAction: async () => ({ action: act }) });
+    const mine = s.observedDamage.find((entry) => entry.attackerSide === 0)!;
+    expect(mine.move).toBe('すてみタックル');
+    expect(mine.defenderIndex).toBe(0);
+    expect(mine.fraction).toBeCloseTo(1 - s.teamB[0]!.currentHP / s.teamB[0]!.maxHP, 6);
+    expect(s.fork().observedDamage).toEqual(s.observedDamage);
   });
 });

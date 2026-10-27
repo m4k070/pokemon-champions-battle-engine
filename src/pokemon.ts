@@ -72,6 +72,8 @@ export interface PokémonConstructorData {
   disguiseBroken?: boolean;
   // アンコール: 直前に使った技の名前（アンコールの固定対象を決めるのに使う）。
   lastMoveName?: string | null;
+  // 場に出たことがあるか（不完全情報で、相手の選出のうち見えた控えを決めるのに使う）。
+  hasAppeared?: boolean;
   // アンコール: 固定中の技のインデックスと、効果が切れるターン番号。交代で解除。
   encoredMoveIndex?: number | null;
   encoredUntilTurn?: number | null;
@@ -129,6 +131,7 @@ export class Pokemon {
   disguiseBroken: boolean;
   // アンコール: 直前に使った技の名前。未使用なら null。
   lastMoveName: string | null;
+  hasAppeared: boolean;
   // アンコール: 固定中の技のインデックス。null なら固定されていない。
   encoredMoveIndex: number | null;
   // アンコール: 効果が切れるターン番号（このターンの終了までは固定が続く）。
@@ -166,6 +169,7 @@ export class Pokemon {
     this.protectStreak = data.protectStreak ?? 0;
     this.disguiseBroken = data.disguiseBroken ?? false;
     this.lastMoveName = data.lastMoveName ?? null;
+    this.hasAppeared = data.hasAppeared ?? false;
     this.encoredMoveIndex = data.encoredMoveIndex ?? null;
     this.encoredUntilTurn = data.encoredUntilTurn ?? null;
     this.form = data.form ?? 'normal';
