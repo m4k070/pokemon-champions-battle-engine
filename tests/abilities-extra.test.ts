@@ -289,3 +289,63 @@ describe('もらいび', () => {
     expect(flash.flashFireActive).toBe(false);
   });
 });
+
+describe('でんきにかえる', () => {
+  test('攻撃技でダメージを受けるとじゅうでん状態になる', () => {
+    const holder = mon('でんきにかえる持ち', { ability: 'electromorphosis' });
+    const attacker = mon('攻撃側');
+    const engine = makeEngine(attacker, holder);
+
+    engine.useMove(attacker, holder, tackle());
+
+    expect(holder.charged).toBe(true);
+    expect(holder.abilityRevealed).toBe(true);
+  });
+
+  test('変化技やみがわりへの攻撃では発動しない', () => {
+    const holder = mon('でんきにかえる持ち', { ability: 'electromorphosis' });
+    const attacker = mon('攻撃側');
+    const engine = makeEngine(attacker, holder);
+
+    engine.useMove(attacker, holder, thunderWave());
+    expect(holder.charged).toBe(false);
+
+    holder.removeStatus();
+    holder.substituteHP = 50;
+    engine.useMove(attacker, holder, tackle());
+    expect(holder.charged).toBe(false);
+  });
+
+  test('じゅうでん中はでんき技の威力が2倍になり、使うと解除される', () => {
+    const damage = (charged: boolean): { dealt: number; after: boolean } => {
+      const attacker = mon('でんきにかえる持ち', { ability: 'electromorphosis' });
+      const defender = mon('相手');
+      const engine = new BattleEngine({ rng: new SeededRandom(42) });
+      engine.setActivePokemon(0, attacker);
+      engine.setActivePokemon(1, defender);
+      attacker.charged = charged;
+      engine.useMove(attacker, defender, thunderbolt());
+      return { dealt: defender.maxHP - defender.currentHP, after: attacker.charged };
+    };
+
+    const plain = damage(false);
+    const boosted = damage(true);
+
+    expect(plain.dealt).toBeGreaterThan(0);
+    expect(boosted.dealt).toBeGreaterThan(plain.dealt * 1.8);
+    expect(boosted.after).toBe(false);
+  });
+
+  test('でんき以外の技では解除されず、場を離れると解除される', () => {
+    const holder = mon('でんきにかえる持ち', { ability: 'electromorphosis' });
+    const defender = mon('相手');
+    const engine = makeEngine(holder, defender);
+    holder.charged = true;
+
+    engine.useMove(holder, defender, tackle());
+    expect(holder.charged).toBe(true);
+
+    engine.switchIn(holder, [holder], 0);
+    expect(holder.charged).toBe(false);
+  });
+});

@@ -1286,6 +1286,12 @@ export class BattleEngine {
       power = Math.floor(power * 0.5);
     }
 
+    // じゅうでん状態: でんき技の威力が2倍になり、状態は解除される（本編仕様）。
+    if (attacker.charged && effectiveType === 'electric') {
+      power *= 2;
+      attacker.charged = false;
+    }
+
     // 特性による威力補正（テクニシャン等）。
     const powerAbility = getAbilityDefinition(attacker.ability);
     if (powerAbility?.modifyMovePower) {
@@ -1839,6 +1845,7 @@ export class BattleEngine {
     pokemon.hasAppeared = true;
     // もらいびの吸収状態は場を離れると解除される（volatile）。
     pokemon.flashFireActive = false;
+    pokemon.charged = false;
     this.events.emit('switch-in', { pokemon, team, engine: this });
 
     if (side === undefined || pokemon.isFainted) return pokemon;

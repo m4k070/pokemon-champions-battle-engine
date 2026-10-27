@@ -39,6 +39,7 @@ export interface PokemonSnapshot {
   // 揮発状態。fork/undo と見せ合いからの分岐で失われないように保存する。
   substituteHP: number;
   disguiseBroken: boolean;
+  charged: boolean;
   protecting: boolean;
   protectStreak: number;
   intendsToAttackThisTurn: boolean;
@@ -194,6 +195,7 @@ export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
     tauntTurnsLeft: pokemon.tauntTurnsLeft,
     substituteHP: pokemon.substituteHP,
     disguiseBroken: pokemon.disguiseBroken,
+    charged: pokemon.charged,
     protecting: pokemon.protecting,
     protectStreak: pokemon.protectStreak,
     intendsToAttackThisTurn: pokemon.intendsToAttackThisTurn,
@@ -235,6 +237,7 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
     tauntTurnsLeft: snapshot.tauntTurnsLeft,
     substituteHP: snapshot.substituteHP,
     disguiseBroken: snapshot.disguiseBroken,
+    charged: snapshot.charged,
     protecting: snapshot.protecting,
     protectStreak: snapshot.protectStreak,
     intendsToAttackThisTurn: snapshot.intendsToAttackThisTurn,

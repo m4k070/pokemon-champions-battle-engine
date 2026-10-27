@@ -121,7 +121,7 @@ function cacheKey(attacker: Pokemon, defender: Pokemon, move: MoveData, environm
   const side = (pokemon: Pokemon) => [
     pokemon.name, pokemon.types.join('/'), pokemon.ability, pokemon.item, pokemon.itemUsed, pokemon.status,
     Object.values(pokemon.stats).join(','), Object.values(pokemon.statStages).join(','),
-    pokemon.currentHP, pokemon.maxHP, pokemon.substituteHP, pokemon.flashFireActive, pokemon.disguiseBroken, pokemon.weightKg, pokemon.form,
+    pokemon.currentHP, pokemon.maxHP, pokemon.substituteHP, pokemon.flashFireActive, pokemon.charged, pokemon.disguiseBroken, pokemon.weightKg, pokemon.form,
   ].join('|');
   return [side(attacker), side(defender), move.name, move.type, move.category, move.power, move.accuracy,
     environment.weather, environment.terrain, environment.reflect > 0, environment.auroraVeil > 0, environment.faintedAllies].join('#');

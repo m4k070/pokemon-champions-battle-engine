@@ -70,6 +70,7 @@ export interface PokémonConstructorData {
   protectStreak?: number;
   // ばけのかわ: 既に身代わりになったか（バトル中は戻らない。交代しても復活しない）。
   disguiseBroken?: boolean;
+  charged?: boolean;
   // アンコール: 直前に使った技の名前（アンコールの固定対象を決めるのに使う）。
   lastMoveName?: string | null;
   // 場に出たことがあるか（不完全情報で、相手の選出のうち見えた控えを決めるのに使う）。
@@ -94,6 +95,8 @@ export class Pokemon {
   abilityRevealed: boolean;
   // もらいび: ほのお技を吸収して発動中か（場を離れると解除される volatile）。
   flashFireActive: boolean;
+  // じゅうでん状態（でんきにかえる）: 次のでんき技の威力が2倍になる。でんき技を使うか場を離れると解除される。
+  charged: boolean;
   lockedMove: number | null;
   baseStats: BaseStats;
   statPoints: StatPointsInput;
@@ -151,6 +154,7 @@ export class Pokemon {
     this.itemUsed = data.itemUsed ?? false;
     this.abilityRevealed = data.abilityRevealed ?? false;
     this.flashFireActive = false;
+    this.charged = data.charged ?? false;
     this.lockedMove = data.lockedMove ?? null;
     this.baseStats = data.baseStats;
     this.moves = data.moves ?? [];
