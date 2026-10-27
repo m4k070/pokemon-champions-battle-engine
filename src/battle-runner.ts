@@ -7,12 +7,14 @@ import { getAbilityDefinition } from './rules/abilities/registry.js';
 import { createStruggleMove } from './move.js';
 import type { Pokemon } from './pokemon.js';
 import { shallowClonePokemon } from './pokemon.js';
+import { applyEstimatedStats } from './ai/opponent-belief.js';
+import type { OpponentStatsEstimate } from './ai/opponent-belief.js';
 import type { AgentAction } from './types.js';
 import { STAT_STAGE_KEYS } from './types.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './ai/battle-agent.js';
 import { snapshotBattle, restoreBattle } from './battle-snapshot.js';
-import type { BattleSnapshot, KnownInfoSnapshot, PendingTurn } from './battle-snapshot.js';
-import { shouldPivotAfterMove } from './use-move-result.js';
+import type { BattleSnapshot, KnownInfoSnapshot, ObservedDamage, PendingTurn } from './battle-snapshot.js';
+import { isDamageResult, shouldPivotAfterMove } from './use-move-result.js';
 
 export interface TurnReasoning {
   turn: number;
@@ -91,6 +93,8 @@ export interface StartSessionOptions {
   rng?: RandomSource;
   // 既定は 'full'（これまでの挙動）。'partial' で相手の未公開情報を伏せる。
   information?: InformationLevel;
+  // 'partial' のとき相手の能力値をどう見せるか。既定 'exact'（実際の値。実戦では見えない）。
+  opponentStats?: OpponentStatsEstimate;
 }
 
 // 1ターンずつ進められるバトルの実行単位。snapshot()/restore()/fork()により
@@ -107,10 +111,14 @@ export class BattleSession {
   private megaUsed: [boolean, boolean] = [false, false];
   // 不完全情報モード用の「見えた情報」。viewer → (相手ポケモン → 見えた技index / 持ち物 / 特性)。
   readonly information: InformationLevel;
+  // 'partial' のときの相手の能力値の見せ方（StartSessionOptions.opponentStats）。fork に引き継ぐ。
+  opponentStats: OpponentStatsEstimate = 'exact';
   private knownMoves: [Map<Pokemon, Set<number>>, Map<Pokemon, Set<number>>] = [new Map<Pokemon, Set<number>>(), new Map<Pokemon, Set<number>>()];
   private knownItems: [Set<Pokemon>, Set<Pokemon>] = [new Set(), new Set()];
   private knownAbilities: [Set<Pokemon>, Set<Pokemon>] = [new Set(), new Set()];
   reasoningLog: TurnReasoning[] = [];
+  // 両者に見えたダメージの記録（ObservedDamage）。
+  observedDamage: ObservedDamage[] = [];
   private turnBegun = false;
   // 技の実行途中でpivot技の交代先入力を待つために、ターンの進行状態をここに保持する。
   // nullならターンの技フェーズは実行中でない（=未開始または完了済み）。
@@ -160,7 +168,9 @@ export class BattleSession {
       engine.switchIn(entry.pokemon, entry.team, entry.side);
     }
 
-    return new BattleSession(engine, teamA, teamB, leadA, leadB, megaEvolutionSystem, options.information ?? 'full');
+    const session = new BattleSession(engine, teamA, teamB, leadA, leadB, megaEvolutionSystem, options.information ?? 'full');
+    session.opponentStats = options.opponentStats ?? 'exact';
+    return session;
   }
 
   static fromSnapshot(
@@ -182,6 +192,7 @@ export class BattleSession {
         pendingTurn: this.pendingTurn === null ? null : structuredClone(this.pendingTurn),
         megaUsed: [...this.megaUsed],
         known: [this.snapshotKnown(0), this.snapshotKnown(1)],
+        observedDamage: this.observedDamage.map((entry) => ({ ...entry })),
       },
     };
   }
@@ -217,6 +228,7 @@ export class BattleSession {
     const pendingTurn = snapshot.session?.pendingTurn ?? null;
     this.pendingTurn = pendingTurn === null ? null : structuredClone(pendingTurn);
     this.megaUsed = [...(snapshot.session?.megaUsed ?? [false, false])];
+    this.observedDamage = (snapshot.session?.observedDamage ?? []).map((entry) => ({ ...entry }));
     // 見えた情報は Pokemon の実体に紐づくので、復元した実体へ付け直す。
     for (const viewer of [0, 1] as const) {
       const known = snapshot.session?.known?.[viewer];
@@ -247,6 +259,7 @@ export class BattleSession {
       this.information,
     );
     session.reasoningLog = [...this.reasoningLog];
+    session.opponentStats = this.opponentStats;
     if (options.rngSeed !== undefined) session.engine.rng = new SeededRandom(options.rngSeed);
     return session;
   }
@@ -327,6 +340,8 @@ export class BattleSession {
     clone.ability = this.knownAbilities[viewer].has(pokemon) || pokemon.abilityRevealed
       ? pokemon.ability
       : 'none';
+    // 能力値は実戦では見えない（見えるのは HP の割合）。見積もりで置き換える。
+    applyEstimatedStats(clone, this.opponentStats);
     return clone;
   }
 
@@ -345,6 +360,40 @@ export class BattleSession {
       this.knownItems[viewer].add(actor);
       this.knownAbilities[viewer].add(actor);
     }
+  }
+
+  // 技のダメージのうち両者に見えたもの（HP の減った割合・急所・相性）を記録する。みがわりが受けた分は HP に表れないので記録しない。
+  private recordObservedDamage(
+    side: 0 | 1,
+    attacker: Pokemon,
+    defender: Pokemon,
+    move: Pokemon['moves'][number],
+    effectiveness: number,
+    hpBefore: number,
+    logStart: number,
+    stagesBefore: { attack: number; defense: number },
+  ): void {
+    if (move.category === 'status') return;
+    const attackerTeam = side === 0 ? this.teamA : this.teamB;
+    const defenderTeam = side === 0 ? this.teamB : this.teamA;
+    const hpAfter = defender.maxHP === 0 ? 0 : defender.currentHP / defender.maxHP;
+    this.observedDamage.push({
+      turn: this.engine.turn,
+      attackerSide: side,
+      attackerIndex: attackerTeam.indexOf(attacker),
+      defenderIndex: defenderTeam.indexOf(defender),
+      move: move.name,
+      moveType: move.type,
+      category: move.category,
+      power: move.power,
+      effectiveness,
+      hpBefore,
+      fraction: Math.max(0, hpBefore - hpAfter),
+      critical: this.engine.log.slice(logStart).some((line) => line.includes('急所に当たった')),
+      knockedOut: defender.isFainted,
+      attackStage: stagesBefore.attack,
+      defenseStage: stagesBefore.defense,
+    });
   }
 
   // ターン開始処理（天候・トリックルームの残りターン消費）。1ターンにつき1回だけ効く。
@@ -598,7 +647,18 @@ export class BattleSession {
         this.engine.log.push(`${attacker.name}のmoveIndex ${action.moveIndex}は範囲外です`);
         continue;
       }
+      const hpBefore = defender.maxHP === 0 ? 0 : defender.currentHP / defender.maxHP;
+      const hadSubstitute = defender.substituteHP > 0;
+      const logStart = this.engine.log.length;
+      const physicalMove = chosenMove.category === 'physical';
+      const stagesBefore = {
+        attack: attacker.statStages[physicalMove ? 'ATK' : 'SPATK'],
+        defense: defender.statStages[physicalMove ? 'DEF' : 'SPDEF'],
+      };
       const result = this.engine.useMove(attacker, defender, chosenMove);
+      if (isDamageResult(result) && !hadSubstitute && chosenMove.category !== 'status') {
+        this.recordObservedDamage(side, attacker, defender, chosenMove, result.effectiveness, hpBefore, logStart, stagesBefore);
+      }
       // こだわり系は「技を出した時点」で固定される（外した場合も固定される）。わるあがきは固定しない。
       if (action.moveIndex >= 0) attacker.lockMove(action.moveIndex);
 
@@ -664,6 +724,8 @@ export class BattleSession {
     const pivotAction = side === 0 ? pending.actionA : pending.actionB;
     const pivotMove = pivotAction.type === 'move' ? active.moves[pivotAction.moveIndex] : null;
     const carriedStages = pivotMove?.passStats ? { ...active.statStages } : null;
+    // しっぽきり: 身代わりを交代先に引き継ぐ（switchTo が退場側の身代わりを消すため先に控える）。
+    const carriedSubstitute = pivotMove?.shedTail ? active.substituteHP : 0;
 
     this.reasoningLog.push({ turn: this.engine.turn, side, pokemonName: active.name, reasoning: decision.reasoning });
     this.switchTo(side, replacement, team);
@@ -674,6 +736,11 @@ export class BattleSession {
         incoming.statStages[key] = carriedStages[key];
       }
       this.engine.log.push(`${incoming.name}は能力変化を引き継いだ`);
+    }
+    if (carriedSubstitute > 0) {
+      const incoming = side === 0 ? this.activeA : this.activeB;
+      incoming.substituteHP = carriedSubstitute;
+      this.engine.log.push(`${incoming.name}は身代わりを引き継いだ`);
     }
 
     // 交代が済んだので、残りの技を解決できる状態へ戻す。

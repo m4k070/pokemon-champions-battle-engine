@@ -38,6 +38,8 @@ export interface BattleContext {
   self: Pokemon;
   selfTeam: Pokemon[];
   opponent: Pokemon;
+  // 相手の選出（3体）。不完全情報では、まだ場に出ていない控え（hasAppeared が false）の正体は実戦では分からないので、
+  // 判断に使わないこと（HP・残数の数え方は変わらないので、特徴量の HP・残数はそのまま使える）。
   opponentTeam: Pokemon[];
   canMegaEvolve: boolean;
   // 技を選べず交代先だけを選ぶ場面（瀕死による強制交代 / pivot技の攻撃後交代）。

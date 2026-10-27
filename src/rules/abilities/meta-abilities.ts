@@ -531,6 +531,18 @@ export const SEED_SOWER: AbilityDefinition = {
   },
 };
 
+// でんきにかえる: 攻撃技でダメージを受けると、じゅうでん状態になる（次のでんき技の威力2倍）。
+// みがわりが受けたときは発動しない。威力の補正と解除は battle-engine 側（Pokemon.charged）。
+export const ELECTROMORPHOSIS: AbilityDefinition = {
+  name: 'electromorphosis',
+  onDamaged: ({ defender, move, engine }) => {
+    if (!isDamageMove(move) || defender.substituteHP > 0) return;
+    defender.charged = true;
+    engine.log.push(`${defender.name}はでんきにかえるでじゅうでんした`);
+    engine.observeAbility(defender);
+  },
+};
+
 // ちくでん: でんき技を無効化し特攻を上げる（無効化は blocksMove、上昇は battle-engine 側）。
 export const VOLT_ABSORB: AbilityDefinition = {
   name: 'volt-absorb',
@@ -610,6 +622,7 @@ export const META_ABILITIES: AbilityDefinition[] = [
   TOXIC_DEBRIS,
   THERMAL_EXCHANGE,
   SEED_SOWER,
+  ELECTROMORPHOSIS,
   VOLT_ABSORB,
   FLASH_FIRE,
   FRISK,

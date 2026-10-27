@@ -267,6 +267,14 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     // 実データ: ミミロップ A76/D84/S105 → メガ A136/D94/S135（A+60/D+10/S+30 = +100）
     statBoosts: { ATK: 60, DEF: 10, SPATK: 0, SPDEF: 0, SPEED: 30 },
   },
+  'sceptilite': {
+    pokemon: 'sceptile',
+    megaName: 'mega-sceptile',
+    typeChange: ['grass', 'dragon'],
+    abilityChange: 'lightning-rod', // ひらいしん（でんき技を引き受けて無効化し、特攻+1）
+    // ジュカイン A85/D65/SA105/SD85/S120 → メガ A110/D75/SA145/SD85/S145（A+25/D+10/SA+40/S+25 = +100）
+    statBoosts: { ATK: 25, DEF: 10, SPATK: 40, SPDEF: 0, SPEED: 25 },
+  },
   // ---- Champions/ZA 独自メガ（やっくんチャンピオンズ図鑑 2026-08-19 確認）----
   'dragoniteite': {
     pokemon: 'dragonite',

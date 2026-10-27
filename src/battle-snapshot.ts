@@ -39,6 +39,7 @@ export interface PokemonSnapshot {
   // 揮発状態。fork/undo と見せ合いからの分岐で失われないように保存する。
   substituteHP: number;
   disguiseBroken: boolean;
+  charged: boolean;
   protecting: boolean;
   protectStreak: number;
   intendsToAttackThisTurn: boolean;
@@ -53,6 +54,7 @@ export interface PokemonSnapshot {
   encoredMoveIndex?: number | null;
   encoredUntilTurn?: number | null;
   lastMoveName?: string | null;
+  hasAppeared?: boolean;
 }
 
 export interface FieldSnapshot {
@@ -106,6 +108,33 @@ export interface SessionSnapshot {
   megaUsed?: [boolean, boolean];
   // [side 0 から見た side 1 の情報, side 1 から見た side 0 の情報]
   known?: [KnownInfoSnapshot, KnownInfoSnapshot];
+  // 観察したダメージ（無い古いスナップショットは空）。
+  observedDamage?: ObservedDamage[];
+}
+
+// 技のダメージのうち、対戦している両者に見えたもの（HP の減った割合・急所・相性の区分）。
+// 相手の能力値を逆算する（前に当てたときの減り方から次を見積もる）のに使う。添字はそれぞれのチームの添字。
+export interface ObservedDamage {
+  turn: number;
+  attackerSide: 0 | 1;
+  attackerIndex: number;
+  defenderIndex: number;
+  move: string;
+  // 技のタイプ・分類・威力（技データの値。特性によるタイプ変化などは effectiveness にだけ表れる）。
+  moveType: string;
+  category: 'physical' | 'special';
+  power: number;
+  // タイプ相性の倍率（4・2・1・0.5・0.25。0 はダメージが無いので記録しない）。
+  effectiveness: number;
+  // 受ける前の HP の割合と、減った割合（どちらも最大 HP に対する割合）。
+  hpBefore: number;
+  fraction: number;
+  critical: boolean;
+  // 倒した（減った割合は下限でしかない）。
+  knockedOut: boolean;
+  // 撃ったときの攻撃側の攻撃（特攻）ランクと、受けた側の防御（特防）ランク。逆算のときにランクの分を割り引く。
+  attackStage?: number;
+  defenseStage?: number;
 }
 
 export interface BattleSnapshot {
@@ -166,6 +195,7 @@ export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
     tauntTurnsLeft: pokemon.tauntTurnsLeft,
     substituteHP: pokemon.substituteHP,
     disguiseBroken: pokemon.disguiseBroken,
+    charged: pokemon.charged,
     protecting: pokemon.protecting,
     protectStreak: pokemon.protectStreak,
     intendsToAttackThisTurn: pokemon.intendsToAttackThisTurn,
@@ -178,6 +208,7 @@ export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
     encoredMoveIndex: pokemon.encoredMoveIndex,
     encoredUntilTurn: pokemon.encoredUntilTurn,
     lastMoveName: pokemon.lastMoveName,
+    hasAppeared: pokemon.hasAppeared,
   };
 }
 
@@ -206,6 +237,7 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
     tauntTurnsLeft: snapshot.tauntTurnsLeft,
     substituteHP: snapshot.substituteHP,
     disguiseBroken: snapshot.disguiseBroken,
+    charged: snapshot.charged,
     protecting: snapshot.protecting,
     protectStreak: snapshot.protectStreak,
     intendsToAttackThisTurn: snapshot.intendsToAttackThisTurn,
@@ -219,6 +251,7 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
     encoredMoveIndex: snapshot.encoredMoveIndex ?? null,
     encoredUntilTurn: snapshot.encoredUntilTurn ?? null,
     lastMoveName: snapshot.lastMoveName ?? null,
+    hasAppeared: snapshot.hasAppeared ?? false,
   });
 }
 

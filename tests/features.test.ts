@@ -21,11 +21,11 @@ const mon = (name: string, options: { ability?: Pokemon['ability']; item?: Pokem
   });
 
 describe('特徴量の追加分', () => {
-  test('列数は77で、旧来の列名は残っている（weather だけ one-hot に置換）', async () => {
+  test('列数は86で（2026-10-27 に est_* など9列を追加）、旧来の列名は残っている（weather だけ one-hot に置換）', async () => {
     const session = await BattleSession.start([mon('A')], [mon('B')], { information: 'partial', rng: new SeededRandom(1) });
     const features = extractFeatures(session.getContext(0));
 
-    expect(Object.keys(features)).toHaveLength(77);
+    expect(Object.keys(features)).toHaveLength(86);
     expect(features).not.toHaveProperty('weather');
     expect(features).toHaveProperty('weather_rain');
     expect(features).toHaveProperty('turn');

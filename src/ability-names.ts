@@ -12,6 +12,7 @@ export const ABILITY_NAMES = [
   'drizzle',
   'drought',
   'electric-surge',
+  'electromorphosis',
   'huge-power',
   'inner-focus',
   'insomnia',

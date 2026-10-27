@@ -41,10 +41,10 @@ async function sample(): Promise<Record<string, number>> {
 }
 
 describe('特徴量スキーマ', () => {
-  test('FEATURE_NAMES は抽出結果と順序まで一致する（77列）', async () => {
+  test('FEATURE_NAMES は抽出結果と順序まで一致する（86列）', async () => {
     const features = await sample();
     expect(Object.keys(features)).toEqual([...FEATURE_NAMES]);
-    expect(FEATURE_NAMES).toHaveLength(77);
+    expect(FEATURE_NAMES).toHaveLength(86);
   });
 
   test('列名は重複しない', () => {

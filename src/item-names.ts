@@ -59,6 +59,7 @@ export const ITEM_NAMES = [
   'raichunite-y',
   'sablenite',
   'salamencite',
+  'sceptilite',
   'scizorite',
   'scolipite',
   'scovillainite',
