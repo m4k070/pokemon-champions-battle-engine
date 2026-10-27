@@ -111,5 +111,9 @@ describe('選出を決める', () => {
     expect(second[0]!.item).toBe('life-orb');
     expect(second[0]!.stats.ATK).toBeGreaterThan(first[0]!.stats.ATK);
     expect(first[1]!.item).toBeNull();
+    // 候補の無い種族は、実物の技・特性を使わず、仮の一致技と特性なしにする。
+    expect(first[1]!.moves.map((move) => move.name)).toEqual(['仮の一致技（normal）']);
+    expect(first[1]!.moves[0]!.power).toBe(80);
+    expect(first[1]!.ability).toBe('none');
   });
 });
