@@ -116,6 +116,27 @@ export function estimateStats(pokemon: Pokemon, mode: Exclude<OpponentStatsEstim
   return out;
 }
 
+// 見せ合いで見えるのは種族だけなので、選出を考えるときの相手の1体（新しく作った複製）に信念の候補セットの1つを当てはめる。
+// pick で候補を選ぶ（試合ごとに変えると型の不確かさを反映できる）。
+// 候補が無い種族は持ち物なし・無振りにして false を返す（技・特性は実物のまま残るので、その分は漏れる）。
+export function applyPreviewSet(pokemon: Pokemon, belief: Belief, pick: number): boolean {
+  const sets = belief.get(pokemon.baseName ?? pokemon.name) ?? [];
+  const set = sets.length > 0 ? sets[pick % sets.length] : undefined;
+  if (set) {
+    pokemon.moves = set.moves.map((move) => ({ ...move }));
+    pokemon.item = set.item;
+    pokemon.ability = set.ability;
+  } else {
+    pokemon.item = null;
+  }
+  pokemon.statPoints = set?.statPoints ?? {};
+  pokemon.nature = set?.nature ?? null;
+  pokemon.stats = Pokemon.calculateStats(pokemon.baseStats, pokemon.level, pokemon.statPoints, pokemon.nature);
+  pokemon.maxHP = pokemon.stats.HP;
+  pokemon.currentHP = pokemon.maxHP;
+  return set !== undefined;
+}
+
 // 相手のポケモン（の複製）の能力値を見積もりに置き換える。HP とみがわりは割合を保つ（実戦で見えるのは HP の割合）。
 export function applyEstimatedStats(pokemon: Pokemon, mode: OpponentStatsEstimate, belief: Belief = defaultBelief()): void {
   if (mode === 'exact') return;

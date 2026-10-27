@@ -1,6 +1,7 @@
 import { Pokemon } from '../src/pokemon.js';
 import { createMove } from '../src/move.js';
-import { buildPayoffMatrix, enumerateSelections, sampleStrategy, solveMatrixGame } from '../src/ai/selection-matrix.js';
+import { buildPayoffMatrix, chooseSelection, enumerateSelections, findOption, previewOpponent, sampleStrategy, solveMatrixGame } from '../src/ai/selection-matrix.js';
+import { buildBelief } from '../src/ai/opponent-belief.js';
 import { SeededRandom } from '../src/rng.js';
 
 const stats = { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
@@ -62,5 +63,53 @@ describe('勝率表', () => {
     // 弱い1体を控えに置く組は、3体とも強い組とほとんど変わらないので、先発にする候補だけを見る。
     const weakLeadMass = table.rows.reduce((sum, option, i) => sum + (option[0] === 3 ? solution.row[i]! : 0), 0);
     expect(weakLeadMass).toBeLessThan(0.1);
+  });
+});
+
+describe('選出を決める', () => {
+  const table = {
+    rows: [[0, 1, 2], [1, 0, 2], [2, 0, 1]],
+    cols: [[0, 1, 2]],
+    matrix: [[0.9], [0.5], [0.52]],
+    games: 3,
+  };
+
+  test('見込みの差がしきい値に届かなければ既定の選出にする', () => {
+    const solution = { row: [0, 0, 1], col: [1], value: 0.52, rowGuarantee: 0.52 };
+    const choice = chooseSelection(table, solution, 1, new SeededRandom(1), 0.05);
+    expect(choice.source).toBe('fallback');
+    expect(choice.option).toEqual([1, 0, 2]);
+    expect(choice.gain).toBeCloseTo(0.02);
+  });
+
+  test('見込みの差がしきい値以上なら引いた候補にする', () => {
+    const solution = { row: [1, 0, 0], col: [1], value: 0.9, rowGuarantee: 0.9 };
+    const choice = chooseSelection(table, solution, 1, new SeededRandom(1), 0.05);
+    expect(choice.source).toBe('matrix');
+    expect(choice.option).toEqual([0, 1, 2]);
+  });
+
+  test('先発と3体の組で候補を照合する', () => {
+    const roster = [mon('a', 100), mon('b', 100), mon('c', 100), mon('d', 100)];
+    const options = enumerateSelections(4);
+    const index = findOption(options, roster, [roster[2]!, roster[3]!, roster[0]!]);
+    expect(options[index]).toEqual([2, 0, 3]);
+    expect(findOption(options, roster, [mon('よそ', 100), roster[0]!, roster[1]!])).toBe(-1);
+  });
+
+  test('見せ合いの種族だけから、信念の型を試合の番号で入れ替えて当てはめる', () => {
+    const setA = mon('a', 100);
+    setA.item = 'leftovers';
+    const setB = mon('a', 100);
+    setB.item = 'life-orb';
+    setB.statPoints = { ATK: 32 };
+    const belief = buildBelief([[setA], [setB]]);
+    const make = previewOpponent(() => [mon('a', 100), mon('なし', 100)], belief);
+    const first = make(0);
+    const second = make(1);
+    expect(first[0]!.item).toBe('leftovers');
+    expect(second[0]!.item).toBe('life-orb');
+    expect(second[0]!.stats.ATK).toBeGreaterThan(first[0]!.stats.ATK);
+    expect(first[1]!.item).toBeNull();
   });
 });

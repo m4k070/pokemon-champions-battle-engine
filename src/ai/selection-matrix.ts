@@ -4,6 +4,8 @@ import { HeuristicV1BattleAgent } from './baselines/heuristic-v1.js';
 import { runBattle } from '../battle-runner.js';
 import type { RandomSource } from '../rng.js';
 import { SeededRandom } from '../rng.js';
+import { applyPreviewSet } from './opponent-belief.js';
+import type { Belief } from './opponent-belief.js';
 
 // 選出の勝率表と、その表を同時手番のゲームとして解く関数。
 //
@@ -39,6 +41,8 @@ export interface PayoffMatrixOptions {
   maxTurns?: number;
   // 模擬対戦の方策（既定は v1）。
   agent?: (rng: RandomSource) => BattleAgent;
+  // 1行ごとにイベントループへ処理を返す（サーバーで裏で計算するとき、その間も他の要求に応えられるようにする）。
+  yieldEachRow?: boolean;
 }
 
 export interface PayoffMatrix {
@@ -50,17 +54,18 @@ export interface PayoffMatrix {
 }
 
 // 自分の6体（makeSelf）と相手の6体（makeOpponent）から勝率表を作る。
-// ポケモンは試合中に書き換わるので、試合ごとに作り直せる関数で受け取る。
+// ポケモンは試合中に書き換わるので、試合ごとに作り直せる関数で受け取る。引数はマスの中の試合の番号で、
+// 同じ番号ならどのマスでも同じ6体を返すようにする（相手の型を番号で入れ替えると、型の不確かさを平均できる）。
 export async function buildPayoffMatrix(
-  makeSelf: () => Pokemon[],
-  makeOpponent: () => Pokemon[],
+  makeSelf: (game: number) => Pokemon[],
+  makeOpponent: (game: number) => Pokemon[],
   options: PayoffMatrixOptions = {},
 ): Promise<PayoffMatrix> {
   const gamesPerCell = options.gamesPerCell ?? 10;
   const seed = options.seed ?? 1;
   const agent = options.agent ?? ((rng: RandomSource) => new HeuristicV1BattleAgent(rng));
-  const rows = enumerateSelections(makeSelf().length);
-  const cols = enumerateSelections(makeOpponent().length);
+  const rows = enumerateSelections(makeSelf(0).length);
+  const cols = enumerateSelections(makeOpponent(0).length);
   const matrix: number[][] = [];
   for (const row of rows) {
     const scores: number[] = [];
@@ -68,8 +73,8 @@ export async function buildPayoffMatrix(
       let score = 0;
       for (let game = 0; game < gamesPerCell; game++) {
         const base = (seed + game) * 7919;
-        const self = makeSelf();
-        const opponent = makeOpponent();
+        const self = makeSelf(game);
+        const opponent = makeOpponent(game);
         const teamA = row.map((index) => self[index]);
         const teamB = col.map((index) => opponent[index]);
         const result = await runBattle(teamA, teamB, agent(new SeededRandom(base + 1)), agent(new SeededRandom(base + 2)), {
@@ -84,6 +89,7 @@ export async function buildPayoffMatrix(
       scores.push(score / gamesPerCell);
     }
     matrix.push(scores);
+    if (options.yieldEachRow) await new Promise((resolve) => setTimeout(resolve, 0));
   }
   return { rows, cols, matrix, games: rows.length * cols.length * gamesPerCell };
 }
@@ -153,4 +159,53 @@ export function sampleStrategy(probabilities: number[], rng: RandomSource): numb
     if (r < 0) return i;
   }
   return probabilities.length - 1;
+}
+
+// 見せ合いで見える種族だけから相手の6体を作る関数（buildPayoffMatrix の makeOpponent に渡す）。
+// makeRoster は相手の6体の新しい複製を返す。型は信念の候補を試合の番号で入れ替えて当てはめる。
+// 相手の構築そのものが信念に入っていると漏れになるので、belief からは外しておく。
+export function previewOpponent(makeRoster: () => Pokemon[], belief: Belief): (game: number) => Pokemon[] {
+  return (game) => {
+    const roster = makeRoster();
+    for (const pokemon of roster) applyPreviewSet(pokemon, belief, game);
+    return roster;
+  };
+}
+
+// 選出の候補のうち、members（先発が先頭）と同じ先発・同じ3体のもの。無ければ -1。
+export function findOption(options: SelectionOption[], roster: Pokemon[], members: Pokemon[]): number {
+  const indices = members.map((pokemon) => roster.indexOf(pokemon));
+  if (indices.some((index) => index < 0)) return -1;
+  const key = [...indices].sort((a, b) => a - b).join(',');
+  return options.findIndex((option) => option[0] === indices[0] && [...option].sort((a, b) => a - b).join(',') === key);
+}
+
+// 行の候補の、相手の均衡の戦略に対する見込み（勝率表の上の期待得点）。
+export function expectedScore(table: PayoffMatrix, solution: MatrixGameSolution, row: number): number {
+  return table.matrix[row].reduce((sum, value, j) => sum + value * solution.col[j], 0);
+}
+
+export interface SelectionChoice {
+  index: number;
+  option: SelectionOption;
+  // matrix: 混合戦略から引いた候補。fallback: 見込みの差がしきい値に届かず、既定の選出（基本選出）にした。
+  source: 'matrix' | 'fallback';
+  // 引いた候補の見込みから、既定の選出の見込みを引いた差。
+  gain: number;
+}
+
+// 混合戦略から1つ引き、既定の選出より見込みが threshold 以上高いときだけそれを使う。
+// 勝率表は v1 どうしの模擬対戦なので、見込みの差が小さいときは既定の選出（構築の作者が練った基本選出）のほうが良い。
+export function chooseSelection(
+  table: PayoffMatrix,
+  solution: MatrixGameSolution,
+  fallback: number,
+  rng: RandomSource,
+  threshold = 0,
+): SelectionChoice {
+  const pick = sampleStrategy(solution.row, rng);
+  if (fallback < 0) return { index: pick, option: table.rows[pick], source: 'matrix', gain: 0 };
+  const gain = expectedScore(table, solution, pick) - expectedScore(table, solution, fallback);
+  const index = gain >= threshold ? pick : fallback;
+  return { index, option: table.rows[index], source: gain >= threshold ? 'matrix' : 'fallback', gain };
 }
