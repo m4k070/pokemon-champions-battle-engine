@@ -264,7 +264,7 @@ export const PSYCHIC_SURGE: AbilityDefinition = {
 // 切る技は本編の一覧のうち、チャンピオンズで覚えるものを名前で持つ。
 const SLICING_MOVE_NAMES = new Set([
   'つばめがえし', 'エアカッター', 'エアスラッシュ', 'アクアカッター', 'クロスポイズン', 'つじぎり',
-  'サイコカッター', 'リーフブレード', 'はっぱカッター', 'シェルブレード', 'せいなるつるぎ', 'ひけんちえなみ',
+  'サイコカッター', 'リーフブレード', 'はっぱカッター', 'シェルブレード', 'せいなるつるぎ', 'ひけんちえなみ', 'ひけん・ちえなみ',
   'きりさく', 'シザークロス', 'ソーラーブレード', 'ドゲザン',
   'aerial-ace', 'air-cutter', 'air-slash', 'aqua-cutter', 'cross-poison', 'night-slash', 'psycho-cut',
   'leaf-blade', 'razor-leaf', 'razor-shell', 'sacred-sword', 'ceaseless-edge', 'slash', 'x-scissor',
