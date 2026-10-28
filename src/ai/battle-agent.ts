@@ -1,3 +1,4 @@
+import type { Belief } from './opponent-belief.js';
 import type { Pokemon } from '../pokemon.js';
 import type { AgentAction, WeatherType } from '../types.js';
 import type { BattleSession } from '../battle-runner.js';
@@ -46,6 +47,8 @@ export interface BattleContext {
   mustSwitch: boolean;
   field: BattleFieldView;
   recentLog: string[];
+  // この側から見た相手の型の信念（BattleSession の beliefs。指定が無ければ既定の信念）。
+  belief?: Belief;
 }
 
 export interface AgentDecision {

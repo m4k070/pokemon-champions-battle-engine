@@ -7,8 +7,8 @@ import { getAbilityDefinition } from './rules/abilities/registry.js';
 import { createStruggleMove } from './move.js';
 import type { Pokemon } from './pokemon.js';
 import { shallowClonePokemon } from './pokemon.js';
-import { applyEstimatedStats } from './ai/opponent-belief.js';
-import type { OpponentStatsEstimate } from './ai/opponent-belief.js';
+import { applyEstimatedStats, defaultBelief } from './ai/opponent-belief.js';
+import type { Belief, OpponentStatsEstimate } from './ai/opponent-belief.js';
 import type { AgentAction } from './types.js';
 import { STAT_STAGE_KEYS } from './types.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './ai/battle-agent.js';
@@ -95,6 +95,9 @@ export interface StartSessionOptions {
   information?: InformationLevel;
   // 'partial' のとき相手の能力値をどう見せるか。既定 'exact'（実際の値。実戦では見えない）。
   opponentStats?: OpponentStatsEstimate;
+  // 側ごとの相手の型の信念（[A から見た B, B から見た A]）。省略した側は既定の信念（defaultBelief）。
+  // 相手の構築そのものを含まない信念を渡すと、カタログの構築どうしの対戦でも型の漏れが無くなる。
+  beliefs?: [Belief | undefined, Belief | undefined];
 }
 
 // 1ターンずつ進められるバトルの実行単位。snapshot()/restore()/fork()により
@@ -113,6 +116,8 @@ export class BattleSession {
   readonly information: InformationLevel;
   // 'partial' のときの相手の能力値の見せ方（StartSessionOptions.opponentStats）。fork に引き継ぐ。
   opponentStats: OpponentStatsEstimate = 'exact';
+  // 側ごとの相手の型の信念（StartSessionOptions.beliefs）。fork に引き継ぐ。
+  beliefs: [Belief | undefined, Belief | undefined] = [undefined, undefined];
   private knownMoves: [Map<Pokemon, Set<number>>, Map<Pokemon, Set<number>>] = [new Map<Pokemon, Set<number>>(), new Map<Pokemon, Set<number>>()];
   private knownItems: [Set<Pokemon>, Set<Pokemon>] = [new Set(), new Set()];
   private knownAbilities: [Set<Pokemon>, Set<Pokemon>] = [new Set(), new Set()];
@@ -170,6 +175,7 @@ export class BattleSession {
 
     const session = new BattleSession(engine, teamA, teamB, leadA, leadB, megaEvolutionSystem, options.information ?? 'full');
     session.opponentStats = options.opponentStats ?? 'exact';
+    session.beliefs = options.beliefs ?? [undefined, undefined];
     return session;
   }
 
@@ -261,6 +267,7 @@ export class BattleSession {
     );
     session.reasoningLog = [...this.reasoningLog];
     session.opponentStats = this.opponentStats;
+    session.beliefs = this.beliefs;
     if (options.rngSeed !== undefined) session.engine.rng = new SeededRandom(options.rngSeed);
     return session;
   }
@@ -325,7 +332,13 @@ export class BattleSession {
     // 分岐探索（1手先読み）用。局面の複製はエージェント側で行う。
     context.side = side;
     context.session = this;
+    context.belief = this.beliefOf(side);
     return context;
+  }
+
+  // viewer から見た相手の型の信念。
+  beliefOf(viewer: 0 | 1): Belief {
+    return this.beliefs[viewer] ?? defaultBelief();
   }
 
   // 相手の情報を「見えている分だけ」に絞る。full モードでは素通し。
@@ -342,7 +355,7 @@ export class BattleSession {
       ? pokemon.ability
       : 'none';
     // 能力値は実戦では見えない（見えるのは HP の割合）。見積もりで置き換える。
-    applyEstimatedStats(clone, this.opponentStats);
+    applyEstimatedStats(clone, this.opponentStats, this.beliefOf(viewer));
     return clone;
   }
 

@@ -309,7 +309,7 @@ export function extractFeatures(context: BattleContext): FeatureVector {
   // --- プレイヤーの視点でのダメージの見積もり（2026-10-27。player-damage.ts） ---
   // est_*: エンジンと同じ計算の期待ダメージ（最大 HP に対する割合）と KO 率。相手の能力値は見えている値（見積もり）を使い、
   // 前に当てた（受けた）ときの減り方で補正する。obs_* はその補正があったか。eff_* は相性の区分（4・2・1・0.5・0.25・0）。
-  const view = playerDamage(context);
+  const view = playerDamage(context, context.belief);
   features.est_out = view.out.fraction;
   features.est_out_ko = view.out.koChance;
   features.est_in = view.in.fraction;

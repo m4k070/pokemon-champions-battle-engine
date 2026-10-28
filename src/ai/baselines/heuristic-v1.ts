@@ -360,7 +360,7 @@ function matchupScore(candidate: Pokemon, context: BattleContext): number {
 }
 
 export interface HeuristicV1Options {
-  // 相手の型に関する信念（省略時はメタの構築プールから作る）。
+  // 相手の型に関する信念（省略時は局面の信念 context.belief、それも無ければメタの構築プールから作る）。
   belief?: Belief;
   // みがわりの評価式。'legacy' は旧実装（伏せ情報を「無い」と扱う）。A/B用。
   substituteScoring?: 'expectation' | 'legacy' | 'off';
@@ -381,11 +381,11 @@ export class HeuristicV1BattleAgent implements BattleAgent {
   // 直近の selectAction で各候補に付けたスコア（ハイブリッド方策の「迷い検出」用）。
   lastEvaluation: { label: string; score: number; kind: 'move' | 'switch' }[] = [];
 
-  private readonly belief: Belief;
+  private readonly belief: Belief | undefined;
   private readonly substituteScoring: 'expectation' | 'legacy' | 'off';
 
   constructor(private readonly rng: RandomSource = SYSTEM_RANDOM, options: HeuristicV1Options = {}) {
-    this.belief = options.belief ?? defaultBelief();
+    this.belief = options.belief;
     this.substituteScoring = options.substituteScoring ?? 'legacy';
     this.allowVoluntarySwitch = options.allowVoluntarySwitch ?? true;
     this.leadWithMega = options.leadWithMega ?? true;
@@ -436,7 +436,7 @@ export class HeuristicV1BattleAgent implements BattleAgent {
       // 相手の選択を予測しない方策では当てにできないので割り引く（実測: グソクムシャ構築の改善）。
       const conditionalPenalty = move.category !== 'status' && move.failsUnlessTargetAttacks ? 0.35 : 1;
       const damageScore = (ratio * 400 + lethal) * selfDropPenalty(move) * conditionalPenalty;
-      let utility = move.category === 'status' ? statusMoveScore(move, context, this.belief, this.substituteScoring) : 0;
+      let utility = move.category === 'status' ? statusMoveScore(move, context, this.belief ?? context.belief ?? defaultBelief(), this.substituteScoring) : 0;
       if (hasPassMove) {
         // 渡す技そのもの: 積んだ段数が多いほど、かつ瀕死に近いほど（＝今渡す価値が高い）加点。
         if (move.passStats) {
