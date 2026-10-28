@@ -64,8 +64,9 @@ class ScriptedRandom implements RandomSource {
   setState(): void {}
 }
 
+// snapshotPokemon・restorePokemon がそれぞれ中身を複製するので、間に structuredClone は挟まない（探索の時間の4割を占めていた）。
 function clone(pokemon: Pokemon): Pokemon {
-  return restorePokemon(structuredClone(snapshotPokemon(pokemon)));
+  return restorePokemon(snapshotPokemon(pokemon));
 }
 
 function hitChance(attacker: Pokemon, defender: Pokemon, move: MoveData, environment: DamageEnvironment): number {
