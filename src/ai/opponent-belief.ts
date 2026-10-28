@@ -1,4 +1,5 @@
 import { Pokemon } from '../pokemon.js';
+import { createMove } from '../move.js';
 import type { StatKey, Stats } from '../types.js';
 import type { NatureInput, StatPointsInput } from '../rules/stat-point-system.js';
 
@@ -114,6 +115,36 @@ export function estimateStats(pokemon: Pokemon, mode: Exclude<OpponentStatsEstim
     out[key] = Math.round(all.reduce((sum, stats) => sum + stats[key], 0) / all.length);
   }
   return out;
+}
+
+// 見せ合いで見えるのは種族だけなので、選出を考えるときの相手の1体（新しく作った複製）に信念の候補セットの1つを当てはめる。
+// pick で候補を選ぶ（試合ごとに変えると型の不確かさを反映できる）。
+// 候補が無い種族は、タイプ一致の仮の攻撃技だけ・特性なし・持ち物なし・無振りにして false を返す
+// （実物の技・特性は見せ合いでは見えないので使わない）。
+export function applyPreviewSet(pokemon: Pokemon, belief: Belief, pick: number): boolean {
+  const sets = belief.get(pokemon.baseName ?? pokemon.name) ?? [];
+  const set = sets.length > 0 ? sets[pick % sets.length] : undefined;
+  if (set) {
+    pokemon.moves = set.moves.map((move) => ({ ...move }));
+    pokemon.item = set.item;
+    pokemon.ability = set.ability;
+  } else {
+    pokemon.moves = placeholderMoves(pokemon);
+    pokemon.item = null;
+    pokemon.ability = 'none';
+  }
+  pokemon.statPoints = set?.statPoints ?? {};
+  pokemon.nature = set?.nature ?? null;
+  pokemon.stats = Pokemon.calculateStats(pokemon.baseStats, pokemon.level, pokemon.statPoints, pokemon.nature);
+  pokemon.maxHP = pokemon.stats.HP;
+  pokemon.currentHP = pokemon.maxHP;
+  return set !== undefined;
+}
+
+// 型の分からない種族の仮の技: タイプごとに威力80・命中100の一致技を1つ。物理か特殊かは種族値の高いほう。
+export function placeholderMoves(pokemon: Pokemon): Pokemon['moves'] {
+  const category = pokemon.baseStats.ATK >= pokemon.baseStats.SPATK ? 'physical' : 'special';
+  return pokemon.types.map((type) => createMove({ name: `仮の一致技（${type}）`, type, power: 80, accuracy: 100, pp: 16, category }));
 }
 
 // 相手のポケモン（の複製）の能力値を見積もりに置き換える。HP とみがわりは割合を保つ（実戦で見えるのは HP の割合）。
