@@ -1,6 +1,7 @@
 import { Pokemon } from '../src/pokemon.js';
 import { createMove } from '../src/move.js';
-import { statusMoveProbability, compatibleSets, baseStatusRate, type Belief } from '../src/ai/opponent-belief.js';
+import { statusMoveProbability, compatibleSets, baseStatusRate, buildBelief, type Belief } from '../src/ai/opponent-belief.js';
+import { BattleSession } from '../src/battle-runner.js';
 
 // 不完全情報では、まだ見えていない技を「無い」と扱うと判断が歪む。
 // 信念（候補セット）から確率で扱うことを固定する。
@@ -42,5 +43,27 @@ describe('相手の型の信念', () => {
     const rate = statusMoveProbability(unknown, belief);
     expect(rate).toBe(baseStatusRate(belief));
     expect(rate).toBeGreaterThan(0);
+  });
+});
+
+describe('側ごとの信念', () => {
+  const base = { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 };
+  const tackle = () => createMove({ name: 'たいあたり', type: 'normal', power: 40, accuracy: 100, pp: 35, category: 'physical' });
+  const make = (name: string) => new Pokemon({ name, types: ['normal'], ability: 'none', item: null, baseStats: base, moves: [tackle()] });
+
+  test('見る側の信念で相手の能力値を見積もり、局面と fork に渡す', async () => {
+    const fast = make('b');
+    fast.statPoints = { SPEED: 32 };
+    const beliefA = buildBelief([[fast]]);
+    const session = await BattleSession.start([make('a')], [make('b')], {
+      information: 'partial', opponentStats: 'belief', beliefs: [beliefA, undefined],
+    });
+    const context = session.getContext(0);
+    expect(context.belief).toBe(beliefA);
+    // A から見た b は信念の配分（素早さ全振り）で、実物（無振り）より速い。
+    expect(context.opponent.stats.SPEED).toBeGreaterThan(session.activeB.stats.SPEED);
+    expect(session.fork().getContext(0).belief).toBe(beliefA);
+    // B の側は既定の信念（未登録なら空なので無振り・無補正）。
+    expect(session.getContext(1).opponent.stats.SPEED).toBe(session.activeA.stats.SPEED);
   });
 });

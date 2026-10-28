@@ -144,7 +144,7 @@ export class ValueSearchBattleAgent implements BattleAgent {
     const mode = this.options.opponentMode ?? 'worst';
     if (mode === 'belief' || (this.fair && mode !== 'model')) {
       const scenarios = this.fair
-        ? fairOpponentScenarios(session.getContext(side), this.options.belief ?? defaultBelief())
+        ? fairOpponentScenarios(session.getContext(side), this.options.belief ?? session.beliefOf(side))
         : this.beliefScenarios(session.fork(), side);
       if (scenarios.length === 0) return -Infinity;
       if (mode !== 'belief') {
@@ -198,7 +198,7 @@ export class ValueSearchBattleAgent implements BattleAgent {
   // 候補セットごとに技4つ、加えて交代（ベンチに残っている全員）を1つずつ。
   // 実際の技構成・PPは見ないので、不完全情報モードでも情報が漏れない。
   private beliefScenarios(fork: BattleSession, side: 0 | 1): OpponentScenario[] {
-    return opponentScenarios(fork.getContext(side), this.options.belief ?? defaultBelief());
+    return opponentScenarios(fork.getContext(side), this.options.belief ?? fork.beliefOf(side));
   }
 
   private async simulateWith(
@@ -210,7 +210,7 @@ export class ValueSearchBattleAgent implements BattleAgent {
     const opponent = side === 0 ? fork.activeB : fork.activeA;
     // 複製の中の相手は実物なので、能力値も見積もりに置き換える（先読みのダメージ・素早さの順番に実際の配分を使わない）。
     for (const pokemon of side === 0 ? fork.teamB : fork.teamA) {
-      applyEstimatedStats(pokemon, fork.opponentStats, this.options.belief ?? defaultBelief());
+      applyEstimatedStats(pokemon, fork.opponentStats, this.options.belief ?? fork.beliefOf(side));
     }
     if (scenario.moves !== null) {
       opponent.moves = scenario.moves.map((move) => ({ ...move }));
