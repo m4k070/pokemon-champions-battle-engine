@@ -247,14 +247,15 @@ export class BattleSession {
   }
 
   // 現在の状態から独立した別セッションを作る（分岐探索用）。
-  // structuredCloneでスナップショットを複製してから復元するため、参照を共有しない。
+  // snapshot() は値を書き出した新しいデータで、fromSnapshot がそこから実体を作り直すので、参照を共有しない
+  // （間に structuredClone を挟むと、探索の時間の1割を占めていた）。
   // 情報レベルは引き継ぐ（'partial' の対戦で fork が 'full' になると、探索が相手の
   // 伏せ情報を見てしまう＝実戦ではできない推論になる）。
   // 既定では乱数の状態も複製するので、同じ行動なら本番と同じ結果（急所・命中・ダメージの乱数）になる。
   // 探索で本番の乱数を覗かないようにするには rngSeed を渡し、複製側だけ乱数を引き直す。
   fork(options: { rngSeed?: number } = {}): BattleSession {
     const session = BattleSession.fromSnapshot(
-      structuredClone(this.snapshot()),
+      this.snapshot(),
       this.megaEvolutionSystem,
       this.information,
     );
