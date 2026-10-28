@@ -92,6 +92,24 @@ describe('きれあじ', () => {
     const target = () => mon('相手', { types: ['psychic'] });
     expect(damage(mon('アブソル', { ability: 'sharpness' }), target(), claw())).toBe(damage(mon('攻撃側'), target(), claw()));
   });
+
+  test('カタログの技名（ひけん・ちえなみ）も切る技', () => {
+    const edge = () => move('ひけん・ちえなみ', 'dark', 'physical');
+    expect(damage(mon('ダイケンキ', { ability: 'sharpness' }), mon('相手'), edge()) / damage(mon('攻撃側'), mon('相手'), edge())).toBeGreaterThan(1.4);
+  });
+});
+
+describe('フェアリーオーラ', () => {
+  const fairy = () => move('ムーンフォース', 'fairy', 'special');
+  test('使う側でも受ける側でも、フェアリー技は約1.33倍', () => {
+    const plain = damage(mon('攻撃側'), mon('相手'), fairy());
+    expect(damage(mon('メガフラエッテ', { ability: 'fairy-aura' }), mon('相手'), fairy()) / plain).toBeGreaterThan(1.25);
+    expect(damage(mon('攻撃側'), mon('メガフラエッテ', { ability: 'fairy-aura' }), fairy()) / plain).toBeGreaterThan(1.25);
+  });
+  test('フェアリー以外の技は変わらない', () => {
+    const slash = () => move('つじぎり', 'dark', 'physical');
+    expect(damage(mon('メガフラエッテ', { ability: 'fairy-aura' }), mon('相手'), slash())).toBe(damage(mon('攻撃側'), mon('相手'), slash()));
+  });
 });
 
 describe('追加したメガシンカ', () => {
@@ -178,5 +196,30 @@ describe('ゆき（チャンピオンズの天候）', () => {
       if (result.outcome === 'failed') missed++;
     }
     expect(missed).toBe(0);
+  });
+});
+
+describe('いたずらごころ', () => {
+  const willOWisp = () => createMove({ name: 'おにび', type: 'fire', power: 0, accuracy: 85, pp: 15, category: 'status', status: 'burn' });
+  const swordsDance = () =>
+    createMove({ name: 'つるぎのまい', type: 'normal', power: 0, accuracy: 100, pp: 20, category: 'status', selfStatChange: [{ stat: 'ATK', delta: 2 }] });
+
+  test('変化技の優先度が+1になり、攻撃技は変わらない', () => {
+    const engine = new BattleEngine({ rng: new SeededRandom(1) });
+    const banette = mon('メガジュペッタ', { ability: 'prankster' });
+    expect(engine.movePriority(banette, willOWisp())).toBe(1);
+    expect(engine.movePriority(banette, move('シャドークロー', 'ghost', 'physical'))).toBe(0);
+    expect(engine.movePriority(mon('相手'), willOWisp())).toBe(0);
+  });
+
+  test('あくタイプの相手には、相手に向けた変化技が効かない（自分に使う技は出せる）', () => {
+    const engine = new BattleEngine({ rng: new SeededRandom(1) });
+    const banette = mon('メガジュペッタ', { ability: 'prankster' });
+    const dark = mon('アブソル', { types: ['dark'] });
+    engine.setActivePokemon(0, banette);
+    engine.setActivePokemon(1, dark);
+    expect(engine.useMove(banette, dark, willOWisp())).toEqual({ outcome: 'failed', reason: 'blocked-by-ability' });
+    expect(dark.status).toBeNull();
+    expect(engine.useMove(banette, dark, swordsDance()).outcome).not.toBe('failed');
   });
 });

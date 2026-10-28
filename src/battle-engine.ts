@@ -705,6 +705,14 @@ export class BattleEngine {
       return { outcome: 'failed', reason: 'blocked-by-terrain' };
     }
 
+    // いたずらごころ: 優先度が上がった変化技は、あくタイプの相手には効かない（本編仕様）。
+    // 相手に向けた変化技には、あくび・アンコール・ちょうはつ・ふきとばしも含める（targetsOpponent は能力・状態の変化だけを見る）。
+    if (isStatusMove(move) && attacker.ability === 'prankster' && defender.types.includes('dark')
+        && (targetsOpponent(move) || move.inflictsDrowsy || move.inflictsEncore || move.inflictsTaunt || move.forcesSwitch)) {
+      this.log.push(`${defender.name}には効果がないようだ…`);
+      return { outcome: 'failed', reason: 'blocked-by-ability' };
+    }
+
     // ふいうち: 相手がそのターン攻撃技を選んでいなければ失敗する（本編仕様）。
     // 「選んでいるか」は BattleRunner が毎ターン設定する（intendsToAttackThisTurn）。
     if (isDamageMove(move) && move.failsUnlessTargetAttacks && !defender.intendsToAttackThisTurn) {
@@ -1284,6 +1292,11 @@ export class BattleEngine {
     // ミストフィールド: 接地している側が受けるドラゴン技は威力が半減する（本編仕様）。
     if (this.field.terrain === 'misty-terrain' && effectiveType === 'dragon' && this.isGrounded(defender)) {
       power = Math.floor(power * 0.5);
+    }
+
+    // フェアリーオーラ: 場にこの特性のポケモンがいると、どちらが使うフェアリー技も威力が約1.33倍（5448/4096、本編仕様。メガフラエッテの特性）。
+    if (effectiveType === 'fairy' && (attacker.ability === 'fairy-aura' || defender.ability === 'fairy-aura')) {
+      power = Math.floor(power * 5448 / 4096);
     }
 
     // じゅうでん状態: でんき技の威力が2倍になり、状態は解除される（本編仕様）。
@@ -1932,11 +1945,13 @@ export class BattleEngine {
   }
 
   // 技の実効優先度。グラススライダーはグラスフィールドで接地していれば+1（本編仕様）。
+  // いたずらごころ: 変化技は+1（本編仕様。メガジュペッタの特性）。
   movePriority(pokemon: Pokemon, move: MoveData): number {
     if (isDamageMove(move) && move.priorityInGrassyTerrain
         && this.field.terrain === 'grassy-terrain' && this.isGrounded(pokemon)) {
       return move.priority + 1;
     }
+    if (isStatusMove(move) && pokemon.ability === 'prankster') return move.priority + 1;
     return move.priority;
   }
 
