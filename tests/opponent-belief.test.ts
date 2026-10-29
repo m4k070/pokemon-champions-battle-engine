@@ -2,6 +2,8 @@ import { Pokemon } from '../src/pokemon.js';
 import { createMove } from '../src/move.js';
 import { statusMoveProbability, compatibleSets, baseStatusRate, buildBelief, type Belief } from '../src/ai/opponent-belief.js';
 import { BattleSession } from '../src/battle-runner.js';
+import { HeuristicBattleAgent } from '../src/ai/heuristic-battle-agent.js';
+import { SeededRandom } from '../src/rng.js';
 
 // 不完全情報では、まだ見えていない技を「無い」と扱うと判断が歪む。
 // 信念（候補セット）から確率で扱うことを固定する。
@@ -65,5 +67,39 @@ describe('側ごとの信念', () => {
     expect(session.fork().getContext(0).belief).toBe(beliefA);
     // B の側は既定の信念（未登録なら空なので無振り・無補正）。
     expect(session.getContext(1).opponent.stats.SPEED).toBe(session.activeA.stats.SPEED);
+  });
+
+  test('fork の信念を差し替えても元の局面には影響しない', async () => {
+    const beliefA = buildBelief([[make('b')]]);
+    const beliefs: [Belief | undefined, Belief | undefined] = [beliefA, undefined];
+    const session = await BattleSession.start([make('a')], [make('b')], { information: 'partial', beliefs });
+    const fork = session.fork();
+    fork.beliefs[0] = buildBelief([]);
+    beliefs[1] = buildBelief([]);
+    expect(session.getContext(0).belief).toBe(beliefA);
+    expect(session.beliefs[1]).toBeUndefined();
+  });
+
+  test('HeuristicBattleAgent は信念の指定が無ければ局面の信念で変化技を見積もる', async () => {
+    // 局面の信念に「b はあくびを持つ」とあれば、相手の妨害変化技を警戒してみがわりの評価が上がる（expectation）。
+    const yawn = () => createMove({ name: 'あくび', type: 'normal', power: 0, accuracy: 100, pp: 10, category: 'status', inflictsDrowsy: true });
+    const sub = () => createMove({ name: 'みがわり', type: 'normal', power: 0, accuracy: 100, pp: 10, category: 'status', createsSubstitute: true });
+    const self = () => {
+      const pokemon = make('a');
+      pokemon.moves = [sub()];
+      return pokemon;
+    };
+    const yawner = make('b');
+    yawner.moves = [yawn(), tackle(), tackle(), tackle()];
+    const scoreWith = async (beliefs: [Belief | undefined, Belief | undefined]) => {
+      const session = await BattleSession.start([self()], [make('b')], { information: 'partial', beliefs });
+      const agent = new HeuristicBattleAgent(new SeededRandom(1), { substituteScoring: 'expectation' });
+      await agent.selectAction(session.getContext(0));
+      return agent.lastEvaluation.find((entry) => entry.label.includes('みがわり'))?.score;
+    };
+    const withYawn = await scoreWith([buildBelief([[yawner]]), undefined]);
+    const without = await scoreWith([buildBelief([[make('b')]]), undefined]);
+    expect(withYawn).toBeDefined();
+    expect(withYawn).toBeGreaterThan(without!);
   });
 });

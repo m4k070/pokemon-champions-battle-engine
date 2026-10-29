@@ -218,8 +218,9 @@ describe('いたずらごころ', () => {
     const dark = mon('アブソル', { types: ['dark'] });
     engine.setActivePokemon(0, banette);
     engine.setActivePokemon(1, dark);
-    expect(engine.useMove(banette, dark, willOWisp())).toEqual({ outcome: 'failed', reason: 'blocked-by-ability' });
+    expect(engine.useMove(banette, dark, willOWisp())).toEqual({ outcome: 'no-effect', reason: 'type-immune', pivot: false });
     expect(dark.status).toBeNull();
+    expect(banette.abilityRevealed).toBe(true);
     expect(engine.useMove(banette, dark, swordsDance()).outcome).not.toBe('failed');
   });
 });

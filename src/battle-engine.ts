@@ -707,10 +707,12 @@ export class BattleEngine {
 
     // いたずらごころ: 優先度が上がった変化技は、あくタイプの相手には効かない（本編仕様）。
     // 相手に向けた変化技には、あくび・アンコール・ちょうはつ・ふきとばしも含める（targetsOpponent は能力・状態の変化だけを見る）。
+    // 相手の特性ではなくタイプによる無効なので、他の変化技のタイプ無効と同じ type-immune で返す。効かなかったことで特性も知られる。
     if (isStatusMove(move) && attacker.ability === 'prankster' && defender.types.includes('dark')
         && (targetsOpponent(move) || move.inflictsDrowsy || move.inflictsEncore || move.inflictsTaunt || move.forcesSwitch)) {
+      this.observeAbility(attacker);
       this.log.push(`${defender.name}には効果がないようだ…`);
-      return { outcome: 'failed', reason: 'blocked-by-ability' };
+      return { outcome: 'no-effect', reason: 'type-immune', pivot: false };
     }
 
     // ふいうち: 相手がそのターン攻撃技を選んでいなければ失敗する（本編仕様）。

@@ -175,7 +175,7 @@ export class BattleSession {
 
     const session = new BattleSession(engine, teamA, teamB, leadA, leadB, megaEvolutionSystem, options.information ?? 'full');
     session.opponentStats = options.opponentStats ?? 'exact';
-    session.beliefs = options.beliefs ?? [undefined, undefined];
+    session.beliefs = options.beliefs ? [...options.beliefs] : [undefined, undefined];
     return session;
   }
 
@@ -267,7 +267,7 @@ export class BattleSession {
     );
     session.reasoningLog = [...this.reasoningLog];
     session.opponentStats = this.opponentStats;
-    session.beliefs = this.beliefs;
+    session.beliefs = [...this.beliefs];
     if (options.rngSeed !== undefined) session.engine.rng = new SeededRandom(options.rngSeed);
     return session;
   }
