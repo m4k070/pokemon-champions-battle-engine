@@ -4,7 +4,7 @@ import { BattleField } from './battle-field.js';
 import type { TerrainType } from './battle-field.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
 import { Pokemon } from './pokemon.js';
-import type { MoveData, StatusCondition, StatStageKey, TypeName, WeatherType, TypeChart } from './types.js';
+import type { FieldEffect, MoveData, StatusCondition, StatStageKey, TypeName, WeatherType, TypeChart } from './types.js';
 import { STAT_STAGE_KEYS } from './types.js';
 import { isDamageMove, isPhysicalMove, isSpecialMove, isStatusMove, cloneDamageMove, targetsOpponent } from './move.js';
 import type { UseMoveResult, NoEffectReason } from './use-move-result.js';
@@ -55,6 +55,25 @@ const TYPE_BOOST_ITEMS: Partial<Record<string, TypeName>> = {
   'mystic-water': 'water',
   'spell-tag': 'ghost',
 };
+
+// ウェザーボール。カタログの表記（日本語）と英語IDの両方を受ける。
+const WEATHER_BALL_NAMES = new Set(['ウェザーボール', 'weather-ball']);
+
+// 場に置く技のうち、相手の場に置くもの（マジックミラーで跳ね返る）。
+const OPPONENT_HAZARD_EFFECTS: ReadonlySet<FieldEffect> = new Set<FieldEffect>(['stealth-rock', 'spikes', 'toxic-spikes', 'sticky-web']);
+
+// 相手に向けた変化技の効果を持つか。targetsOpponent（状態異常・能力変化・やどりぎ）に、
+// あくび・アンコール・ちょうはつを足したもの。ほえる・ふきとばしは含めない（まもるを貫通するため個別に扱う）。
+function hasOpponentStatusEffect(move: MoveData): boolean {
+  return targetsOpponent(move) || move.inflictsDrowsy === true || move.inflictsEncore === true || move.inflictsTaunt === true;
+}
+
+// マジックミラーで跳ね返る変化技（相手に向けた変化技と、相手の場に置く技）。
+function isReflectable(move: MoveData): boolean {
+  if (!isStatusMove(move)) return false;
+  return hasOpponentStatusEffect(move) || move.forcesSwitch === true
+    || (move.fieldEffect != null && OPPONENT_HAZARD_EFFECTS.has(move.fieldEffect));
+}
 
 // グラスフィールドで威力が半減する地面技（本編仕様。マグニチュードも対象だがチャンピオンズに無い）。
 const GRASSY_HALVED_MOVE_NAMES = new Set(['じしん', 'じならし', 'earthquake', 'bulldoze']);
@@ -632,20 +651,6 @@ export class BattleEngine {
       }
     }
 
-    // まもる: そのターンの間、相手から受ける技を無効化する（本編仕様）。
-    // 自分を対象にする技（つるぎのまい等）は防げないため targetsOpponent で限定する。
-    if (defender.protecting && targetsOpponent(move)) {
-      this.log.push(`${defender.name}は身を守っている`);
-      return { outcome: 'failed', reason: 'protected' };
-    }
-
-    // マジックミラー（magic-bounce）: 変化技を跳ね返す（対象を入れ替えて再適用）。
-    // 両者マジックミラーなら跳ね返し合いにならない（1回だけ跳ね返す）。
-    if (isStatusMove(move) && defender.ability === 'magic-bounce' && attacker.ability !== 'magic-bounce') {
-      this.log.push(`${defender.name}のマジックミラーが${attacker.name}の${move.name}を跳ね返した！`);
-      return this.useMove(defender, attacker, move);
-    }
-
     // プレッシャー: 相手が持っていると、こちらのPP消費が2倍になる（かたやぶりは無視）。
     // わるあがきはPPを持たないので消費しない（プレッシャーも乗らない）。
     if (move.ignoresTypeEffectiveness && move.name === 'わるあがき') {
@@ -697,10 +702,31 @@ export class BattleEngine {
       return { outcome: 'failed', reason: 'encored' };
     }
 
+    return this.executeMove(attacker, defender, move, false);
+  }
+
+  // 技を出した後の解決（PP の消費・技の記録は useMove が済ませている）。
+  // bounced はマジックミラーで跳ね返された技の解決で、もう一度は跳ね返らず、跳ね返した側の「直前の技」にもならない。
+  private executeMove(attacker: Pokemon, defender: Pokemon, move: MoveData, bounced: boolean): UseMoveResult {
+    // まもる: そのターンの間、相手から受ける技を無効化する（本編仕様）。PP は減り、技も相手に知られる。
+    // 自分を対象にする技（つるぎのまい等）・場に置く技・ほえる（まもるを貫通する）は防げない。
+    if (defender.protecting && hasOpponentStatusEffect(move)) {
+      this.log.push(`${defender.name}は身を守っている`);
+      return { outcome: 'failed', reason: 'protected' };
+    }
+
+    // マジックミラー（magic-bounce）: 相手に向けた変化技・相手の場に置く技を跳ね返す（本編仕様）。
+    // 自分に使う技（つるぎのまい・まもる等）は跳ね返らない。かたやぶりの技は跳ね返せない。
+    if (!bounced && isReflectable(move) && defender.ability === 'magic-bounce' && attacker.ability !== 'mold-breaker') {
+      this.observeAbility(defender);
+      this.log.push(`${defender.name}のマジックミラーが${attacker.name}の${move.name}を跳ね返した！`);
+      return this.executeMove(defender, attacker, move, true);
+    }
+
     // サイコフィールド: 接地している相手には先制技（優先度+1以上）が効かない（本編仕様）。
     // 相手が接地していなければ（ひこう・ふゆう）通常どおり効く。
     if (this.field.terrain === 'psychic-terrain' && this.movePriority(attacker, move) > 0
-        && targetsOpponent(move) && this.isGrounded(defender)) {
+        && (hasOpponentStatusEffect(move) || move.forcesSwitch === true) && this.isGrounded(defender)) {
       this.log.push(`${defender.name}はサイコフィールドに守られている！`);
       return { outcome: 'failed', reason: 'blocked-by-terrain' };
     }
@@ -709,7 +735,7 @@ export class BattleEngine {
     // 相手に向けた変化技には、あくび・アンコール・ちょうはつ・ふきとばしも含める（targetsOpponent は能力・状態の変化だけを見る）。
     // 相手の特性ではなくタイプによる無効なので、他の変化技のタイプ無効と同じ type-immune で返す。効かなかったことで特性も知られる。
     if (isStatusMove(move) && attacker.ability === 'prankster' && defender.types.includes('dark')
-        && (targetsOpponent(move) || move.inflictsDrowsy || move.inflictsEncore || move.inflictsTaunt || move.forcesSwitch)) {
+        && (hasOpponentStatusEffect(move) || move.forcesSwitch === true)) {
       this.observeAbility(attacker);
       this.log.push(`${defender.name}には効果がないようだ…`);
       return { outcome: 'no-effect', reason: 'type-immune', pivot: false };
@@ -807,7 +833,7 @@ export class BattleEngine {
     }
 
     // 技が実行に進んだ時点で「直前に使った技」として記録する（アンコールの対象になる）。
-    attacker.recordLastMove(move.name);
+    if (!bounced) attacker.recordLastMove(move.name);
 
     if (move.fieldEffect === 'trick-room') {
       if (this.trickRoom) {
@@ -1131,12 +1157,14 @@ export class BattleEngine {
     if (move.inflictsSeed) {
       if (defender.types.includes('grass')) {
         this.log.push('くさタイプには効果がない');
-      } else if (defender.isSeeded) {
-        this.log.push(`${defender.name}にはすでにやどりぎのタネが植えられている`);
-      } else {
-        defender.isSeeded = true;
-        this.log.push(`${defender.name}にやどりぎのタネを植え付けた`);
+        return noEffect('type-immune');
       }
+      if (defender.isSeeded) {
+        this.log.push(`${defender.name}にはすでにやどりぎのタネが植えられている`);
+        return noEffect('no-applicable-effect');
+      }
+      defender.isSeeded = true;
+      this.log.push(`${defender.name}にやどりぎのタネを植え付けた`);
       return effectApplied();
     }
 
@@ -1198,11 +1226,12 @@ export class BattleEngine {
       return { outcome: 'damaged', damage: dealt, effectiveness: 1, pivot: false };
     }
 
-    let effectiveType = move.name === 'weather-ball' && this.weather && WEATHER_BALL_TYPE[this.weather]
-      ? WEATHER_BALL_TYPE[this.weather]!
-      : move.type;
+    const weatherBallType = WEATHER_BALL_NAMES.has(move.name) && this.weather ? WEATHER_BALL_TYPE[this.weather] : undefined;
+    let effectiveType = weatherBallType ?? move.type;
 
     let power = move.power;
+    // ウェザーボール: 天候下ではタイプが変わり、威力が2倍になる（本編仕様）。
+    if (weatherBallType !== undefined) power *= 2;
 
     // おはかまいり: 倒れている味方1体につき威力+50（本編仕様）。
     if (isDamageMove(move) && move.powerPerFaintedAlly) {
@@ -1412,10 +1441,7 @@ export class BattleEngine {
       this.log.push('効果はいまひとつのようだ');
     } else if (lastEffectiveness === 0) {
       this.log.push('効果がなかった');
-      // タイプ無効時は追加効果・能力変化を発動しない
-      if (move.selfStatChange) {
-        this.applySelfStatChange(attacker, move.selfStatChange);
-      }
+      // タイプ無効時は追加効果も使用者の能力変化（インファイト等）も発動しない（本編仕様）。
       return { outcome: 'no-effect', reason: 'type-immune', pivot: false };
     }
 

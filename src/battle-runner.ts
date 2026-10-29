@@ -501,6 +501,8 @@ export class BattleSession {
     outgoing.resetEncore(); // アンコールも場を離れると解除される
     // ばけのかわは場を離れても戻らない（バトル中1回きり。第8世代以降）。リセットしない。
     outgoing.resetSubstitute(); // みがわりは場を離れると消える
+    outgoing.resetProtect(); // まもるの連続使用のカウントも場を離れると切れる
+    outgoing.recordLastMove(null); // 直前の技（アンコールの対象）も場を離れると消える
 
     // 場を離れるときの特性フック（さいせいりょく等）。
     const ability = getAbilityDefinition(outgoing.ability);
@@ -680,7 +682,12 @@ export class BattleSession {
       // 控えが全員瀕死なら何も起きない。
       if (defender.forcedOut) {
         defender.resetForcedOut();
-        this.applyForcedOutSwitch(side === 0 ? 1 : 0);
+        const forcedSide = side === 0 ? 1 : 0;
+        this.applyForcedOutSwitch(forcedSide);
+        // 引きずり出されたポケモンはそのターン行動しない。まだ動いていなかった側の行動は取り消す
+        // （残すと、交代先が元のポケモンの moveIndex で技を出してしまう）。
+        const pendingIndex = pending.remainingSides.indexOf(forcedSide);
+        if (pendingIndex >= 0) pending.remainingSides.splice(pendingIndex, 1);
       }
 
       if (this.isFinished()) break;

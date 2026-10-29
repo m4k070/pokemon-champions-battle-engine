@@ -71,6 +71,8 @@ export interface PokémonConstructorData {
   // ばけのかわ: 既に身代わりになったか（バトル中は戻らない。交代しても復活しない）。
   disguiseBroken?: boolean;
   charged?: boolean;
+  // もらいびで炎技を吸収した後の強化状態（場を離れると解除）。
+  flashFireActive?: boolean;
   // アンコール: 直前に使った技の名前（アンコールの固定対象を決めるのに使う）。
   lastMoveName?: string | null;
   // 場に出たことがあるか（不完全情報で、相手の選出のうち見えた控えを決めるのに使う）。
@@ -153,7 +155,7 @@ export class Pokemon {
     this.item = data.item ?? null;
     this.itemUsed = data.itemUsed ?? false;
     this.abilityRevealed = data.abilityRevealed ?? false;
-    this.flashFireActive = false;
+    this.flashFireActive = data.flashFireActive ?? false;
     this.charged = data.charged ?? false;
     this.lockedMove = data.lockedMove ?? null;
     this.baseStats = data.baseStats;
@@ -347,7 +349,7 @@ export class Pokemon {
   }
 
   // アンコール: 直前に使った技を記録する（技を実行したときに BattleEngine が呼ぶ）。
-  recordLastMove(moveName: string): void {
+  recordLastMove(moveName: string | null): void {
     this.lastMoveName = moveName;
   }
 

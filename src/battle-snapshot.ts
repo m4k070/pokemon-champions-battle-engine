@@ -40,6 +40,7 @@ export interface PokemonSnapshot {
   substituteHP: number;
   disguiseBroken: boolean;
   charged: boolean;
+  flashFireActive: boolean;
   protecting: boolean;
   protectStreak: number;
   intendsToAttackThisTurn: boolean;
@@ -196,6 +197,7 @@ export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
     substituteHP: pokemon.substituteHP,
     disguiseBroken: pokemon.disguiseBroken,
     charged: pokemon.charged,
+    flashFireActive: pokemon.flashFireActive,
     protecting: pokemon.protecting,
     protectStreak: pokemon.protectStreak,
     intendsToAttackThisTurn: pokemon.intendsToAttackThisTurn,
@@ -238,6 +240,7 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
     substituteHP: snapshot.substituteHP,
     disguiseBroken: snapshot.disguiseBroken,
     charged: snapshot.charged,
+    flashFireActive: snapshot.flashFireActive,
     protecting: snapshot.protecting,
     protectStreak: snapshot.protectStreak,
     intendsToAttackThisTurn: snapshot.intendsToAttackThisTurn,
