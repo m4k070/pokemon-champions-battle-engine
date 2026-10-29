@@ -821,21 +821,11 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(guardedDamage).toBeGreaterThanOrEqual(Math.floor(plainDamage / 2));
     expect(guardedDamage).toBeLessThanOrEqual(Math.ceil(plainDamage / 2));
   });
-  test('エレキメイカー: 入場時にエレキフィールドを展開し、でん技の威力が1.3倍になる', () => {
+  test('エレキメイカー: エレキフィールドの威力補正は特性ではなくフィールド側が持つ', () => {
+    // 威力1.3倍はエレキメイカー以外のポケモンにも掛かるため、battle-engine がフィールドを見て掛ける。
+    // 特性にも補正を持たせると、エレキメイカー自身のでんき技だけ二重に掛かる。
     const { ELECTRIC_SURGE } = require('../src/rules/abilities/meta-abilities.js') as typeof import('../src/rules/abilities/meta-abilities.js');
-    const attacker = makePokemon('Raichu', 'electric-surge', { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
-
-    // エレキフィールドなしでは補正なし
-    const electricNormal = ELECTRIC_SURGE.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Thunderbolt', type: 'electric', power: 90 }), value: 90, engine });
-    expect(electricNormal).toBe(90);
-
-    // エレキフィールドありでは1.3倍
-    engine.field.terrain = 'electric-terrain';
-    const electricBoosted = ELECTRIC_SURGE.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Thunderbolt', type: 'electric', power: 90 }), value: 90, engine });
-    expect(electricBoosted).toBe(117);
-
-    const otherType = ELECTRIC_SURGE.modifyMovePower!({ pokemon: attacker, move: move({ name: 'Tackle', type: 'normal', power: 40 }), value: 40, engine });
-    expect(otherType).toBe(40);
+    expect(ELECTRIC_SURGE.modifyMovePower).toBeUndefined();
   });
 
   test('つめかえなし: 接触技の威力が1.3倍になる', () => {

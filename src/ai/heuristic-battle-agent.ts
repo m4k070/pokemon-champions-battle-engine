@@ -2,6 +2,7 @@ import type { Pokemon } from '../pokemon.js';
 import type { MoveData, StatStageKey, TypeName } from '../types.js';
 import { STAT_STAGE_KEYS } from '../types.js';
 import { TYPE_CHART } from '../type-chart.js';
+import { isMegaStone } from '../rules/mega-evolution.js';
 import { SYSTEM_RANDOM } from '../rng.js';
 import type { RandomSource } from '../rng.js';
 import { getLegalActions } from './battle-agent.js';
@@ -272,6 +273,7 @@ function statusMoveScore(
       case 'toxic-spikes':
         return 50;
       case 'reflect':
+      case 'light-screen':
       case 'aurora-veil':
       case 'tailwind':
         return 45;
@@ -399,7 +401,7 @@ export class HeuristicBattleAgent implements BattleAgent {
       if (setter) return setter;
     }
     if (this.leadWithMega) {
-      const megaHolder = team.find((pokemon) => pokemon.item !== null && /ite(-z)?$/.test(pokemon.item));
+      const megaHolder = team.find((pokemon) => pokemon.item !== null && isMegaStone(pokemon.item));
       if (megaHolder) return megaHolder;
     }
     return team[0];

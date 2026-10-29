@@ -269,9 +269,9 @@ describe('だいちのはどう（フィールドでタイプと威力が変わ�
   }
 
   test.each([
-    // サイコフィールド・グラスフィールドは接地したエスパー技・くさ技をさらに1.3倍するため 50→100→130 になる。
+    // サイコ・エレキ・グラスフィールドは接地したエスパー技・でんき技・くさ技をさらに1.3倍するため 50→100→130 になる。
     ['psychic-terrain', 'psychic', 130],
-    ['electric-terrain', 'electric', 100],
+    ['electric-terrain', 'electric', 130],
     ['grassy-terrain', 'grass', 130],
     ['misty-terrain', 'fairy', 100],
   ] as const)('%s では %s タイプ・威力が2倍になる', (terrain, expectedType, expectedPower) => {

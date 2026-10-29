@@ -26,8 +26,8 @@ const TypeNameSchema = z.enum(TYPE_NAMES);
 const MoveCategorySchema = z.enum(MOVE_CATEGORIES);
 const StatusConditionSchema = z.enum(['sleep', 'poison', 'burn', 'paralysis', 'freeze', 'badly-poisoned']);
 const FieldEffectSchema = z.enum([
-  'tailwind', 'trick-room', 'reflect', 'stealth-rock', 'spikes', 'toxic-spikes',
-  'psychic-terrain', 'misty-terrain', 'aurora-veil', 'sticky-web',
+  'tailwind', 'trick-room', 'reflect', 'light-screen', 'stealth-rock', 'spikes', 'toxic-spikes',
+  'psychic-terrain', 'misty-terrain', 'electric-terrain', 'grassy-terrain', 'aurora-veil', 'sticky-web',
 ]);
 const StatStageKeySchema = z.enum(['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED']);
 
@@ -303,6 +303,8 @@ function stateView(stored: StoredSession) {
     toxicSpikes: { ...session.engine.field.toxicSpikes },
     tailwind: { ...session.engine.field.tailwind },
     reflect: { ...session.engine.field.reflect },
+    lightScreen: { ...session.engine.field.lightScreen },
+    auroraVeil: { ...session.engine.field.auroraVeil },
     teamA: session.teamA.map((p) => pokemonView(p)),
     teamB: session.teamB.map((p) => pokemonView(p)),
     activeIndexA: session.teamA.indexOf(session.activeA),
@@ -319,6 +321,18 @@ function stateView(stored: StoredSession) {
     canUndo: stored.history.canUndo(),
     canRedo: stored.history.canRedo(),
   };
+}
+
+type UsedMove = { name: string; type: string; category: string };
+
+function movesUsedBy(used: Record<string, UsedMove[]>, pokemon: Pokemon): UsedMove[] {
+  const moves = [...(used[pokemon.name] ?? [])];
+  if (pokemon.baseName !== pokemon.name) {
+    for (const move of used[pokemon.baseName] ?? []) {
+      if (!moves.some((m) => m.name === move.name)) moves.push(move);
+    }
+  }
+  return moves;
 }
 
 /**
@@ -338,7 +352,7 @@ function visibleStateView(stored: StoredSession, side: 0 | 1) {
   const opponentActive = opponentTeam[opponentActiveIndex];
 
   // 相手が使った技を記憶（moveLog から抽出）
-  const opponentMovesUsed: Record<string, { name: string; type: string; category: string }[]> = {};
+  const opponentMovesUsed: Record<string, UsedMove[]> = {};
   for (const entry of session.engine.moveLog) {
     if (entry.side !== side) {
       const pokemonName = entry.pokemonName;
@@ -367,10 +381,13 @@ function visibleStateView(stored: StoredSession, side: 0 | 1) {
     toxicSpikes: { ...session.engine.field.toxicSpikes },
     tailwind: { ...session.engine.field.tailwind },
     reflect: { ...session.engine.field.reflect },
+    lightScreen: { ...session.engine.field.lightScreen },
+    auroraVeil: { ...session.engine.field.auroraVeil },
     myTeam: myTeam.map((p, i) => visiblePokemonView(p, true, i === myActiveIndex, opponentActive?.types)),
     opponentTeam: opponentTeam.map((p, i) => ({
       ...visiblePokemonView(p, false, i === opponentActiveIndex, myActive?.types),
-      movesUsed: opponentMovesUsed[p.name] || [],
+      // メガシンカすると名前が変わるので、メガシンカ前の名前で記録された技も合わせる。
+      movesUsed: movesUsedBy(opponentMovesUsed, p),
     })),
     myActiveIndex,
     opponentActiveIndex,
@@ -539,7 +556,13 @@ export function createBattleServer(): McpServer {
 
         stored.history.checkpoint();
         session.beginTurn();
-        session.applyForcedSwitch(side, { action: { type: 'switch', pokemonIndex }, reasoning });
+        try {
+          session.applyForcedSwitch(side, { action: { type: 'switch', pokemonIndex }, reasoning });
+        } catch (error) {
+          // 不正な交代先などで失敗したら、チェックポイントとターン開始ごと巻き戻す（apply_turn と同じ）。
+          stored.history.rollback();
+          throw error;
+        }
 
         return stateView(stored);
       })
@@ -590,8 +613,8 @@ export function createBattleServer(): McpServer {
             session.endTurn();
           }
         } catch (error) {
-          // エラー時はスナップショットを巻き戻す
-          stored.history.undo();
+          // エラー時はスナップショットを巻き戻す（redo 履歴には残さない）
+          stored.history.rollback();
           throw error;
         }
 

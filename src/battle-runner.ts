@@ -2,14 +2,13 @@ import { BattleEngine } from './battle-engine.js';
 import type { RandomSource } from './rng.js';
 import { SeededRandom } from './rng.js';
 import { MegaEvolutionSystem } from './rules/mega-evolution.js';
-import { isDamageMove } from './move.js';
+import { isDamageMove, needsLivingTarget } from './move.js';
 import { getAbilityDefinition } from './rules/abilities/registry.js';
 import { createStruggleMove } from './move.js';
 import type { Pokemon } from './pokemon.js';
 import { shallowClonePokemon } from './pokemon.js';
 import { applyEstimatedStats, defaultBelief } from './ai/opponent-belief.js';
 import type { Belief, OpponentStatsEstimate } from './ai/opponent-belief.js';
-import type { AgentAction } from './types.js';
 import { STAT_STAGE_KEYS } from './types.js';
 import type { BattleAgent, BattleContext, AgentDecision } from './ai/battle-agent.js';
 import { snapshotBattle, restoreBattle } from './battle-snapshot.js';
@@ -319,13 +318,16 @@ export class BattleSession {
     const self = side === 0 ? this.activeA : this.activeB;
     const selfTeam = side === 0 ? this.teamA : this.teamB;
 
+    // 場の相手とチーム内の同じ個体は、同じ複製を指すようにする（full モードと同じく参照で突き合わせられる）。
+    const redactedTeam = opponentTeam.map((pokemon) => this.redact(side, pokemon));
+    const activeIndex = opponentTeam.indexOf(opponent);
     const context = buildContext(
       this.engine,
       side,
       self,
       selfTeam,
-      this.redact(side, opponent),
-      opponentTeam.map((pokemon) => this.redact(side, pokemon)),
+      activeIndex >= 0 ? redactedTeam[activeIndex] : this.redact(side, opponent),
+      redactedTeam,
       canMegaEvolve,
       mustSwitch,
     );
@@ -359,21 +361,22 @@ export class BattleSession {
     return clone;
   }
 
-  // 行動から相手に伝わる情報を記録する（使った技・メガシンカによる持ち物と特性の判明）。
-  private reveal(viewer: 0 | 1, actor: Pokemon, action: AgentAction): void {
-    if (this.information === 'full') return;
-    if (action.type !== 'move') return;
-
+  // 実際に出た技を相手に開示する。選んだだけで出なかった技（ねむり・ひるみ・まひ・先に倒れた）は見えない。
+  private revealMove(viewer: 0 | 1, actor: Pokemon, moveIndex: number): void {
+    if (this.information === 'full' || moveIndex < 0) return;
     let revealed = this.knownMoves[viewer].get(actor);
     if (!revealed) {
       revealed = new Set<number>();
       this.knownMoves[viewer].set(actor, revealed);
     }
-    if (action.moveIndex >= 0) revealed.add(action.moveIndex);
-    if (action.megaEvolve) {
-      this.knownItems[viewer].add(actor);
-      this.knownAbilities[viewer].add(actor);
-    }
+    revealed.add(moveIndex);
+  }
+
+  // メガシンカは場で見えるので、持ち物（メガストーン）と特性が相手に判明する。
+  private revealMegaEvolution(viewer: 0 | 1, actor: Pokemon): void {
+    if (this.information === 'full') return;
+    this.knownItems[viewer].add(actor);
+    this.knownAbilities[viewer].add(actor);
   }
 
   // 技のダメージのうち両者に見えたもの（HP の減った割合・急所・相性）を記録する。みがわりが受けた分は HP に表れないので記録しない。
@@ -579,6 +582,7 @@ export class BattleSession {
       this.megaEvolutionSystem.megaEvolve(this.activeA);
       this.megaUsed[0] = true;
       this.engine.log.push(`${this.activeA.name}はメガシンカした！`);
+      this.revealMegaEvolution(1, this.activeA);
       // メガシンカは実質的な場への再登場: 新特性の onSwitchIn（いかく・天候変化等）を発動する。
       // ステータス変化・状態異常などは megaEvolve 内で引き継がれる（リセットしない）。
       this.engine.events.emit('switch-in', { pokemon: this.activeA, team: this.teamA, engine: this.engine });
@@ -587,6 +591,7 @@ export class BattleSession {
       this.megaEvolutionSystem.megaEvolve(this.activeB);
       this.megaUsed[1] = true;
       this.engine.log.push(`${this.activeB.name}はメガシンカした！`);
+      this.revealMegaEvolution(0, this.activeB);
       // 同上: 新特性の onSwitchIn を発動する
       this.engine.events.emit('switch-in', { pokemon: this.activeB, team: this.teamB, engine: this.engine });
     }
@@ -650,7 +655,7 @@ export class BattleSession {
     ) {
       const attacker = side === 0 ? this.activeA : this.activeB;
       const defender = side === 0 ? this.activeB : this.activeA;
-      if (attacker.isFainted || defender.isFainted) continue;
+      if (attacker.isFainted) continue;
 
       const action = side === 0 ? pending.actionA : pending.actionB;
       if (action.type !== 'move') continue;
@@ -663,6 +668,8 @@ export class BattleSession {
         this.engine.log.push(`${attacker.name}のmoveIndex ${action.moveIndex}は範囲外です`);
         continue;
       }
+      // 相手が先に倒れていたら、相手に向ける技は出せない。自分や場に対する技はそのまま出る（本編仕様）。
+      if (defender.isFainted && needsLivingTarget(chosenMove)) continue;
       const hpBefore = defender.maxHP === 0 ? 0 : defender.currentHP / defender.maxHP;
       const hadSubstitute = defender.substituteHP > 0;
       const logStart = this.engine.log.length;
@@ -671,7 +678,10 @@ export class BattleSession {
         attack: attacker.statStages[physicalMove ? 'ATK' : 'SPATK'],
         defense: defender.statStages[physicalMove ? 'DEF' : 'SPDEF'],
       };
+      const moveLogLength = this.engine.moveLog.length;
       const result = this.engine.useMove(attacker, defender, chosenMove);
+      // 技が出た（moveLog に載った）ときだけ相手に見える。
+      if (this.engine.moveLog.length > moveLogLength) this.revealMove(side === 0 ? 1 : 0, attacker, action.moveIndex);
       if (isDamageResult(result) && !hadSubstitute && chosenMove.category !== 'status') {
         this.recordObservedDamage(side, attacker, defender, chosenMove, result.effectiveness, hpBefore, logStart, stagesBefore);
       }
@@ -814,10 +824,7 @@ export class BattleSession {
       agentB.selectAction(this.getContext(1)),
     ]);
 
-    // 不完全情報モード: 使った技と、メガシンカで判明する持ち物・特性を相手に開示する。
-    this.reveal(1, this.activeA, decisionA.action);
-    this.reveal(0, this.activeB, decisionB.action);
-
+    // 不完全情報モードでの開示（出た技・メガシンカ）は applyTurn の中で、実際に起きたときに行う。
     this.applyTurn(decisionA, decisionB);
 
     // pivot技は交代先を技の解決後に選ぶため、完了するまで該当エージェントに問い合わせる
@@ -839,6 +846,8 @@ export class BattleHistory {
   session: BattleSession;
   private past: BattleSnapshot[] = [];
   private future: BattleSnapshot[] = [];
+  // 直前の checkpoint で捨てた redo 履歴（rollback で戻すため）。
+  private futureBeforeCheckpoint: BattleSnapshot[] = [];
 
   constructor(session: BattleSession) {
     this.session = session;
@@ -857,7 +866,18 @@ export class BattleHistory {
   // 履歴管理だけを流用したいときに使う。
   checkpoint(): void {
     this.past.push(this.session.snapshot());
+    this.futureBeforeCheckpoint = this.future;
     this.future = [];
+  }
+
+  // 直前の checkpoint 以降の操作を、無かったことにする（失敗した操作の巻き戻し用）。
+  // undo と違って redo 履歴に積まず、checkpoint で捨てた redo 履歴も元に戻す。
+  rollback(): void {
+    const snapshot = this.past.pop();
+    if (snapshot === undefined) throw new Error('rollbackできる履歴がありません');
+    this.session.restore(snapshot);
+    this.future = this.futureBeforeCheckpoint;
+    this.futureBeforeCheckpoint = [];
   }
 
   async playTurn(agentA: BattleAgent, agentB: BattleAgent): Promise<void> {

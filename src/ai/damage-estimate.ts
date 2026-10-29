@@ -31,6 +31,7 @@ export interface DamageEnvironment {
   terrain: BattleContext['field']['terrain'];
   // 受ける側の壁（ターン数。0 なら無し）。
   reflect: number;
+  lightScreen: number;
   auroraVeil: number;
   // 攻撃側の味方で倒れている数（おはかまいり）。
   faintedAllies: number;
@@ -107,6 +108,7 @@ function simulate(
   engine.field.terrain = environment.terrain;
   engine.field.terrainTurnsLeft = environment.terrain === null ? 0 : 5;
   engine.field.reflect.playerB = environment.reflect;
+  engine.field.lightScreen.playerB = environment.lightScreen;
   engine.field.auroraVeil.playerB = environment.auroraVeil;
   const sure = { ...move, accuracy: 100, pp: Math.max(1, move.pp) };
   const before = d.currentHP;
@@ -125,7 +127,7 @@ function cacheKey(attacker: Pokemon, defender: Pokemon, move: MoveData, environm
     pokemon.currentHP, pokemon.maxHP, pokemon.substituteHP, pokemon.flashFireActive, pokemon.charged, pokemon.disguiseBroken, pokemon.weightKg, pokemon.form,
   ].join('|');
   return [side(attacker), side(defender), move.name, move.type, move.category, move.power, move.accuracy,
-    environment.weather, environment.terrain, environment.reflect > 0, environment.auroraVeil > 0, environment.faintedAllies].join('#');
+    environment.weather, environment.terrain, environment.reflect > 0, environment.lightScreen > 0, environment.auroraVeil > 0, environment.faintedAllies].join('#');
 }
 
 export function estimateDamage(attacker: Pokemon, defender: Pokemon, move: MoveData, environment: DamageEnvironment): DamageEstimate {
@@ -192,6 +194,7 @@ export function damageEnvironment(context: BattleContext, attackerIsSelf: boolea
     weather: context.field.weather,
     terrain: context.field.terrain,
     reflect: engine?.field.reflect[defenderSide] ?? 0,
+    lightScreen: engine?.field.lightScreen[defenderSide] ?? 0,
     auroraVeil: engine?.field.auroraVeil[defenderSide] ?? 0,
     faintedAllies: attackerTeam.filter((pokemon) => pokemon !== attacker && pokemon.name !== attacker.name && pokemon.isFainted).length,
   };

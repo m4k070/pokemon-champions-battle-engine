@@ -199,7 +199,7 @@ export const SPICY_SPRAY: AbilityDefinition = {
 };
 
 // エレキメイカー: 入場時にエレキフィールドを展開する（5ターン）。
-// でん技の威力が1.3倍になる効果は battle-engine 側で field.terrain を参照して実装する。
+// でんき技の威力1.3倍・ねむり無効はフィールドの効果なので、battle-engine 側で field.terrain を参照して実装する。
 export const ELECTRIC_SURGE: AbilityDefinition = {
   name: 'electric-surge',
   onSwitchIn: ({ pokemon, engine }) => {
@@ -207,12 +207,6 @@ export const ELECTRIC_SURGE: AbilityDefinition = {
     engine.field.terrain = 'electric-terrain';
     engine.field.terrainTurnsLeft = 5;
     engine.log.push(`${pokemon.name}のエレキメイカーでエレキフィールドが発動した！`);
-  },
-  modifyMovePower: ({ move, value, engine }) => {
-    if (move.type === 'electric' && engine.field.terrain === 'electric-terrain') {
-      return Math.floor(value * 1.3);
-    }
-    return value;
   },
 };
 

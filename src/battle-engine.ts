@@ -6,7 +6,7 @@ import { getAbilityDefinition } from './rules/abilities/registry.js';
 import { Pokemon } from './pokemon.js';
 import type { FieldEffect, MoveData, StatusCondition, StatStageKey, TypeName, WeatherType, TypeChart } from './types.js';
 import { STAT_STAGE_KEYS } from './types.js';
-import { isDamageMove, isPhysicalMove, isSpecialMove, isStatusMove, cloneDamageMove, targetsOpponent } from './move.js';
+import { isDamageMove, isPhysicalMove, isSpecialMove, isStatusMove, cloneDamageMove, targetsOpponent, hasOpponentStatusEffect } from './move.js';
 import type { UseMoveResult, NoEffectReason } from './use-move-result.js';
 import { SYSTEM_RANDOM } from './rng.js';
 import { isMegaStone } from './rules/mega-evolution.js';
@@ -62,12 +62,6 @@ const WEATHER_BALL_NAMES = new Set(['ウェザーボール', 'weather-ball']);
 // 場に置く技のうち、相手の場に置くもの（マジックミラーで跳ね返る）。
 const OPPONENT_HAZARD_EFFECTS: ReadonlySet<FieldEffect> = new Set<FieldEffect>(['stealth-rock', 'spikes', 'toxic-spikes', 'sticky-web']);
 
-// 相手に向けた変化技の効果を持つか。targetsOpponent（状態異常・能力変化・やどりぎ）に、
-// あくび・アンコール・ちょうはつを足したもの。ほえる・ふきとばしは含めない（まもるを貫通するため個別に扱う）。
-function hasOpponentStatusEffect(move: MoveData): boolean {
-  return targetsOpponent(move) || move.inflictsDrowsy === true || move.inflictsEncore === true || move.inflictsTaunt === true;
-}
-
 // マジックミラーで跳ね返る変化技（相手に向けた変化技と、相手の場に置く技）。
 function isReflectable(move: MoveData): boolean {
   if (!isStatusMove(move)) return false;
@@ -84,6 +78,17 @@ const TERRAIN_PULSE_TYPE: Record<NonNullable<TerrainType>, TypeName> = {
   'grassy-terrain': 'grass',
   'misty-terrain': 'fairy',
 };
+
+const TERRAIN_NAMES: Record<NonNullable<TerrainType>, string> = {
+  'electric-terrain': 'エレキフィールド',
+  'psychic-terrain': 'サイコフィールド',
+  'grassy-terrain': 'グラスフィールド',
+  'misty-terrain': 'ミストフィールド',
+};
+
+function isTerrainEffect(effect: FieldEffect | null | undefined): effect is NonNullable<TerrainType> {
+  return effect != null && effect in TERRAIN_NAMES;
+}
 
 // あさのひざし等、天候依存の自己回復技の回復割合（本編仕様）。
 const WEATHER_HEAL_PERCENT: Record<'none' | WeatherType, number> = {
@@ -240,6 +245,13 @@ export class BattleEngine {
   flowerVeilProtects(pokemon: Pokemon): boolean {
     if (!pokemon.types.includes('grass')) return false;
     return this.teamOf(pokemon).some((ally) => !ally.isFainted && ally.ability === 'flower-veil');
+  }
+
+  // フィールドによる状態異常の無効化。ミストフィールドは全ての状態異常、エレキフィールドはねむりを防ぐ（接地しているときだけ）。
+  terrainBlocksStatus(target: Pokemon, status: StatusCondition): boolean {
+    if (!this.isGrounded(target)) return false;
+    if (this.field.terrain === 'misty-terrain') return true;
+    return this.field.terrain === 'electric-terrain' && status === 'sleep';
   }
 
   // 特性による状態異常の無効化（ふみん・じゅうなん・ねつこうかん・フラワーヴェール）。
@@ -499,7 +511,7 @@ export class BattleEngine {
     });
   }
 
-  // ダメージ補正の合成。タイプ相性 → 急所 → 壁（リフレクター）の順に適用する。
+  // ダメージ補正の合成。タイプ相性 → 急所 → 壁（リフレクター・ひかりのかべ・オーロラベール）の順に適用する。
   // 急所は壁を貫通するため、壁による軽減は急所のときに適用しない。
   // 乱数（0.85〜1.00）はここでは掛けない（rollDamage が担当）。
   applyModifiers(
@@ -517,15 +529,15 @@ export class BattleEngine {
       finalDamage = Math.floor(finalDamage * CRIT_MULTIPLIER);
     }
 
+    // 壁: リフレクターは物理、ひかりのかべは特殊、オーロラベールは両方を半減する。
+    // 壁同士は重ならず、何枚張られていても半減は1回だけ（本編仕様）。急所は壁を貫通する。
     const defenderSide = this.getSide(defender);
-    if (!critical && isPhysicalMove(move) && defenderSide !== null && this.field.reflect[this.sideKey(defenderSide)] > 0) {
-      finalDamage = Math.floor(finalDamage / 2);
-    }
-
-    // オーロラベール: 張られている側が受けるダメージを半減する（物理・特殊を問わない。本編仕様）。
-    // 急所は壁を貫通するため適用しない。
-    if (!critical && defenderSide !== null && this.field.auroraVeil[this.sideKey(defenderSide)] > 0) {
-      finalDamage = Math.floor(finalDamage / 2);
+    if (!critical && defenderSide !== null) {
+      const key = this.sideKey(defenderSide);
+      const walled = this.field.auroraVeil[key] > 0
+        || (isPhysicalMove(move) && this.field.reflect[key] > 0)
+        || (isSpecialMove(move) && this.field.lightScreen[key] > 0);
+      if (walled) finalDamage = Math.floor(finalDamage / 2);
     }
 
     this.events.emit('apply-modifiers', { attacker, defender, move, finalDamage, effectiveness, critical });
@@ -717,7 +729,7 @@ export class BattleEngine {
 
     // マジックミラー（magic-bounce）: 相手に向けた変化技・相手の場に置く技を跳ね返す（本編仕様）。
     // 自分に使う技（つるぎのまい・まもる等）は跳ね返らない。かたやぶりの技は跳ね返せない。
-    if (!bounced && isReflectable(move) && defender.ability === 'magic-bounce' && attacker.ability !== 'mold-breaker') {
+    if (!bounced && isReflectable(move) && !defender.isFainted && defender.ability === 'magic-bounce' && attacker.ability !== 'mold-breaker') {
       this.observeAbility(defender);
       this.log.push(`${defender.name}のマジックミラーが${attacker.name}の${move.name}を跳ね返した！`);
       return this.executeMove(defender, attacker, move, true);
@@ -857,11 +869,19 @@ export class BattleEngine {
       return effectApplied();
     }
 
-    if (move.fieldEffect === 'reflect') {
+    // リフレクター / ひかりのかべ: 5ターン（ひかりのねんどで8ターン）。張られている間は張り直せない（本編仕様）。
+    if (move.fieldEffect === 'reflect' || move.fieldEffect === 'light-screen') {
       const side = this.getSide(attacker);
       if (side !== null) {
-        this.field.reflect[this.sideKey(side)] = attacker.item === 'light-clay' ? 8 : 5;
-        this.log.push(`${attacker.name}側の場に「リフレクター」の壁ができた`);
+        const walls = move.fieldEffect === 'reflect' ? this.field.reflect : this.field.lightScreen;
+        const wallName = move.fieldEffect === 'reflect' ? 'リフレクター' : 'ひかりのかべ';
+        const key = this.sideKey(side);
+        if (walls[key] > 0) {
+          this.log.push('しかし うまくきまらなかった');
+          return noEffect('no-applicable-effect');
+        }
+        walls[key] = attacker.item === 'light-clay' ? 8 : 5;
+        this.log.push(`${attacker.name}側の場に「${wallName}」の壁ができた`);
       }
       return effectApplied();
     }
@@ -925,12 +945,17 @@ export class BattleEngine {
       return effectApplied();
     }
 
-    // サイコフィールド / ミストフィールド: 5ターンの間フィールドを展開する。
-    // グランドコート持ちなら8ターンになる（本編仕様）。
-    if (move.fieldEffect === 'psychic-terrain' || move.fieldEffect === 'misty-terrain') {
+    // フィールド技: 5ターンの間フィールドを展開する。
+    // グランドコート持ちなら8ターンになる。同じフィールドが既にあれば失敗する（本編仕様）。
+    if (isTerrainEffect(move.fieldEffect)) {
+      const terrain = move.fieldEffect;
+      if (this.field.terrain === terrain) {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('no-applicable-effect');
+      }
       const turns = attacker.item === 'terrain-extender' ? 8 : 5;
-      const terrainName = move.fieldEffect === 'psychic-terrain' ? 'サイコフィールド' : 'ミストフィールド';
-      this.field.terrain = move.fieldEffect;
+      const terrainName = TERRAIN_NAMES[terrain];
+      this.field.terrain = terrain;
       this.field.terrainTurnsLeft = turns;
       this.log.push(`${attacker.name}は${terrainName}を展開した（${turns}ターン）`);
       return effectApplied();
@@ -1104,8 +1129,8 @@ export class BattleEngine {
         this.log.push(`${defender.name}はすでにねむけている`);
         return noEffect('no-applicable-effect');
       }
-      // すでに状態異常なら眠れないため、ねむけも付かない（本編仕様）。
-      if (defender.status !== null) {
+      // すでに状態異常なら眠れないため、ねむけも付かない。眠れないフィールドの上でも同じ（本編仕様）。
+      if (defender.status !== null || this.terrainBlocksStatus(defender, 'sleep')) {
         this.log.push('効果がなかった');
         return noEffect('status-immune');
       }
@@ -1310,6 +1335,12 @@ export class BattleEngine {
       power = Math.floor(power * 1.3);
     }
 
+    // エレキフィールド: 接地している側のでんき技は威力1.3倍（本編仕様）。
+    if (this.field.terrain === 'electric-terrain' && effectiveType === 'electric'
+        && this.isGrounded(attacker)) {
+      power = Math.floor(power * 1.3);
+    }
+
     // グラスフィールド: 接地している側のくさ技は威力1.3倍。接地している相手へのじしん・じならしは半減（本編仕様）。
     if (this.field.terrain === 'grassy-terrain') {
       if (effectiveType === 'grass' && this.isGrounded(attacker)) {
@@ -1496,8 +1527,8 @@ export class BattleEngine {
     if (defender.isFainted) {
       this.log.push(`${defender.name}は戦闘不能になった`);
     } else {
-      const mistyProtected = this.field.terrain === 'misty-terrain' && this.isGrounded(defender);
-      if (move.secondaryEffect && !mistyProtected && this.rng.next() * 100 < move.secondaryEffect.chance) {
+      if (move.secondaryEffect && !this.terrainBlocksStatus(defender, move.secondaryEffect.status)
+          && this.rng.next() * 100 < move.secondaryEffect.chance) {
         // 特性による無効化は追加効果でも効く。
         if (this.blocksStatusByAbility(defender, move.secondaryEffect.status)) {
           this.observeAbility(defender);
@@ -1600,9 +1631,9 @@ export class BattleEngine {
       return { outcome: 'no-effect', reason: 'status-immune', pivot };
     }
 
-    // ミストフィールド: 接地しているポケモンは状態異常にならない（本編仕様）。
-    if (this.field.terrain === 'misty-terrain' && this.isGrounded(defender)) {
-      this.log.push(`${defender.name}はミストフィールドに守られている`);
+    // ミストフィールド・エレキフィールド: 接地しているポケモンは状態異常（エレキはねむりだけ）にならない（本編仕様）。
+    if (this.terrainBlocksStatus(defender, status)) {
+      this.log.push(`${defender.name}は${TERRAIN_NAMES[this.field.terrain!]}に守られている`);
       return { outcome: 'no-effect', reason: 'status-immune', pivot };
     }
 
@@ -1675,6 +1706,12 @@ export class BattleEngine {
         this.field.reflect[key]--;
         if (this.field.reflect[key] === 0) {
           this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側のリフレクターが消えた`);
+        }
+      }
+      if (this.field.lightScreen[key] > 0) {
+        this.field.lightScreen[key]--;
+        if (this.field.lightScreen[key] === 0) {
+          this.log.push(`${side === 0 ? 'プレイヤーA' : 'プレイヤーB'}側のひかりのかべが消えた`);
         }
       }
       if (this.field.auroraVeil[key] > 0) {
@@ -1813,7 +1850,7 @@ export class BattleEngine {
       // 既に別の状態異常なら眠れない（ねむけは消える）。本編仕様。
       // ふみん・フラワーヴェールも眠らない（ねむけ自体は消える）。
       const blocked = this.blocksStatusByAbility(pokemon, 'sleep');
-      const applied = blocked ? false : pokemon.applyStatus('sleep', this.rng);
+      const applied = blocked || this.terrainBlocksStatus(pokemon, 'sleep') ? false : pokemon.applyStatus('sleep', this.rng);
       if (blocked) this.observeAbility(pokemon);
       pokemon.resetDrowsy();
       this.log.push(applied

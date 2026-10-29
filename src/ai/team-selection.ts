@@ -1,6 +1,7 @@
 import type { Pokemon } from '../pokemon.js';
 import type { TypeName } from '../types.js';
 import { TYPE_CHART } from '../type-chart.js';
+import { isMegaStone } from '../rules/mega-evolution.js';
 
 // 選出（シングル3体）のルールベース実装。
 //
@@ -44,7 +45,7 @@ function fourTimesWeakness(pokemon: Pokemon): TypeName | null {
 }
 
 function isMegaHolder(pokemon: Pokemon): boolean {
-  return pokemon.item !== null && /ite(-z)?$/.test(pokemon.item);
+  return pokemon.item !== null && isMegaStone(pokemon.item);
 }
 
 function hasSetupMove(pokemon: Pokemon): boolean {

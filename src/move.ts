@@ -323,6 +323,18 @@ export function targetsOpponent(move: MoveData): boolean {
   return targetStatChange !== null && targetStatChange.length > 0;
 }
 
+// 相手に向けた変化技の効果を持つか。targetsOpponent（状態異常・能力変化・やどりぎ）に、
+// あくび・アンコール・ちょうはつを足したもの。ほえる・ふきとばしは含めない（まもるを貫通するため個別に扱う）。
+export function hasOpponentStatusEffect(move: MoveData): boolean {
+  return targetsOpponent(move) || move.inflictsDrowsy === true || move.inflictsEncore === true || move.inflictsTaunt === true;
+}
+
+// 場にいる相手がいないと出せない技か。自分や場に対する技（つるぎのまい・まもる・ステルスロック等）は
+// 相手が先に倒れていても出せる（本編仕様）。
+export function needsLivingTarget(move: MoveData): boolean {
+  return isDamageMove(move) || hasOpponentStatusEffect(move) || move.forcesSwitch === true;
+}
+
 // --- ファクトリ ---
 
 export function createMove(data: StatusMoveInput): StatusMove;

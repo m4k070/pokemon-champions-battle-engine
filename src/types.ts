@@ -21,14 +21,15 @@ export type StatStages = Record<StatStageKey, number>;
 // 能力ランクのキーの一覧（Object.keys は string[] になるので、走査にはこちらを使う）。
 export const STAT_STAGE_KEYS: readonly StatStageKey[] = ['ATK', 'DEF', 'SPATK', 'SPDEF', 'SPEED'];
 
-// 天候・フィールドではなく「陣営の場」に対して発動する効果技（おいかぜ・リフレクター）と、
+// 天候・フィールドではなく「陣営の場」に対して発動する効果技（おいかぜ・リフレクター・ひかりのかべ）と、
 // 盤面全体に対して発動する効果技（トリックルーム）。
 // ハザード（ステルスロック・まきびし・どくびし）もここに含める。
 // ひけんちえなみは「まきびしを設置する追加効果を持つ技」のため fieldEffect には含めない。
 export type FieldEffect =
-  | 'tailwind' | 'trick-room' | 'reflect'
+  | 'tailwind' | 'trick-room' | 'reflect' | 'light-screen'
   | 'stealth-rock' | 'spikes' | 'toxic-spikes'
-  | 'psychic-terrain' | 'misty-terrain' | 'aurora-veil' | 'sticky-web';
+  | 'psychic-terrain' | 'misty-terrain' | 'electric-terrain' | 'grassy-terrain'
+  | 'aurora-veil' | 'sticky-web';
 
 // ダメージ技に追加効果として付随する状態異常（例: れいとうパンチの10%こおり）。
 // status(ダメージ0の状態異常専用技)とは別概念のため独立したフィールドとして持つ。
