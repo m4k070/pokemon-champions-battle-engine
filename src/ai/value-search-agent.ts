@@ -158,7 +158,6 @@ export class ValueSearchBattleAgent implements BattleAgent {
         }
         return mode === 'worst' || mode === 'maximin' ? worst : sum / scenarios.length;
       }
-      if (scenarios.length === 0) return -Infinity;
       let sum = 0;
       for (const scenario of scenarios) {
         sum += await this.simulateWith(this.forkOf(session), side, action, scenario);
