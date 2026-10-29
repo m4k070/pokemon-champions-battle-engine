@@ -8,7 +8,7 @@ import type { DamageEnvironment } from '../src/ai/damage-estimate.js';
 // 乱数を引かない期待ダメージが、エンジンで実際に撃った平均（命中・急所・乱数込み）と合うことを固定する。
 
 const stats = { HP: 100, ATK: 120, DEF: 80, SPATK: 80, SPDEF: 80, SPEED: 100 };
-const environment: DamageEnvironment = { weather: null, terrain: null, reflect: 0, auroraVeil: 0, faintedAllies: 0 };
+const environment: DamageEnvironment = { weather: null, terrain: null, reflect: 0, lightScreen: 0, auroraVeil: 0, faintedAllies: 0 };
 const mon = (name: string, types: Pokemon['types'], ability: Pokemon['ability'] = 'none', item: Pokemon['item'] = null) =>
   new Pokemon({ name, types, ability, item, baseStats: stats, moves: [] });
 

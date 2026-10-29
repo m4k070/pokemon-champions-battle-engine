@@ -122,7 +122,7 @@ export class HybridBattleAgent implements BattleAgent {
         confidence: parseConfidence(raw),
       });
       if (same) return base;
-      return { action: proposed, reasoning: `[hybrid:${reason}] LLMが上書き` };
+      return { action: keepMegaEvolution(proposed, base.action), reasoning: `[hybrid:${reason}] LLMが上書き` };
     } catch (error) {
       this.consultations.push({
         turn: context.turn,
@@ -186,11 +186,6 @@ export class HybridBattleAgent implements BattleAgent {
     const selfLeft = context.selfTeam.filter((pokemon) => !pokemon.isFainted).length;
     const opponentLeft = context.opponentTeam.filter((pokemon) => !pokemon.isFainted).length;
     if (context.turn >= 6 && (selfLeft <= 2 || opponentLeft <= 2)) yield '終盤の詰め';
-  }
-
-  // トリガーが有効なら理由を返し、無効なら null。
-  private enabled(reason: ConsultReason): ConsultReason | null {
-    return this.enabledTriggers.has(reason) ? reason : null;
   }
 
   // 上位2候補のスコア差を1位に対する相対値で返す。候補が1つ以下なら null。
@@ -281,7 +276,7 @@ export class HybridBattleAgent implements BattleAgent {
   async consultForced(context: BattleContext, base: AgentDecision): Promise<AgentDecision> {
     const raw = await this.ask(this.buildPrompt(context, base, '終盤の詰め'));
     const override = parseReply(raw, context);
-    return override === null ? base : { action: override, reasoning: '[hybrid:forced]' };
+    return override === null ? base : { action: keepMegaEvolution(override, base.action), reasoning: '[hybrid:forced]' };
   }
 }
 
@@ -291,6 +286,13 @@ export function parseConfidence(raw: string): number | undefined {
   if (!match) return undefined;
   const value = Number(match[1]);
   return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : undefined;
+}
+
+// LLM には技か交代だけを聞くので、技を差し替えてもメガシンカの判断はヒューリスティックのものを引き継ぐ。
+// 引き継がないと、LLM が技を変えただけでメガシンカしないターンになる。
+function keepMegaEvolution(proposed: AgentAction, base: AgentAction): AgentAction {
+  if (proposed.type !== 'move' || base.type !== 'move' || !base.megaEvolve) return proposed;
+  return { ...proposed, megaEvolve: true };
 }
 
 function sameAction(a: AgentAction, b: AgentAction): boolean {

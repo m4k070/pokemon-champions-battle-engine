@@ -116,6 +116,25 @@ describe('MCP battle server (client-driven actions)', () => {
     expect(switched.activeIndexA).toBe(1);
   });
 
+  test('apply_forced_switch が失敗したら、ターン開始とチェックポイントごと巻き戻す', async () => {
+    const { client } = await setup();
+    const teamA = [defender('Fainted'), attacker('Bench')];
+    const { data: started } = await callTool(client, 'start_battle', { teamA, teamB: [attacker('Opponent')] });
+    await callTool(client, 'apply_turn', {
+      sessionId: started.sessionId,
+      actionA: { type: 'move', moveIndex: 0 },
+      actionB: { type: 'move', moveIndex: 0 },
+    });
+    const before = (await callTool(client, 'get_battle_state', { sessionId: started.sessionId })).data;
+
+    // 倒れているポケモン自身を交代先に指定すると失敗する。
+    const rejected = await callTool(client, 'apply_forced_switch', { sessionId: started.sessionId, side: 0, pokemonIndex: 0 });
+    expect(rejected.result.isError).toBe(true);
+
+    const after = (await callTool(client, 'get_battle_state', { sessionId: started.sessionId })).data;
+    expect(after).toEqual(before);
+  });
+
   test('undo/redo revert and re-apply the last apply_turn', async () => {
     const { client } = await setup();
     const { data: started } = await callTool(client, 'start_battle', { teamA: [attacker()], teamB: [defender()] });
