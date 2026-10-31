@@ -340,6 +340,336 @@ const DEFAULT_MEGA_STONES: Record<string, MegaStoneConfig> = {
     abilityChange: 'magic-bounce', // マジックミラー（battle-engine の変化技の跳ね返しで実装済み）
     // ヤミラミ A75/D75/SA65/SD65/S50 → メガ A85/D125/SA85/SD115/S20
     statBoosts: { ATK: 10, DEF: 50, SPATK: 20, SPDEF: 50, SPEED: -30 },
+  },  // ---- pokedb 上位構築に出るメガ（2026-10-31 追加）----
+  // 種族値・タイプ・特性は PokeAPI（pokemon/{種族}-mega、2026-10-31 取得）から算出した。
+  // 既存の35種で PokeAPI の値と突き合わせ、全種一致を確認済み（とびだすなかみの英語名だけ PokeAPI は innards-out）。
+  // メガスターミー（スターミナイト）: water/psychic・ちからもち・60-100-105-130-105-120
+  'starminite': {
+    pokemon: 'starmie',
+    megaName: 'mega-starmie',
+    typeChange: ['water', 'psychic'],
+    abilityChange: 'huge-power',
+    statBoosts: { ATK: 25, DEF: 20, SPATK: 30, SPDEF: 20, SPEED: 5 },
+  },
+  // メガメガニウム（メガニウムナイト）: grass/fairy・メガソーラー・80-92-115-143-115-80
+  'meganiumite': {
+    pokemon: 'meganium',
+    megaName: 'mega-meganium',
+    typeChange: ['grass', 'fairy'],
+    abilityChange: 'mega-sol',
+    statBoosts: { ATK: 10, DEF: 15, SPATK: 60, SPDEF: 15, SPEED: 0 },
+  },
+  // メガキラフロル（キラフロルナイト）: rock/poison・てきおうりょく・83-90-105-150-96-101
+  'glimmoranite': {
+    pokemon: 'glimmora',
+    megaName: 'mega-glimmora',
+    typeChange: ['rock', 'poison'],
+    abilityChange: 'adaptability',
+    statBoosts: { ATK: 35, DEF: 15, SPATK: 20, SPDEF: 15, SPEED: 15 },
+  },
+  // メガエアームド（エアームドナイト）: steel/flying・すじがねいり・65-140-110-40-100-110
+  'skarmorite': {
+    pokemon: 'skarmory',
+    megaName: 'mega-skarmory',
+    typeChange: ['steel', 'flying'],
+    abilityChange: 'stalwart',
+    statBoosts: { ATK: 60, DEF: -30, SPATK: 0, SPDEF: 30, SPEED: 40 },
+  },
+  // メガヤドラン（ヤドランナイト）: water/psychic・シェルアーマー・95-75-180-130-80-30
+  'slowbronite': {
+    pokemon: 'slowbro',
+    megaName: 'mega-slowbro',
+    typeChange: ['water', 'psychic'],
+    abilityChange: 'shell-armor',
+    statBoosts: { ATK: 0, DEF: 70, SPATK: 30, SPDEF: 0, SPEED: 0 },
+  },
+  // メガプテラ（プテラナイト）: rock/flying・かたいツメ・80-135-85-70-95-150
+  'aerodactylite': {
+    pokemon: 'aerodactyl',
+    megaName: 'mega-aerodactyl',
+    typeChange: ['rock', 'flying'],
+    abilityChange: 'tough-claws',
+    statBoosts: { ATK: 30, DEF: 20, SPATK: 10, SPDEF: 20, SPEED: 20 },
+  },
+  // メガカイロス（カイロスナイト）: bug/flying・スカイスキン・65-155-120-65-90-105
+  'pinsirite': {
+    pokemon: 'pinsir',
+    megaName: 'mega-pinsir',
+    typeChange: ['bug', 'flying'],
+    abilityChange: 'aerilate',
+    statBoosts: { ATK: 30, DEF: 20, SPATK: 10, SPDEF: 20, SPEED: 20 },
+  },
+  // メガブリガロン（ブリガロナイト）: grass/fighting・ぼうだん・88-137-172-74-115-44
+  'chesnaughtite': {
+    pokemon: 'chesnaught',
+    megaName: 'mega-chesnaught',
+    typeChange: ['grass', 'fighting'],
+    abilityChange: 'bulletproof',
+    statBoosts: { ATK: 30, DEF: 50, SPATK: 0, SPDEF: 40, SPEED: -20 },
+  },
+  // メガバンギラス（バンギラスナイト）: rock/dark・すなおこし・100-164-150-95-120-71
+  'tyranitarite': {
+    pokemon: 'tyranitar',
+    megaName: 'mega-tyranitar',
+    typeChange: ['rock', 'dark'],
+    abilityChange: 'sand-stream',
+    statBoosts: { ATK: 30, DEF: 40, SPATK: 0, SPDEF: 20, SPEED: 10 },
+  },
+  // メガカエンジシ（カエンジシナイト）: fire/normal・Fire Mane（日本語名未確認）・86-88-92-129-86-126
+  'pyroarite': {
+    pokemon: 'pyroar-male',
+    megaName: 'mega-pyroar-male',
+    typeChange: ['fire', 'normal'],
+    abilityChange: 'fire-mane',
+    statBoosts: { ATK: 20, DEF: 20, SPATK: 20, SPDEF: 20, SPEED: 20 },
+  },
+  // メガヘラクロス（ヘラクロスナイト）: bug/fighting・スキルリンク・80-185-115-40-105-75
+  'heracronite': {
+    pokemon: 'heracross',
+    megaName: 'mega-heracross',
+    typeChange: ['bug', 'fighting'],
+    abilityChange: 'skill-link',
+    statBoosts: { ATK: 60, DEF: 40, SPATK: 0, SPDEF: 10, SPEED: -10 },
+  },
+  // メガセグレイブ（セグレイブナイト）: dragon/ice・ねつこうかん・115-175-117-105-101-87
+  'baxcalibrite': {
+    pokemon: 'baxcalibur',
+    megaName: 'mega-baxcalibur',
+    typeChange: ['dragon', 'ice'],
+    abilityChange: 'thermal-exchange',
+    statBoosts: { ATK: 30, DEF: 25, SPATK: 30, SPDEF: 15, SPEED: 0 },
+  },
+  // メガドラミドロ（ドラミドナイト）: poison/dragon・さいせいりょく・65-85-105-132-163-44
+  'dragalgite': {
+    pokemon: 'dragalge',
+    megaName: 'mega-dragalge',
+    typeChange: ['poison', 'dragon'],
+    abilityChange: 'regenerator',
+    statBoosts: { ATK: 10, DEF: 15, SPATK: 35, SPDEF: 40, SPEED: 0 },
+  },
+  // メガエルレイド（エルレイドナイト）: psychic/fighting・せいしんりょく・68-165-95-65-115-110
+  'galladite': {
+    pokemon: 'gallade',
+    megaName: 'mega-gallade',
+    typeChange: ['psychic', 'fighting'],
+    abilityChange: 'inner-focus',
+    statBoosts: { ATK: 40, DEF: 30, SPATK: 0, SPDEF: 0, SPEED: 30 },
+  },
+  // メガバクーダ（バクーダナイト）: fire/ground・ちからずく・70-120-100-145-105-20
+  'cameruptite': {
+    pokemon: 'camerupt',
+    megaName: 'mega-camerupt',
+    typeChange: ['fire', 'ground'],
+    abilityChange: 'sheer-force',
+    statBoosts: { ATK: 20, DEF: 30, SPATK: 40, SPDEF: 30, SPEED: -20 },
+  },
+  // メガケケンカニ（ケケンカニナイト）: fighting/ice・てつのこぶし・97-157-122-62-107-33
+  'crabominite': {
+    pokemon: 'crabominable',
+    megaName: 'mega-crabominable',
+    typeChange: ['fighting', 'ice'],
+    abilityChange: 'iron-fist',
+    statBoosts: { ATK: 25, DEF: 45, SPATK: 0, SPDEF: 40, SPEED: -10 },
+  },
+  // メガチリーン（チリーンナイト）: psychic/steel・ふゆう・75-50-110-135-120-65
+  'chimechite': {
+    pokemon: 'chimecho',
+    megaName: 'mega-chimecho',
+    typeChange: ['psychic', 'steel'],
+    abilityChange: 'levitate',
+    statBoosts: { ATK: 0, DEF: 30, SPATK: 40, SPDEF: 30, SPEED: 0 },
+  },
+  // メガゴルーグ（ゴルーグナイト）: ground/ghost・ふかしのこぶし・89-159-105-70-105-55
+  'golurkite': {
+    pokemon: 'golurk',
+    megaName: 'mega-golurk',
+    typeChange: ['ground', 'ghost'],
+    abilityChange: 'unseen-fist',
+    statBoosts: { ATK: 35, DEF: 25, SPATK: 15, SPDEF: 25, SPEED: 0 },
+  },
+  // メガドリュウズ（ドリュウズナイト）: ground/steel・かんつうドリル・110-165-100-65-65-103
+  'excadrite': {
+    pokemon: 'excadrill',
+    megaName: 'mega-excadrill',
+    typeChange: ['ground', 'steel'],
+    abilityChange: 'piercing-drill',
+    statBoosts: { ATK: 30, DEF: 40, SPATK: 15, SPDEF: 0, SPEED: 15 },
+  },
+  // メガボスゴドラ（ボスゴドラナイト）: steel・フィルター・70-140-230-60-80-50
+  'aggronite': {
+    pokemon: 'aggron',
+    megaName: 'mega-aggron',
+    typeChange: ['steel'],
+    abilityChange: 'filter',
+    statBoosts: { ATK: 30, DEF: 50, SPATK: 0, SPDEF: 20, SPEED: 0 },
+  },
+  // メガピジョット（ピジョットナイト）: normal/flying・ノーガード・83-80-80-135-80-121
+  'pidgeotite': {
+    pokemon: 'pidgeot',
+    megaName: 'mega-pidgeot',
+    typeChange: ['normal', 'flying'],
+    abilityChange: 'no-guard',
+    statBoosts: { ATK: 0, DEF: 5, SPATK: 65, SPDEF: 10, SPEED: 20 },
+  },
+  // メガチルタリス（チルタリスナイト）: dragon/fairy・フェアリースキン・75-110-110-110-105-80
+  'altarianite': {
+    pokemon: 'altaria',
+    megaName: 'mega-altaria',
+    typeChange: ['dragon', 'fairy'],
+    abilityChange: 'pixilate',
+    statBoosts: { ATK: 40, DEF: 20, SPATK: 40, SPDEF: 0, SPEED: 0 },
+  },
+  // メガライボルト（ライボルトナイト）: electric・いかく・70-75-80-135-80-135
+  'manectite': {
+    pokemon: 'manectric',
+    megaName: 'mega-manectric',
+    typeChange: ['electric'],
+    abilityChange: 'intimidate',
+    statBoosts: { ATK: 0, DEF: 20, SPATK: 30, SPDEF: 20, SPEED: 30 },
+  },
+  // メガサメハダー（サメハダナイト）: water/dark・がんじょうあご・70-140-70-110-65-105
+  'sharpedonite': {
+    pokemon: 'sharpedo',
+    megaName: 'mega-sharpedo',
+    typeChange: ['water', 'dark'],
+    abilityChange: 'strong-jaw',
+    statBoosts: { ATK: 20, DEF: 30, SPATK: 15, SPDEF: 25, SPEED: 10 },
+  },
+  // メガチャーレム（チャーレムナイト）: fighting/psychic・ヨガパワー・60-100-85-80-85-100
+  'medichamite': {
+    pokemon: 'medicham',
+    megaName: 'mega-medicham',
+    typeChange: ['fighting', 'psychic'],
+    abilityChange: 'pure-power',
+    statBoosts: { ATK: 40, DEF: 10, SPATK: 20, SPDEF: 10, SPEED: 20 },
+  },
+  // メガフーディン（フーディナイト）: psychic・トレース・55-50-65-175-105-150
+  'alakazite': {
+    pokemon: 'alakazam',
+    megaName: 'mega-alakazam',
+    typeChange: ['psychic'],
+    abilityChange: 'trace',
+    statBoosts: { ATK: 0, DEF: 20, SPATK: 40, SPDEF: 10, SPEED: 30 },
+  },
+  // メガシャンデラ（シャンデラナイト）: ghost/fire・すりぬけ・60-75-110-175-110-90
+  'chandelurite': {
+    pokemon: 'chandelure',
+    megaName: 'mega-chandelure',
+    typeChange: ['ghost', 'fire'],
+    abilityChange: 'infiltrator',
+    statBoosts: { ATK: 20, DEF: 20, SPATK: 30, SPDEF: 20, SPEED: 10 },
+  },
+  // メガヘルガー（ヘルガナイト）: dark/fire・サンパワー・75-90-90-140-90-115
+  'houndoominite': {
+    pokemon: 'houndoom',
+    megaName: 'mega-houndoom',
+    typeChange: ['dark', 'fire'],
+    abilityChange: 'solar-power',
+    statBoosts: { ATK: 0, DEF: 40, SPATK: 30, SPDEF: 10, SPEED: 20 },
+  },
+  // メガズルズキン（ズルズキナイト）: dark/fighting・いかく・65-130-135-55-135-68
+  'scraftinite': {
+    pokemon: 'scrafty',
+    megaName: 'mega-scrafty',
+    typeChange: ['dark', 'fighting'],
+    abilityChange: 'intimidate',
+    statBoosts: { ATK: 40, DEF: 20, SPATK: 10, SPDEF: 20, SPEED: 10 },
+  },
+  // メガユキノオー（ユキノオナイト）: grass/ice・ゆきふらし・90-132-105-132-105-30
+  'abomasite': {
+    pokemon: 'abomasnow',
+    megaName: 'mega-abomasnow',
+    typeChange: ['grass', 'ice'],
+    abilityChange: 'snow-warning',
+    statBoosts: { ATK: 40, DEF: 30, SPATK: 40, SPDEF: 20, SPEED: -30 },
+  },
+  // メガエンブオー（エンブオナイト）: fire/fighting・かたやぶり・110-148-75-110-110-75
+  'emboarite': {
+    pokemon: 'emboar',
+    megaName: 'mega-emboar',
+    typeChange: ['fire', 'fighting'],
+    abilityChange: 'mold-breaker',
+    statBoosts: { ATK: 25, DEF: 10, SPATK: 10, SPDEF: 45, SPEED: 10 },
+  },
+  // メガスピアー（スピアナイト）: bug/poison・てきおうりょく・65-150-40-15-80-145
+  'beedrillite': {
+    pokemon: 'beedrill',
+    megaName: 'mega-beedrill',
+    typeChange: ['bug', 'poison'],
+    abilityChange: 'adaptability',
+    statBoosts: { ATK: 60, DEF: 0, SPATK: -30, SPDEF: 0, SPEED: 70 },
+  },
+  // メガデンリュウ（デンリュウナイト）: electric/dragon・かたやぶり・90-95-105-165-110-45
+  'ampharosite': {
+    pokemon: 'ampharos',
+    megaName: 'mega-ampharos',
+    typeChange: ['electric', 'dragon'],
+    abilityChange: 'mold-breaker',
+    statBoosts: { ATK: 20, DEF: 20, SPATK: 50, SPDEF: 20, SPEED: -10 },
+  },
+  // メガガメノデス（ガメノデスナイト）: rock/fighting・かたいツメ・72-140-130-64-106-88
+  'barbaracite': {
+    pokemon: 'barbaracle',
+    megaName: 'mega-barbaracle',
+    typeChange: ['rock', 'fighting'],
+    abilityChange: 'tough-claws',
+    statBoosts: { ATK: 35, DEF: 15, SPATK: 10, SPDEF: 20, SPEED: 20 },
+  },
+  // メガアブソル（アブソルナイト）: dark・マジックミラー・65-150-60-115-60-115
+  'absolite': {
+    pokemon: 'absol',
+    megaName: 'mega-absol',
+    typeChange: ['dark'],
+    abilityChange: 'magic-bounce',
+    statBoosts: { ATK: 20, DEF: 0, SPATK: 40, SPDEF: 0, SPEED: 40 },
+  },
+  // メガタブンネ（タブンネナイト）: normal/fairy・いやしのこころ・103-60-126-80-126-50
+  'audinite': {
+    pokemon: 'audino',
+    megaName: 'mega-audino',
+    typeChange: ['normal', 'fairy'],
+    abilityChange: 'healer',
+    statBoosts: { ATK: 0, DEF: 40, SPATK: 20, SPDEF: 40, SPEED: 0 },
+  },
+  // メガハガネール（ハガネールナイト）: steel/ground・すなのちから・75-125-230-55-95-30
+  'steelixite': {
+    pokemon: 'steelix',
+    megaName: 'mega-steelix',
+    typeChange: ['steel', 'ground'],
+    abilityChange: 'sand-force',
+    statBoosts: { ATK: 40, DEF: 30, SPATK: 0, SPDEF: 30, SPEED: 0 },
+  },
+  // メガルチャブル（ルチャブルナイト）: fighting/flying・ノーガード・78-137-100-74-93-118
+  'hawluchanite': {
+    pokemon: 'hawlucha',
+    megaName: 'mega-hawlucha',
+    typeChange: ['fighting', 'flying'],
+    abilityChange: 'no-guard',
+    statBoosts: { ATK: 45, DEF: 25, SPATK: 0, SPDEF: 30, SPEED: 0 },
+  },
+  // メガジジーロン（ジジーロナイト）: normal/dragon・ぎゃくじょう・78-85-110-160-116-36
+  'drampanite': {
+    pokemon: 'drampa',
+    megaName: 'mega-drampa',
+    typeChange: ['normal', 'dragon'],
+    abilityChange: 'berserk',
+    statBoosts: { ATK: 25, DEF: 25, SPATK: 25, SPDEF: 25, SPEED: 0 },
+  },
+  // メガカラマネロ（カラマネナイト）: dark/psychic・あまのじゃく・86-102-88-98-120-88
+  'malamarite': {
+    pokemon: 'malamar',
+    megaName: 'mega-malamar',
+    typeChange: ['dark', 'psychic'],
+    abilityChange: 'contrary',
+    statBoosts: { ATK: 10, DEF: 0, SPATK: 30, SPDEF: 45, SPEED: 15 },
+  },
+  // メガオーダイル（オーダイルナイト）: water/dragon・ドラゴンスキン・85-160-125-89-93-78
+  'feraligite': {
+    pokemon: 'feraligatr',
+    megaName: 'mega-feraligatr',
+    typeChange: ['water', 'dragon'],
+    abilityChange: 'dragonize',
+    statBoosts: { ATK: 55, DEF: 25, SPATK: 10, SPDEF: 10, SPEED: 0 },
   },
 };
 

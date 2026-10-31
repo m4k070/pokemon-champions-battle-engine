@@ -6,7 +6,7 @@ import { getAbilityDefinition } from './rules/abilities/registry.js';
 import { Pokemon } from './pokemon.js';
 import type { FieldEffect, MoveData, StatusCondition, StatStageKey, TypeName, WeatherType, TypeChart } from './types.js';
 import { STAT_STAGE_KEYS } from './types.js';
-import { isDamageMove, isPhysicalMove, isSpecialMove, isStatusMove, cloneDamageMove, targetsOpponent, hasOpponentStatusEffect } from './move.js';
+import { isDamageMove, isPhysicalMove, isSpecialMove, isStatusMove, cloneDamageMove, targetsOpponent, hasOpponentStatusEffect, hasSecondaryEffect, isSecondarySelfBoost } from './move.js';
 import type { UseMoveResult, NoEffectReason } from './use-move-result.js';
 import { SYSTEM_RANDOM } from './rng.js';
 import { isMegaStone } from './rules/mega-evolution.js';
@@ -160,6 +160,7 @@ export class BattleEngine {
   // いのちのたまの反動は「そのターンにダメージを与えた攻撃者」だけに発動するため、
   // ターンをまたいで参照できるようendTurn()で記録・end-turnイベント処理後にリセットする。
   private attackersDealtDamageThisTurn: Set<Pokemon> = new Set();
+  private sheerForceUsersThisTurn: Set<Pokemon> = new Set();
   // そのターンにダメージを受けたポケモン（ダメおしの威力2倍判定に使う）。
   private defendersDamagedThisTurn: Set<Pokemon> = new Set();
   // ひるみの判定用: そのターン既に行動したポケモンと、ひるんだポケモン。
@@ -313,7 +314,8 @@ export class BattleEngine {
           this.log.push(`${p.name}はたべのこしで${heal}回復した`);
         }
 
-        if (p.item === 'life-orb' && this.attackersDealtDamageThisTurn.has(p)) {
+        // ちからずくで追加効果を打ち消した技では、いのちのたまの反動も受けない（本編仕様）。
+        if (p.item === 'life-orb' && this.attackersDealtDamageThisTurn.has(p) && !this.sheerForceUsersThisTurn.has(p)) {
           const damage = Math.floor(p.maxHP / 10);
           p.takeDamage(damage, this);
           this.log.push(`${p.name}はいのちのたまの反動で${damage}のダメージを受けた`);
@@ -457,7 +459,23 @@ export class BattleEngine {
     return defense;
   }
 
-  calculateBaseDamage(attack: number, defense: number, move: MoveData): number {
+  // ふかしのこぶし・かんつうドリル: 接触するダメージ技はまもるを貫通する（本編仕様）。
+  private piercesProtect(attacker: Pokemon, move: MoveData): boolean {
+    return isDamageMove(move) && move.contact === true
+      && (attacker.ability === 'unseen-fist' || attacker.ability === 'piercing-drill');
+  }
+
+  // 身代わりが攻撃・変化技を受け止めるか。すりぬけは身代わりを無視する（本編仕様）。
+  private substituteBlocks(defender: Pokemon, attacker: Pokemon | undefined): boolean {
+    return defender.substituteHP > 0 && attacker?.ability !== 'infiltrator';
+  }
+
+  // 技を使う側から見た天候。メガソーラーの技は、にほんばれの下にいるものとして扱う（本編仕様）。
+  weatherFor(attacker: Pokemon | undefined): WeatherType | null {
+    return attacker?.ability === 'mega-sol' ? 'sun' : this.weather;
+  }
+
+  calculateBaseDamage(attack: number, defense: number, move: MoveData, attacker?: Pokemon): number {
     if (move.power === 0) return 0;
 
     let power = move.power;
@@ -465,13 +483,14 @@ export class BattleEngine {
     // STAB - check from the move's type, not attacker types here
     // (attacker type check handled in useMove)
 
-    if (this.weather === 'rain' && move.type === 'water') {
+    const weather = this.weatherFor(attacker);
+    if (weather === 'rain' && move.type === 'water') {
       power *= 1.5;
-    } else if (this.weather === 'sun' && move.type === 'fire') {
+    } else if (weather === 'sun' && move.type === 'fire') {
       power *= 1.5;
-    } else if (this.weather === 'rain' && move.type === 'fire') {
+    } else if (weather === 'rain' && move.type === 'fire') {
       power *= 0.5;
-    } else if (this.weather === 'sun' && move.type === 'water') {
+    } else if (weather === 'sun' && move.type === 'water') {
       power *= 0.5;
     }
 
@@ -532,12 +551,23 @@ export class BattleEngine {
     // 壁: リフレクターは物理、ひかりのかべは特殊、オーロラベールは両方を半減する。
     // 壁同士は重ならず、何枚張られていても半減は1回だけ（本編仕様）。急所は壁を貫通する。
     const defenderSide = this.getSide(defender);
-    if (!critical && defenderSide !== null) {
+    // すりぬけ: 壁を無視する（本編仕様）。
+    if (!critical && defenderSide !== null && attacker.ability !== 'infiltrator') {
       const key = this.sideKey(defenderSide);
       const walled = this.field.auroraVeil[key] > 0
         || (isPhysicalMove(move) && this.field.reflect[key] > 0)
         || (isSpecialMove(move) && this.field.lightScreen[key] > 0);
       if (walled) finalDamage = Math.floor(finalDamage / 2);
+    }
+
+    // フィルター: 効果抜群の技のダメージを3/4にする。かたやぶりは無視する（本編仕様）。
+    if (effectiveness > 1 && defender.ability === 'filter' && attacker.ability !== 'mold-breaker') {
+      finalDamage = Math.floor(finalDamage * 0.75);
+    }
+
+    // かんつうドリル: まもるを貫通した接触技は、本来の1/4のダメージになる（本編仕様）。
+    if (defender.protecting && attacker.ability === 'piercing-drill' && this.piercesProtect(attacker, move)) {
+      finalDamage = Math.floor(finalDamage / 4);
     }
 
     this.events.emit('apply-modifiers', { attacker, defender, move, finalDamage, effectiveness, critical });
@@ -598,8 +628,8 @@ export class BattleEngine {
     }
 
     // みがわり: 場に身代わりがあるときは、ダメージを身代わりが受ける（本編仕様）。
-    // 身代わりが受けたぶんは本体のHPには及ばない。身代わりのHPが0になると壊れる。
-    if (defender.substituteHP > 0) {
+    // 身代わりが受けたぶんは本体のHPには及ばない。身代わりのHPが0になると壊れる。すりぬけは身代わりを無視する。
+    if (this.substituteBlocks(defender, attacker)) {
       const absorbed = Math.min(defender.substituteHP, effectiveDamage);
       defender.substituteHP -= absorbed;
       if (defender.substituteHP <= 0) {
@@ -722,7 +752,7 @@ export class BattleEngine {
   private executeMove(attacker: Pokemon, defender: Pokemon, move: MoveData, bounced: boolean): UseMoveResult {
     // まもる: そのターンの間、相手から受ける技を無効化する（本編仕様）。PP は減り、技も相手に知られる。
     // 自分を対象にする技（つるぎのまい等）・場に置く技・ほえる（まもるを貫通する）は防げない。
-    if (defender.protecting && hasOpponentStatusEffect(move)) {
+    if (defender.protecting && hasOpponentStatusEffect(move) && !this.piercesProtect(attacker, move)) {
       this.log.push(`${defender.name}は身を守っている`);
       return { outcome: 'failed', reason: 'protected' };
     }
@@ -818,7 +848,7 @@ export class BattleEngine {
       // みがわり: 身代わりがあるとき、相手に向けた変化技は身代わりに阻まれる（本編仕様）。
       // 場に置く技（ステロ・まきびし等）と自分を対象にする技は防がない。
       // あくび・アンコールは targetsOpponent に載っていないため個別に含める。
-      if (defender.substituteHP > 0 && !move.fieldEffect && !move.selfStatChange && !move.createsSubstitute) {
+      if (this.substituteBlocks(defender, attacker) && !move.fieldEffect && !move.selfStatChange && !move.createsSubstitute) {
         this.log.push(`${defender.name}は身代わりで${move.name}を防いだ`);
         return noEffect('no-applicable-effect');
       }
@@ -1019,7 +1049,7 @@ export class BattleEngine {
     }
 
     if (move.weatherHeal) {
-      const percent = WEATHER_HEAL_PERCENT[this.weather ?? 'none'];
+      const percent = WEATHER_HEAL_PERCENT[this.weatherFor(attacker) ?? 'none'];
       const heal = Math.floor(attacker.maxHP * percent);
       attacker.heal(heal);
       this.log.push(`${attacker.name}は${move.name}で${heal}回復した`);
@@ -1115,7 +1145,7 @@ export class BattleEngine {
     }
 
     // みがわり: あくび・アンコールは targetsOpponent に載らないため、ここでも防ぐ。
-    if (defender.substituteHP > 0 && isStatusMove(move) && (move.inflictsDrowsy || move.inflictsEncore)) {
+    if (this.substituteBlocks(defender, attacker) && isStatusMove(move) && (move.inflictsDrowsy || move.inflictsEncore)) {
       this.log.push(`${defender.name}は身代わりで${move.name}を防いだ`);
       return noEffect('no-applicable-effect');
     }
@@ -1251,7 +1281,8 @@ export class BattleEngine {
       return { outcome: 'damaged', damage: dealt, effectiveness: 1, pivot: false };
     }
 
-    const weatherBallType = WEATHER_BALL_NAMES.has(move.name) && this.weather ? WEATHER_BALL_TYPE[this.weather] : undefined;
+    const attackerWeather = this.weatherFor(attacker);
+    const weatherBallType = WEATHER_BALL_NAMES.has(move.name) && attackerWeather ? WEATHER_BALL_TYPE[attackerWeather] : undefined;
     let effectiveType = weatherBallType ?? move.type;
 
     let power = move.power;
@@ -1290,12 +1321,16 @@ export class BattleEngine {
     // スカイスキン（aerilate）: ノーマル技がひこう技になる（威力1.2倍）
     // フェアリースキン（pixilate）: ノーマル技がフェアリー技になる（威力1.2倍）
     // フリーズスキン（refrigerate）: ノーマル技がこおり技になる（威力1.2倍）
+    // ドラゴンスキン（dragonize）: ノーマル技がドラゴン技になる（威力1.2倍）
     if (effectiveType === 'normal') {
       if (attacker.ability === 'aerilate') {
         effectiveType = 'flying';
         power = Math.floor(power * 1.2);
       } else if (attacker.ability === 'pixilate') {
         effectiveType = 'fairy';
+        power = Math.floor(power * 1.2);
+      } else if (attacker.ability === 'dragonize') {
+        effectiveType = 'dragon';
         power = Math.floor(power * 1.2);
       } else if (attacker.ability === 'refrigerate') {
         effectiveType = 'ice';
@@ -1367,6 +1402,13 @@ export class BattleEngine {
       attacker.charged = false;
     }
 
+    // ちからずく: 追加効果のある技の威力1.3倍。追加効果は下で打ち消す（本編仕様）。
+    const sheerForce = attacker.ability === 'sheer-force' && hasSecondaryEffect(move);
+    if (sheerForce) {
+      power = Math.floor(power * 1.3);
+      this.sheerForceUsersThisTurn.add(attacker);
+    }
+
     // 特性による威力補正（テクニシャン等）。
     const powerAbility = getAbilityDefinition(attacker.ability);
     if (powerAbility?.modifyMovePower) {
@@ -1401,8 +1443,10 @@ export class BattleEngine {
 
     // ロックブラスト等の多段技は命中判定こそ1回だが、当たった後の実ヒット数は乱数（本編仕様）。
     // maxHitsが指定されていれば上限を適用
+    // スキルリンク: 連続技は必ず最大回数当たる（本編仕様）。
+    const maxHits = move.maxHits ?? MULTI_HIT_TABLE[MULTI_HIT_TABLE.length - 1].hits;
     const hitCount = move.multiHit
-      ? (move.maxHits ? Math.min(this.rollMultiHitCount(), move.maxHits) : this.rollMultiHitCount())
+      ? (attacker.ability === 'skill-link' ? maxHits : Math.min(this.rollMultiHitCount(), maxHits))
       : isParentalBond ? 2 : 1;
     let totalDamage = 0;
     let substituteAbsorbed = false;
@@ -1426,14 +1470,14 @@ export class BattleEngine {
         : this.rollCriticalHit(defender);
       const attack = this.calculateAttack(attacker, hitMove, { critical, defender });
       const defense = this.calculateDefense(defender, hitMove, { critical });
-      const baseDamage = this.calculateBaseDamage(attack, defense, hitMove);
+      const baseDamage = this.calculateBaseDamage(attack, defense, hitMove, attacker);
       const { finalDamage, effectiveness } = this.applyModifiers(baseDamage, attacker, defender, hitMove, { critical });
       // 乱数（0.85〜1.00）はヒットごとに独立して引く。
       const rolledDamage = this.rollDamage(finalDamage, effectiveness);
       if (critical) {
         this.log.push('急所に当たった！');
       }
-      const hadSubstitute = defender.substituteHP > 0;
+      const hadSubstitute = this.substituteBlocks(defender, attacker);
       // タイプ無効（実ダメージ0）のときは applyDamage を呼ばない。呼ぶとばけのかわ・
       // さめはだ・じきゅうりょく等の被弾フックが誤って発動する（本編では無効化される）。
       const dealtDamage = rolledDamage > 0 ? this.applyDamage(defender, rolledDamage, attacker, hitMove) : 0;
@@ -1527,7 +1571,7 @@ export class BattleEngine {
     if (defender.isFainted) {
       this.log.push(`${defender.name}は戦闘不能になった`);
     } else {
-      if (move.secondaryEffect && !this.terrainBlocksStatus(defender, move.secondaryEffect.status)
+      if (!sheerForce && move.secondaryEffect && !this.terrainBlocksStatus(defender, move.secondaryEffect.status)
           && this.rng.next() * 100 < move.secondaryEffect.chance) {
         // 特性による無効化は追加効果でも効く。
         if (this.blocksStatusByAbility(defender, move.secondaryEffect.status)) {
@@ -1540,17 +1584,17 @@ export class BattleEngine {
           }
         }
       }
-      if (move.targetStatChange) {
+      if (!sheerForce && move.targetStatChange) {
         this.applyTargetStatChange(attacker, defender, move.targetStatChange);
       }
       // ひるみ: 相手がまだ動いていないターンに当てたときだけ効く。みがわり・せいしんりょくで防ぐ（本編仕様）。
       const flinchChance = isDamageMove(move) ? move.flinchChance ?? 0 : 0;
-      if (flinchChance > 0 && !substituteAbsorbed && !this.actedThisTurn.has(defender)
+      if (!sheerForce && flinchChance > 0 && !substituteAbsorbed && !this.actedThisTurn.has(defender)
           && defender.ability !== 'inner-focus' && this.rng.next() * 100 < flinchChance) {
         this.flinchedThisTurn.add(defender);
       }
       // ひけんちえなみ等: 命中時に相手側にまきびしを設置する追加効果。
-      if (move.inflictsSpikes) {
+      if (!sheerForce && move.inflictsSpikes) {
         const defenderSide = this.getSide(defender);
         if (defenderSide !== null) {
           const key = this.sideKey(defenderSide);
@@ -1565,7 +1609,8 @@ export class BattleEngine {
     }
 
     // リーフストームのような「威力を持つが使用者自身の能力も変化する」技。
-    if (move.selfStatChange) {
+    // ちからずくで打ち消すのは上がる側（ニトロチャージ等）だけ。インファイト等の下がる側は追加効果ではない。
+    if (move.selfStatChange && !(sheerForce && isSecondarySelfBoost(move))) {
       this.applySelfStatChange(attacker, move.selfStatChange);
     }
 
@@ -1787,6 +1832,7 @@ export class BattleEngine {
 
     this.events.emit('end-turn', { team: [...teamA, ...teamB], engine: this });
     this.attackersDealtDamageThisTurn.clear();
+    this.sheerForceUsersThisTurn.clear();
     this.defendersDamagedThisTurn.clear();
     this.actedThisTurn.clear();
     this.flinchedThisTurn.clear();

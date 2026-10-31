@@ -335,6 +335,24 @@ export function needsLivingTarget(move: MoveData): boolean {
   return isDamageMove(move) || hasOpponentStatusEffect(move) || move.forcesSwitch === true;
 }
 
+// 追加効果（ちからずくで打ち消せる効果）を持つダメージ技か。
+// 状態異常・ひるみ・相手の能力変化・まきびしの設置と、使用者の能力が上がる効果が当たる。
+// インファイト・りゅうせいぐんのように使用者の能力が下がる効果は追加効果ではない（本編仕様）。
+export function hasSecondaryEffect(move: MoveData): boolean {
+  if (!isDamageMove(move)) return false;
+  return move.secondaryEffect != null
+    || (move.flinchChance ?? 0) > 0
+    || (move.targetStatChange?.length ?? 0) > 0
+    || move.inflictsSpikes === true
+    || isSecondarySelfBoost(move);
+}
+
+// 使用者の能力が上がる追加効果（ニトロチャージ等）か。
+export function isSecondarySelfBoost(move: MoveData): boolean {
+  const changes = move.selfStatChange ?? [];
+  return changes.length > 0 && changes.every((change) => change.delta > 0);
+}
+
 // --- ファクトリ ---
 
 export function createMove(data: StatusMoveInput): StatusMove;
