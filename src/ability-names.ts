@@ -85,6 +85,21 @@ export const ABILITY_NAMES = [
   'tough-claws',
   'unaware',
   'weak-armor',
+  // pokedb 上位構築に出るメガの特性（2026-10-31 追加）。
+  'berserk',
+  'dragonize',
+  'filter',
+  'fire-mane',
+  'infiltrator',
+  'iron-fist',
+  'mega-sol',
+  'piercing-drill',
+  'pure-power',
+  'sheer-force',
+  'skill-link',
+  'solar-power',
+  'strong-jaw',
+  'unseen-fist',
 
   // --- 名前だけを持つ特性 ---
   // ポケモンのデータとしては現れるが、バトル中の分岐には影響しない。
@@ -94,7 +109,8 @@ export const ABILITY_NAMES = [
   'chlorophyll',
   'fairy-aura',
   'flower-veil',
-  'infiltrator',
+  // いやしのこころ: 味方の状態異常を治す特性で、シングルでは効果が無い（メガタブンネ）。
+  'healer',
   'mega-launcher',
   'natural-cure',
   'none',
@@ -105,6 +121,8 @@ export const ABILITY_NAMES = [
   'serene-grace',
   'static',
   'thermal-exchange',
+  // トレース: 場に出たとき相手の特性を写す（メガフーディン）。交代で元に戻す仕組みが要るので未実装。
+  'trace',
   // とびだすなかみ: Champions 独自（メガウツボット）。英語名が未公開のためローマ字のまま登録する。
   'tobidasu-nakami',
   'torrent',

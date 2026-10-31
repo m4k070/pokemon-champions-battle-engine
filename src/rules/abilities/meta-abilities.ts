@@ -55,10 +55,21 @@ export const TECHNICIAN: AbilityDefinition = {
   modifyMovePower: ({ value }) => (value <= 60 ? Math.floor(value * 1.5) : value),
 };
 
-// ちからもち: 攻撃の実数値が2倍になる。
+// 「こうげき」の実数値で計算する技か（物理技。ボディプレスはぼうぎょで計算するので除く）。
+function usesAttackStat(move: MoveData): boolean {
+  return isPhysicalMove(move) && !(isDamageMove(move) && move.usesDefenseForAttack);
+}
+
+// ちからもち: こうげきの実数値が2倍になる。とくこうには掛からない（本編仕様）。
 export const HUGE_POWER: AbilityDefinition = {
   name: 'huge-power',
-  modifyAttack: ({ value }) => value * 2,
+  modifyAttack: ({ move, value }) => (usesAttackStat(move) ? value * 2 : value),
+};
+
+// ヨガパワー: ちからもちと同じく、こうげきの実数値が2倍になる（メガチャーレム）。
+export const PURE_POWER: AbilityDefinition = {
+  name: 'pure-power',
+  modifyAttack: ({ move, value }) => (usesAttackStat(move) ? value * 2 : value),
 };
 
 // じきゅうりょく: 攻撃を受けるたびに防御が1段階上がる。
@@ -557,7 +568,108 @@ export const FLASH_FIRE: AbilityDefinition = {
     pokemon.flashFireActive && move.type === 'fire' ? Math.floor(value * 1.5) : value,
 };
 
+// ---- pokedb 上位構築に出るメガの特性（2026-10-31 追加）----
+// 効果は PokeAPI の ability の説明文（2026-10-31 取得）による。
+
+// かみつく系の技（がんじょうあご）。カタログは日本語名なので両方の名前で持つ。
+const BITING_MOVE_NAMES = new Set([
+  'かみつく', 'かみくだく', 'ほのおのキバ', 'こおりのキバ', 'かみなりのキバ', 'どくどくのキバ', 'サイコファング',
+  'エラがみ', 'ひっさつまえば', 'くらいつく',
+  'bite', 'crunch', 'fire-fang', 'ice-fang', 'thunder-fang', 'poison-fang', 'psychic-fangs',
+  'fishious-rend', 'hyper-fang', 'jaw-lock',
+]);
+
+// パンチ技（てつのこぶし）。名前に「パンチ」を含む技に加えて、名前に出ないものを持つ。
+const PUNCHING_MOVE_NAMES = new Set([
+  'スカイアッパー', 'アームハンマー', 'アイスハンマー', 'ダブルパンツァー',
+  'sky-uppercut', 'hammer-arm', 'ice-hammer', 'double-iron-bash',
+]);
+
+export function isPunchingMove(move: MoveData): boolean {
+  return move.name.includes('パンチ') || move.name.includes('punch') || PUNCHING_MOVE_NAMES.has(move.name);
+}
+
+// がんじょうあご: かみつく系の技の威力が1.5倍になる（メガサメハダー）。
+export const STRONG_JAW: AbilityDefinition = {
+  name: 'strong-jaw',
+  modifyMovePower: ({ move, value }) => (BITING_MOVE_NAMES.has(move.name) ? Math.floor(value * 1.5) : value),
+};
+
+// てつのこぶし: パンチ技の威力が1.2倍になる（メガケケンカニ）。
+export const IRON_FIST: AbilityDefinition = {
+  name: 'iron-fist',
+  modifyMovePower: ({ move, value }) => (isPunchingMove(move) ? Math.floor(value * 1.2) : value),
+};
+
+// Fire Mane: ほのお技の威力が1.5倍になる（メガカエンジシ。Champions/Z-A 独自で、日本語名は未確認）。
+export const FIRE_MANE: AbilityDefinition = {
+  name: 'fire-mane',
+  modifyMovePower: ({ move, value }) => (move.type === 'fire' ? Math.floor(value * 1.5) : value),
+};
+
+// サンパワー: にほんばれの間、とくこうが1.5倍になり、ターン終了時に最大HPの1/8を失う（メガヘルガー）。
+export const SOLAR_POWER: AbilityDefinition = {
+  name: 'solar-power',
+  modifyAttack: ({ move, value, engine }) =>
+    engine.weather === 'sun' && !isPhysicalMove(move) ? Math.floor(value * 1.5) : value,
+  onEndTurn: ({ pokemon, engine }) => {
+    if (engine.weather !== 'sun' || pokemon.isFainted) return;
+    const damage = Math.max(1, Math.floor(pokemon.maxHP / 8));
+    pokemon.takeDamage(damage, engine);
+    engine.observeAbility(pokemon);
+    engine.log.push(`${pokemon.name}はサンパワーで${damage}のダメージを受けた`);
+  },
+};
+
+// ぎゃくじょう: 攻撃を受けてHPが半分を下回ると、とくこうが1段階上がる（メガジジーロン）。
+// みがわりが受けたときと、その攻撃で倒れるときは発動しない。
+export const BERSERK: AbilityDefinition = {
+  name: 'berserk',
+  onDamaged: ({ defender, move, damage, engine }) => {
+    if (!isDamageMove(move) || defender.substituteHP > 0) return;
+    const before = defender.currentHP;
+    const after = before - damage;
+    if (after <= 0 || before * 2 < defender.maxHP || after * 2 >= defender.maxHP) return;
+    if (defender.modifyStatStage('SPATK', 1) !== 0) {
+      engine.observeAbility(defender);
+      engine.log.push(`${defender.name}のぎゃくじょうで特攻が上がった`);
+    }
+  },
+};
+
+// 以下は battle-engine 側で名前を見て処理する（フックで表現できないもの）。
+// メガソーラー: 自分の技は、にほんばれの下にいるものとして扱う（メガメガニウム）。
+export const MEGA_SOL: AbilityDefinition = { name: 'mega-sol' };
+// ドラゴンスキン: ノーマル技がドラゴン技になり、威力1.2倍（メガオーダイル）。
+export const DRAGONIZE: AbilityDefinition = { name: 'dragonize' };
+// スキルリンク: 連続技が必ず最大回数当たる（メガヘラクロス）。
+export const SKILL_LINK: AbilityDefinition = { name: 'skill-link' };
+// ちからずく: 追加効果のある技の威力が1.3倍になり、追加効果といのちのたまの反動が無くなる（メガバクーダ）。
+export const SHEER_FORCE: AbilityDefinition = { name: 'sheer-force' };
+// ふかしのこぶし: 接触技がまもるを貫通する（メガゴルーグ）。
+export const UNSEEN_FIST: AbilityDefinition = { name: 'unseen-fist' };
+// かんつうドリル: 接触技がまもるを貫通し、本来の1/4のダメージを与える（メガドリュウズ）。
+export const PIERCING_DRILL: AbilityDefinition = { name: 'piercing-drill' };
+// フィルター: 効果抜群の技のダメージを3/4にする（メガボスゴドラ）。
+export const FILTER: AbilityDefinition = { name: 'filter' };
+// すりぬけ: 相手の壁（リフレクター・ひかりのかべ・オーロラベール）とみがわりを無視する（メガシャンデラ）。
+export const INFILTRATOR: AbilityDefinition = { name: 'infiltrator' };
+
 export const META_ABILITIES: AbilityDefinition[] = [
+  PURE_POWER,
+  STRONG_JAW,
+  IRON_FIST,
+  FIRE_MANE,
+  SOLAR_POWER,
+  BERSERK,
+  MEGA_SOL,
+  DRAGONIZE,
+  SKILL_LINK,
+  SHEER_FORCE,
+  UNSEEN_FIST,
+  PIERCING_DRILL,
+  FILTER,
+  INFILTRATOR,
   UNAWARE,
   REGENERATOR,
   ROUGH_SKIN,
