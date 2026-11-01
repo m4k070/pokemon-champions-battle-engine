@@ -160,6 +160,57 @@ describe('上位構築向け特性（meta-abilities）', () => {
     expect(greninja.types).toEqual(['ice']); // 技タイプ（こおり）の単一タイプになる
   });
 
+  test('へんげんじざい: 場に出た後の1回だけ発動し、2回目の技では変化しない', () => {
+    const greninja = new Pokemon({
+      name: 'Greninja',
+      types: ['water', 'dark'],
+      ability: 'protean',
+      item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      stats: { ...FIXED_STATS },
+      moves: [
+        move({ name: 'Ice Beam', type: 'ice', power: 90 }),
+        move({ name: 'Dark Pulse', type: 'dark', power: 80 }),
+      ],
+    });
+    const defender = makePokemon('Defender', 'none', { HP: 300, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    engine.switchIn(greninja, [greninja], 0);
+    engine.setActivePokemon(1, defender);
+
+    engine.useMove(greninja, defender, move({ name: 'Ice Beam', type: 'ice', power: 90 }));
+    expect(greninja.types).toEqual(['ice']); // 登場後の1回目は発動
+
+    engine.useMove(greninja, defender, move({ name: 'Dark Pulse', type: 'dark', power: 80 }));
+    expect(greninja.types).toEqual(['ice']); // 2回目は発動しない（あくタイプにならない）
+  });
+
+  test('へんげんじざい: 場に戻って出直すと再び1回だけ発動する', () => {
+    const greninja = new Pokemon({
+      name: 'Greninja',
+      types: ['water', 'dark'],
+      ability: 'protean',
+      item: null,
+      baseStats: { HP: 100, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 },
+      stats: { ...FIXED_STATS },
+      moves: [
+        move({ name: 'Ice Beam', type: 'ice', power: 90 }),
+        move({ name: 'Dark Pulse', type: 'dark', power: 80 }),
+      ],
+    });
+    const defender = makePokemon('Defender', 'none', { HP: 300, ATK: 100, DEF: 100, SPATK: 100, SPDEF: 100, SPEED: 100 });
+    engine.switchIn(greninja, [greninja], 0);
+    engine.setActivePokemon(1, defender);
+
+    engine.useMove(greninja, defender, move({ name: 'Ice Beam', type: 'ice', power: 90 }));
+    expect(greninja.types).toEqual(['ice']);
+
+    // 交代して再登場すると発動権が戻る（タイプは元のみず/あくに戻っている想定）
+    greninja.types = ['water', 'dark'];
+    engine.switchIn(greninja, [greninja], 0);
+    engine.useMove(greninja, defender, move({ name: 'Dark Pulse', type: 'dark', power: 80 }));
+    expect(greninja.types).toEqual(['dark']);
+  });
+
   test('へんげんじざい: 既に技タイプと同じなら変化しない', () => {
     const greninja = new Pokemon({
       name: 'Greninja',

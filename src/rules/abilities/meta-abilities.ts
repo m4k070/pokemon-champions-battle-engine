@@ -355,12 +355,14 @@ export const MAGIC_BOUNCE: AbilityDefinition = {
   name: 'magic-bounce',
 };
 
-// へんげんじざい: 技を使うと、その技のタイプに変わる（単一タイプになる）。
-// メガシンカでタイプが typeChange にリセットされた場合も、次の技使用で再発動する
-// （メガシンカは実質的な場への再登場のため、タイプ変化もやり直される）。
+// へんげんじざい: 場に出た時とメガシンカした後に1回だけ、次に使う技のタイプに変わる
+// （単一タイプになる）。それ以外のタイプ変化は起きない（技ごとには発動しない）。
+// proteanChanged は switchIn() とメガシンカ時に false へ戻す。
 export const PROTEAN: AbilityDefinition = {
   name: 'protean',
   onMoveUsed: ({ attacker, move, engine }) => {
+    if (attacker.proteanChanged) return; // 今回の登場（メガシンカ後を含む）では既に変化済み
+    attacker.proteanChanged = true;
     if (attacker.types.length === 1 && attacker.types[0] === move.type) return; // 既に技タイプなら変化しない
     attacker.types = [move.type];
     engine.log.push(`${attacker.name}は${move.type}タイプになった`);

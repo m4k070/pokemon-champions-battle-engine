@@ -786,6 +786,8 @@ export class MegaEvolutionSystem {
     pokemon.types = [...stone.typeChange];
     pokemon.ability = stone.abilityChange;
     pokemon.isMega = true;
+    // へんげんじざいはメガシンカ後にもう1回だけ発動できる（タイプも typeChange に戻る）。
+    pokemon.proteanChanged = false;
 
     // メガシンカはHPを変化させない（本編仕様のため対象から除外）。
     for (const stat of MEGA_STAT_KEYS) {

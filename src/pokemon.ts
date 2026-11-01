@@ -70,6 +70,8 @@ export interface PokémonConstructorData {
   protectStreak?: number;
   // ばけのかわ: 既に身代わりになったか（バトル中は戻らない。交代しても復活しない）。
   disguiseBroken?: boolean;
+  // へんげんじざい: 今回場に出てから（メガシンカ後を含む）タイプを変えたか。
+  proteanChanged?: boolean;
   charged?: boolean;
   // もらいびで炎技を吸収した後の強化状態（場を離れると解除）。
   flashFireActive?: boolean;
@@ -134,6 +136,10 @@ export class Pokemon {
   protectStreak: number;
   // ばけのかわ: 既に身代わりになったか。
   disguiseBroken: boolean;
+  // へんげんじざい: 場に出てから（メガシンカ後を含む）既にタイプを変えたか。
+  // 発動は「場に出た時」と「メガシンカした後」の各1回だけ（それ以外の技使用では変化しない）。
+  // 場に出るたび・メガシンカした時に false へ戻す。
+  proteanChanged: boolean;
   // アンコール: 直前に使った技の名前。未使用なら null。
   lastMoveName: string | null;
   hasAppeared: boolean;
@@ -174,6 +180,7 @@ export class Pokemon {
     this.protecting = data.protecting ?? false;
     this.protectStreak = data.protectStreak ?? 0;
     this.disguiseBroken = data.disguiseBroken ?? false;
+    this.proteanChanged = data.proteanChanged ?? false;
     this.lastMoveName = data.lastMoveName ?? null;
     this.hasAppeared = data.hasAppeared ?? false;
     this.encoredMoveIndex = data.encoredMoveIndex ?? null;

@@ -1970,6 +1970,8 @@ export class BattleEngine {
     // もらいびの吸収状態は場を離れると解除される（volatile）。
     pokemon.flashFireActive = false;
     pokemon.charged = false;
+    // へんげんじざいは場に出た時の1回だけ発動できる（メガシンカでもう1回）。
+    pokemon.proteanChanged = false;
     this.events.emit('switch-in', { pokemon, team, engine: this });
 
     if (side === undefined || pokemon.isFainted) return pokemon;
