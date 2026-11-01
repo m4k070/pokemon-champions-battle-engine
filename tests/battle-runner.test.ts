@@ -209,8 +209,8 @@ describe('BattleSession', () => {
     expect(session.engine.field.terrainTurnsLeft).toBe(5);
   });
 
-  test('へんげんじざい: メガシンカ後もタイプ変化が再発動する', async () => {
-    // メガシンカでタイプが typeChange にリセットされても、へんげんじざいは技使用ごとに再発動する
+  test('へんげんじざい: メガシンカ後にもう1回だけタイプ変化が起きる', async () => {
+    // 発動は「場に出た時」と「メガシンカした後」の各1回。技ごとには再発動しない。
     const megaSystem = new MegaEvolutionSystem({
       greninjaite: {
         pokemon: 'greninja',
@@ -255,14 +255,14 @@ describe('BattleSession', () => {
     // へんげんじざいが発動し、技タイプ（みず）の単一タイプになる
     expect(greninja.types).toEqual(['water']);
 
-    // 次のターン: あく技（knock-off）使用でへんげんじざいが再発動し、あくタイプに変わる
+    // 次のターン: あく技（knock-off）を使っても、この登場での発動権は使い切っているので変わらない
     session.beginTurn();
     session.applyTurn(
       { action: { type: 'move', moveIndex: 1, target: 0 } },
       { action: { type: 'forfeit' } }
     );
 
-    expect(greninja.types).toEqual(['dark']); // 再発動: 技タイプ（あく）
+    expect(greninja.types).toEqual(['water']); // メガシンカ後の1回を使い切った後は変化しない
   });
 
   test('start() lets the slower lead\'s weather-setting ability overwrite the faster one\'s', async () => {

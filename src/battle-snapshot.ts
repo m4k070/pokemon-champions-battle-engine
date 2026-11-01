@@ -39,6 +39,8 @@ export interface PokemonSnapshot {
   // 揮発状態。fork/undo と見せ合いからの分岐で失われないように保存する。
   substituteHP: number;
   disguiseBroken: boolean;
+  // へんげんじざい: 今回の登場でタイプを変えたか（fork/undo で失われると発動回数が増える）。
+  proteanChanged: boolean;
   charged: boolean;
   flashFireActive: boolean;
   protecting: boolean;
@@ -196,6 +198,7 @@ export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
     tauntTurnsLeft: pokemon.tauntTurnsLeft,
     substituteHP: pokemon.substituteHP,
     disguiseBroken: pokemon.disguiseBroken,
+    proteanChanged: pokemon.proteanChanged,
     charged: pokemon.charged,
     flashFireActive: pokemon.flashFireActive,
     protecting: pokemon.protecting,
@@ -239,6 +242,7 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
     tauntTurnsLeft: snapshot.tauntTurnsLeft,
     substituteHP: snapshot.substituteHP,
     disguiseBroken: snapshot.disguiseBroken,
+    proteanChanged: snapshot.proteanChanged ?? false,
     charged: snapshot.charged,
     flashFireActive: snapshot.flashFireActive,
     protecting: snapshot.protecting,
