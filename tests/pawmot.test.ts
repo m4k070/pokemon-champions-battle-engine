@@ -113,7 +113,7 @@ describe('パーモット（M-7 34位）の実装', () => {
 
   describe('さいきのいのり', () => {
     const revivalBlessing = () =>
-      move({ name: 'さいきのいのり', type: 'normal', category: 'status', accuracy: null, pp: 1, revivesFainted: true });
+      move({ name: 'さいきのいのり', type: 'normal', category: 'status', pp: 1, revivesFainted: true });
 
     test('ひんしの味方を最大HPの半分で復活させる', () => {
       const attacker = makePawmot();
