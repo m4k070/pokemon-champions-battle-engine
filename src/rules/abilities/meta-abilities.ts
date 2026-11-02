@@ -583,8 +583,8 @@ const BITING_MOVE_NAMES = new Set([
 
 // パンチ技（てつのこぶし）。名前に「パンチ」を含む技に加えて、名前に出ないものを持つ。
 const PUNCHING_MOVE_NAMES = new Set([
-  'スカイアッパー', 'アームハンマー', 'アイスハンマー', 'ダブルパンツァー',
-  'sky-uppercut', 'hammer-arm', 'ice-hammer', 'double-iron-bash',
+  'スカイアッパー', 'アームハンマー', 'アイスハンマー', 'ダブルパンツァー', 'でんこうそうげき',
+  'sky-uppercut', 'hammer-arm', 'ice-hammer', 'double-iron-bash', 'double-shock',
 ]);
 
 export function isPunchingMove(move: MoveData): boolean {

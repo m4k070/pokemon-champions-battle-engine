@@ -72,6 +72,8 @@ export interface PokémonConstructorData {
   disguiseBroken?: boolean;
   // へんげんじざい: 今回場に出てから（メガシンカ後を含む）タイプを変えたか。
   proteanChanged?: boolean;
+  // でんこうそうげき等で失ったタイプ（場を離れると戻る）。
+  lostTypes?: TypeName[];
   charged?: boolean;
   // もらいびで炎技を吸収した後の強化状態（場を離れると解除）。
   flashFireActive?: boolean;
@@ -140,6 +142,8 @@ export class Pokemon {
   // 発動は「場に出た時」と「メガシンカした後」の各1回だけ（それ以外の技使用では変化しない）。
   // 場に出るたび・メガシンカした時に false へ戻す。
   proteanChanged: boolean;
+  // でんこうそうげき等で失ったタイプ。場に戻ると復活する（本編仕様）。
+  lostTypes: TypeName[];
   // アンコール: 直前に使った技の名前。未使用なら null。
   lastMoveName: string | null;
   hasAppeared: boolean;
@@ -181,6 +185,7 @@ export class Pokemon {
     this.protectStreak = data.protectStreak ?? 0;
     this.disguiseBroken = data.disguiseBroken ?? false;
     this.proteanChanged = data.proteanChanged ?? false;
+    this.lostTypes = data.lostTypes ? [...data.lostTypes] : [];
     this.lastMoveName = data.lastMoveName ?? null;
     this.hasAppeared = data.hasAppeared ?? false;
     this.encoredMoveIndex = data.encoredMoveIndex ?? null;
@@ -290,6 +295,27 @@ export class Pokemon {
 
   removeStatus(): void {
     this.statusState = NO_STATUS;
+  }
+
+  // さいきのいのり等でひんしから復活させる。HPを指定量まで戻し、状態異常と
+  // 揮発性の状態（能力ランク・身代わり・ねむけ・アンコール・ちょうはつ等）を初期化する。
+  // PPは復活では回復しない（本編の回復量はHPのみ）。
+  revive(hp: number): void {
+    this.currentHP = Math.max(1, Math.min(this.maxHP, hp));
+    this.removeStatus();
+    this.statStages = zeroStatStages();
+    this.substituteHP = 0;
+    this.isSeeded = false;
+    this.tauntTurnsLeft = 0;
+    this.drowsyUntilTurn = null;
+    this.encoredMoveIndex = null;
+    this.encoredUntilTurn = null;
+    this.protecting = false;
+    this.protectStreak = 0;
+    this.forcedOut = false;
+    this.charged = false;
+    this.flashFireActive = false;
+    this.proteanChanged = false;
   }
 
   // 交代で場を離れると猛毒の経過ターン数はリセットされる（本編仕様）。

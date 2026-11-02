@@ -796,6 +796,12 @@ export class BattleEngine {
       return { outcome: 'failed', reason: 'no-item' };
     }
 
+    // でんこうそうげき: 自分がそのタイプを失っているときは失敗する（本編仕様）。
+    if (move.selfLosesType !== null && move.selfLosesType !== undefined && !attacker.types.includes(move.selfLosesType)) {
+      this.log.push(`${attacker.name}の${move.name}は決まらなかった`);
+      return { outcome: 'failed', reason: 'missing-type' };
+    }
+
     // ぼうだん等の技無効化特性は命中判定より前に解決する（本編仕様）。
     // かたやぶり（mold-breaker）持ちの攻撃は防御側の特性（ぼうだん・ひらいしん等）を無視する。
     const defenderAbility = getAbilityDefinition(defender.ability);
@@ -1012,6 +1018,19 @@ export class BattleEngine {
     if (isStatusMove(move) && move.forcesSwitch) {
       defender.forcedOut = true;
       this.log.push(`${defender.name}は場を追い出された`);
+      return effectApplied();
+    }
+
+    // さいきのいのり: ひんしの味方1体を最大HPの半分で復活させる（本編仕様）。
+    // 対象は選べないため、並び順で最初に見つかったひんしの味方を復活させる。
+    if (move.revivesFainted) {
+      const target = this.teamOf(attacker).find((ally) => ally !== attacker && ally.isFainted);
+      if (target === undefined) {
+        this.log.push('しかし うまくきまらなかった');
+        return noEffect('no-applicable-effect');
+      }
+      target.revive(Math.max(1, Math.floor(target.maxHP / 2)));
+      this.log.push(`${target.name}は復活した`);
       return effectApplied();
     }
 
@@ -1614,6 +1633,16 @@ export class BattleEngine {
       this.applySelfStatChange(attacker, move.selfStatChange);
     }
 
+    // でんこうそうげき: 攻撃後に自分のタイプを失う（でんき・かくとうなら かくとう単タイプになる）。
+    if (move.selfLosesType !== null && move.selfLosesType !== undefined) {
+      const remaining = attacker.types.filter((t) => t !== move.selfLosesType);
+      if (remaining.length > 0 && remaining.length < attacker.types.length) {
+        attacker.types = remaining;
+        attacker.lostTypes = [...attacker.lostTypes, move.selfLosesType];
+        this.log.push(`${attacker.name}は${move.selfLosesType}タイプではなくなった`);
+      }
+    }
+
     // とんぼがえり等は攻撃が通った後に使用者が退場する。
     // 相手を倒しきった場合も本編では交代が発生するが、使用者自身が倒れていたら交代はしない。
     const pivot = move.pivot === true && !attacker.isFainted;
@@ -1972,6 +2001,11 @@ export class BattleEngine {
     pokemon.charged = false;
     // へんげんじざいは場に出た時の1回だけ発動できる（メガシンカでもう1回）。
     pokemon.proteanChanged = false;
+    // でんこうそうげきで失ったタイプは場を離れると戻る（本編仕様）。
+    if (pokemon.lostTypes.length > 0) {
+      pokemon.types = [...pokemon.types, ...pokemon.lostTypes];
+      pokemon.lostTypes = [];
+    }
     this.events.emit('switch-in', { pokemon, team, engine: this });
 
     if (side === undefined || pokemon.isFainted) return pokemon;

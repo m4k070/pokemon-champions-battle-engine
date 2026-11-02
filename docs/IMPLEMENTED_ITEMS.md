@@ -124,6 +124,8 @@
 | おはかまいり | 倒れている味方1体につき威力+50 | `powerPerFaintedAlly` / `BattleEngine.teamOf` |
 | グラスフィールド | 5ターン展開（グラスメイカー・こぼれダネ）。接地側のくさ技1.3倍、接地している相手へのじしん・じならし半減、ターン終了時に接地側を1/16回復 | `BattleEngine.applyGrassyTerrainHeal` / `GRASSY_SURGE` |
 | グラススライダー | グラスフィールドで使用者が接地していれば優先度+1 | `priorityInGrassyTerrain` / `BattleEngine.movePriority` |
+| でんこうそうげき | 攻撃後、自分はでんきタイプでなくなる。でんきでないときは失敗。場に戻るとタイプは復活する | `selfLosesType` / `Pokemon.lostTypes` |
+| さいきのいのり | ひんしの味方1体を最大HPの半分で復活させる。対象は選べず、並び順で最初のひんしが対象。ひんしが不在なら失敗 | `revivesFainted` / `Pokemon.revive` |
 
 **まきびし・どくびしは `fieldEffect`（'spikes' / 'toxic-spikes'）として実装済み**（前の記録で未実装と書いていたのは誤り）。
 

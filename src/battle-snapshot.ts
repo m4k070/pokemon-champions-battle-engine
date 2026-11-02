@@ -41,6 +41,8 @@ export interface PokemonSnapshot {
   disguiseBroken: boolean;
   // へんげんじざい: 今回の登場でタイプを変えたか（fork/undo で失われると発動回数が増える）。
   proteanChanged: boolean;
+  // でんこうそうげき等で失ったタイプ（場に戻ると復活する）。
+  lostTypes: TypeName[];
   charged: boolean;
   flashFireActive: boolean;
   protecting: boolean;
@@ -199,6 +201,7 @@ export function snapshotPokemon(pokemon: Pokemon): PokemonSnapshot {
     substituteHP: pokemon.substituteHP,
     disguiseBroken: pokemon.disguiseBroken,
     proteanChanged: pokemon.proteanChanged,
+    lostTypes: [...pokemon.lostTypes],
     charged: pokemon.charged,
     flashFireActive: pokemon.flashFireActive,
     protecting: pokemon.protecting,
@@ -243,6 +246,7 @@ export function restorePokemon(snapshot: PokemonSnapshot): Pokemon {
     substituteHP: snapshot.substituteHP,
     disguiseBroken: snapshot.disguiseBroken,
     proteanChanged: snapshot.proteanChanged ?? false,
+    lostTypes: [...(snapshot.lostTypes ?? [])],
     charged: snapshot.charged,
     flashFireActive: snapshot.flashFireActive,
     protecting: snapshot.protecting,

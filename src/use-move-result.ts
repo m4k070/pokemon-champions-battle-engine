@@ -16,7 +16,8 @@ export type MoveFailureReason =
   | 'protected'          // 相手がまもる等で防いだ
   | 'protect-failed'     // まもるの連続使用で失敗した
   | 'target-not-attacking' // ふいうち: 相手が攻撃技を選んでいなかった
-  | 'no-item';           // ポルターガイスト: 相手が持ち物を持っていなかった
+  | 'no-item'            // ポルターガイスト: 相手が持ち物を持っていなかった
+  | 'missing-type';      // でんこうそうげき: 自分がそのタイプを持っていなかった
 
 // 技は出たが効果を生まなかった理由。
 export type NoEffectReason =
