@@ -101,6 +101,10 @@ const MoveInputSchema = z.object({
   doublesIfHitFirst: z.boolean().optional(),
   superEffectiveOnWater: z.boolean().optional(),
   healingWish: z.boolean().optional(),
+  // さいきのいのり（変化技）: ひんしの味方1体を最大HPの半分で復活させる。
+  revivesFainted: z.boolean().optional(),
+  // でんこうそうげき（攻撃技）: 攻撃後に自分がこのタイプを失う。
+  selfLosesType: TypeNameSchema.nullable().optional(),
   priorityInGrassyTerrain: z.boolean().optional(),
   alwaysCrit: z.boolean().optional(),
   failsUnlessTargetAttacks: z.boolean().optional(),
@@ -173,6 +177,7 @@ function toMoveInput(spec: z.infer<typeof MoveInputSchema>): MoveInput {
     weather: spec.weather,
     pivot: spec.pivot,
     restoresShieldForm: spec.restoresShieldForm,
+    revivesFainted: spec.revivesFainted,
   };
 
   if (spec.category === 'status') {
@@ -190,6 +195,7 @@ function toMoveInput(spec: z.infer<typeof MoveInputSchema>): MoveInput {
     crashDamage: spec.crashDamage,
     contact: spec.contact,
     inflictsSpikes: spec.inflictsSpikes,
+    selfLosesType: spec.selfLosesType,
   };
 }
 

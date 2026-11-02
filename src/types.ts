@@ -107,6 +107,10 @@ export interface CommonMoveEffects {
   wishes?: boolean;
   // いやしのねがい: 自分が倒れ、次にその場に出たポケモンのHPと状態異常を回復する（本編仕様）。
   healingWish?: boolean;
+  // さいきのいのり: ひんしの味方1体を最大HPの半分で復活させる（本編仕様）。
+  revivesFainted?: boolean;
+  // でんこうそうげき: 攻撃後に自分がこのタイプを失う。タイプを持っていなければ失敗する（本編仕様）。
+  selfLosesType?: TypeName | null;
   // ほえる・ドラゴンテール: 相手を控えと強制交代させる（本編仕様）。
   forcesSwitch?: boolean;
 }

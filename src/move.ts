@@ -108,6 +108,8 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
   rests: boolean;
   wishes: boolean;
   healingWish: boolean;
+  revivesFainted: boolean;
+  selfLosesType: TypeName | null;
   forcesSwitch: boolean;
   drainPercent: number | null;
   ignoresTypeEffectiveness: boolean;
@@ -168,6 +170,8 @@ abstract class DamageMoveBase implements Omit<DamageMoveData, 'category'> {
     this.rests = data.rests ?? false;
     this.wishes = data.wishes ?? false;
     this.healingWish = data.healingWish ?? false;
+    this.revivesFainted = data.revivesFainted ?? false;
+    this.selfLosesType = data.selfLosesType ?? null;
     this.forcesSwitch = data.forcesSwitch ?? false;
     this.drainPercent = data.drainPercent ?? null;
     this.ignoresTypeEffectiveness = data.ignoresTypeEffectiveness ?? false;
@@ -234,6 +238,8 @@ export class StatusMove implements StatusMoveData {
   rests: boolean;
   wishes: boolean;
   healingWish: boolean;
+  revivesFainted: boolean;
+  selfLosesType: TypeName | null;
   forcesSwitch: boolean;
 
   constructor(data: StatusMoveInput) {
@@ -266,6 +272,8 @@ export class StatusMove implements StatusMoveData {
     this.rests = data.rests ?? false;
     this.wishes = data.wishes ?? false;
     this.healingWish = data.healingWish ?? false;
+    this.revivesFainted = data.revivesFainted ?? false;
+    this.selfLosesType = data.selfLosesType ?? null;
     this.forcesSwitch = data.forcesSwitch ?? false;
   }
 }
