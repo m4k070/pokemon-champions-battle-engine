@@ -109,10 +109,16 @@ export const ITEM_NAMES = [
   'malamarite',
   'feraligite',
 
+  // --- 天候を延ばすいわ ---
+  // 持っていると天候が8ターン続く（WEATHER_ROCK_ITEMS）。つめたいいわは さむいギャグ の雪にも効く。
+  'damp-rock',
+  'heat-rock',
+  'icy-rock',
+  'smooth-rock',
+
   // --- 名前だけを持つ持ち物 ---
   // ポケモンのデータとしては現れるが、バトル中の分岐には影響しない。
   // gamewith 最強パーティランキング（2026-10-19）の構築に登場するものもここに含む。
-  'damp-rock',
   'grassy-seed',
   'haban-berry',
   'psychic-seed',
