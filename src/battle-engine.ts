@@ -90,6 +90,14 @@ function isTerrainEffect(effect: FieldEffect | null | undefined): effect is NonN
   return effect != null && effect in TERRAIN_NAMES;
 }
 
+// 天候を延ばすいわ（本編仕様。持っていると5ターン→8ターン）。
+const WEATHER_ROCK_ITEMS: Record<WeatherType, string> = {
+  sun: 'heat-rock',
+  rain: 'damp-rock',
+  sand: 'smooth-rock',
+  snow: 'icy-rock',
+};
+
 // あさのひざし等、天候依存の自己回復技の回復割合（本編仕様）。
 const WEATHER_HEAL_PERCENT: Record<'none' | WeatherType, number> = {
   none: 0.5,
@@ -1059,9 +1067,10 @@ export class BattleEngine {
     }
 
     // あまごい・にほんばれ等: 天候を5ターン変化させる。
+    // 対応する天候のいわを持っていれば8ターン（本編仕様。さむいギャグ等の技でも同じ）。
     if (move.weather) {
       this.weather = move.weather;
-      this.weatherTurnsLeft = 5;
+      this.weatherTurnsLeft = attacker.item === WEATHER_ROCK_ITEMS[move.weather] ? 8 : 5;
       const weatherName = { rain: 'あめ', sun: 'にほんばれ', sand: 'すなあらし', snow: 'ゆき' }[move.weather];
       this.log.push(`${attacker.name}は${weatherName}を呼び出した`);
       return effectApplied();
