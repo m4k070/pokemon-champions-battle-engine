@@ -1,6 +1,7 @@
 import type { BattleAgent, BattleContext, AgentDecision } from './battle-agent.js';
 import type { Pokemon } from '../pokemon.js';
 import { getLegalActions } from './battle-agent.js';
+import { isMegaStone } from '../rules/mega-evolution.js';
 import type { BattleSession } from '../battle-runner.js';
 import type { AgentAction } from '../types.js';
 import { applyEstimatedStats, compatibleSets, defaultBelief } from './opponent-belief.js';
@@ -221,7 +222,14 @@ export class ValueSearchBattleAgent implements BattleAgent {
 
   private enumerateActions(context: BattleContext): AgentAction[] {
     const legal = getLegalActions(context);
-    const actions: AgentAction[] = legal.moves.map((move) => ({ type: 'move' as const, moveIndex: move.index, target: 0 }));
+    // 相手もメガシンカできるなら、その手も候補に入れる。入れ忘れると「自分だけメガって相手はしない」
+    // 世界で先読みしてしまい、素早さもダメージも自分の得になる（2026-11-04 に発覚）。
+    const actions: AgentAction[] = legal.moves.map((move) => ({
+      type: 'move' as const,
+      moveIndex: move.index,
+      target: 0,
+      megaEvolve: legal.canMegaEvolve || undefined,
+    }));
     for (const target of legal.switches) actions.push({ type: 'switch', pokemonIndex: target.index });
     return actions;
   }
@@ -291,12 +299,15 @@ export function fairOpponentScenarios(context: BattleContext, belief: Belief = d
   const knownAbility = opponent.ability !== 'none';
 
   for (const set of sets) {
+    // 相手がメガストーンを持っている想定なら、メガシンカして殴る手も入れる。
+    const assumedItem = knownItem ? opponent.item : set.item;
+    const opponentCanMega = assumedItem !== null && assumedItem !== undefined && isMegaStone(assumedItem);
     for (let index = 0; index < set.moves.length; index++) {
       scenarios.push({
         moves: set.moves,
         item: knownItem ? undefined : set.item,
         ability: knownAbility ? undefined : set.ability,
-        action: { type: 'move', moveIndex: index, target: 0 },
+        action: { type: 'move', moveIndex: index, target: 0, megaEvolve: opponentCanMega || undefined },
       });
     }
   }

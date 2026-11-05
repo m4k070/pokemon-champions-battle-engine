@@ -139,9 +139,25 @@ function bestIncoming(attacker: Pokemon, defender: Pokemon, context: BattleConte
   return best;
 }
 
+// 実効素早さ。エンジンの順番決め（BattleEngine.calculateSpeed）と同じ補正を入れる。
+// 段階・持ち物・状態異常・天候特性を見ないと、「かそくで上を取った」「スカーフで抜いた」を
+// 特徴量が拾えず、実際の行動順と食い違う（2026-11-04 に発覚）。
+function effectiveSpeed(pokemon: Pokemon, context: BattleContext): number {
+  let speed = Math.floor(pokemon.stats.SPEED * pokemon.getStatStageMultiplier('SPEED'));
+  if (pokemon.item === 'choice-scarf') speed = Math.floor(speed * 1.5);
+  if (pokemon.item === 'iron-ball') speed = Math.floor(speed / 2);
+  if (pokemon.status === 'paralysis') speed = Math.floor(speed / 2);
+  const weather = context.field.weather;
+  if (pokemon.ability === 'swift-swim' && weather === 'rain') speed *= 2;
+  if (pokemon.ability === 'chlorophyll' && weather === 'sun') speed *= 2;
+  if (pokemon.ability === 'unburden' && pokemon.itemUsed) speed *= 2;
+  // おいかぜは BattleFieldView に無いので未対応（要追加）。
+  return speed;
+}
+
 function speedOrder(self: Pokemon, opponent: Pokemon, context: BattleContext): number {
-  const selfSpeed = self.stats.SPEED * (self.status === 'paralysis' ? 0.5 : 1);
-  const oppSpeed = opponent.stats.SPEED * (opponent.status === 'paralysis' ? 0.5 : 1);
+  const selfSpeed = effectiveSpeed(self, context);
+  const oppSpeed = effectiveSpeed(opponent, context);
   if (context.field.trickRoom) return selfSpeed < oppSpeed ? 1 : -1;
   return selfSpeed > oppSpeed ? 1 : -1;
 }
