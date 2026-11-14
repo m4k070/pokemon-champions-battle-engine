@@ -50,7 +50,10 @@ export interface ValueSearchOptions {
   //   'worst'   相手の合法手のうち自分にとって最悪の結果
   //   'maximin' 'worst' の別名（CLI で --mode=maximin と書けるように）
   //   'belief'  相手の型の信念（候補セット）から、ありうる手を列挙して平均（伏せ情報を使わない）
-  opponentMode?: 'model' | 'uniform' | 'worst' | 'maximin' | 'belief';
+  //   'setwise' fair 専用。信念の候補セットを「相手の選べる手」でなく「どの型かの確率」として扱う: 候補セットごとに
+  //             （その4技と交代の中の）最悪を取り、候補セットの間は平均する。'worst' は全候補の全技の中の最悪なので、
+  //             候補が増えるほど悲観が強くなる。候補が1個以下の相手には 'worst' と同じ
+  opponentMode?: 'model' | 'uniform' | 'worst' | 'maximin' | 'belief' | 'setwise';
   // 信念。既定はメタ構築プールから作る。
   belief?: Belief;
   // 探索する候補の上限（計算時間の制御）。0 なら全候補。
@@ -152,10 +155,21 @@ export class ValueSearchBattleAgent implements BattleAgent {
         // fair の uniform / worst: 信念から作った相手の手について平均または最悪値。
         let sum = 0;
         let worst = Infinity;
+        // setwise: 候補セットごとの最悪（set の無い場面＝交代や、候補の無い相手の手は、どの候補セットにも共通）。
+        const worstOfSet = new Map<number, number>();
+        let worstShared = Infinity;
         for (const scenario of scenarios) {
           const value = await this.simulateWith(this.forkOf(session), side, action, scenario);
           sum += value;
           worst = Math.min(worst, value);
+          if (scenario.set === undefined) worstShared = Math.min(worstShared, value);
+          else worstOfSet.set(scenario.set, Math.min(worstOfSet.get(scenario.set) ?? Infinity, value));
+        }
+        if (mode === 'setwise') {
+          if (worstOfSet.size === 0) return worst;
+          let total = 0;
+          for (const value of worstOfSet.values()) total += Math.min(value, worstShared);
+          return total / worstOfSet.size;
         }
         return mode === 'worst' || mode === 'maximin' ? worst : sum / scenarios.length;
       }
@@ -184,7 +198,8 @@ export class ValueSearchBattleAgent implements BattleAgent {
       sum += value;
       worst = Math.min(worst, value);
     }
-    return mode === 'worst' || mode === 'maximin' ? worst : sum / opponentActions.length;
+    // setwise は fair 専用（oracle は相手の実物の手を列挙するので、候補セットが無い）。oracle では worst と同じ。
+    return mode === 'worst' || mode === 'maximin' || mode === 'setwise' ? worst : sum / opponentActions.length;
   }
 
   // 診断用: 指定した手を打ったときの V 値（相手モデルは options.opponentMode に従う）。
@@ -285,6 +300,8 @@ export interface OpponentScenario {
   moves: Pokemon['moves'] | null;
   item?: Pokemon['item'];
   ability?: Pokemon['ability'];
+  // 信念の何番目の候補セットから作った場面か（交代と、候補の無い相手の手には無い）。
+  set?: number;
   action: AgentAction;
 }
 
@@ -298,7 +315,7 @@ export function fairOpponentScenarios(context: BattleContext, belief: Belief = d
   const knownItem = opponent.item !== null;
   const knownAbility = opponent.ability !== 'none';
 
-  for (const set of sets) {
+  for (const [setIndex, set] of sets.entries()) {
     // 相手がメガストーンを持っている想定なら、メガシンカして殴る手も入れる。
     const assumedItem = knownItem ? opponent.item : set.item;
     const opponentCanMega = assumedItem !== null && assumedItem !== undefined && isMegaStone(assumedItem);
@@ -307,6 +324,7 @@ export function fairOpponentScenarios(context: BattleContext, belief: Belief = d
         moves: set.moves,
         item: knownItem ? undefined : set.item,
         ability: knownAbility ? undefined : set.ability,
+        set: setIndex,
         action: { type: 'move', moveIndex: index, target: 0, megaEvolve: opponentCanMega || undefined },
       });
     }
