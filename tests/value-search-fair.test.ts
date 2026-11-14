@@ -105,3 +105,44 @@ describe('fair の ValueSearchBattleAgent', () => {
     expect(first.turns).toBe(second.turns);
   });
 });
+
+describe('setwise（候補セットごとの最悪を平均する）', () => {
+  // 相手 mon-x の候補は2つ: 弱い技だけの型と、強い技だけの型。評価は自分の残り HP の割合。
+  const weak = attack('よわい技', 10);
+  const strong = attack('つよい技', 120);
+  const belief: Belief = new Map([
+    ['mon-x', [{ moves: [weak] as never, item: null, ability: 'none' }, { moves: [strong] as never, item: null, ability: 'none' }]],
+  ]);
+  const evaluate = (context: BattleContext) => context.self.currentHP / context.self.maxHP;
+
+  async function values() {
+    const session = await BattleSession.start(
+      [makePokemon('mon-me', [attack('たいあたり')])], [makePokemon('mon-x', [attack('たいあたり')])],
+      { rng: new SeededRandom(3), information: 'partial', beliefs: [belief, belief] },
+    );
+    const action: AgentAction = { type: 'move', moveIndex: 0, target: 0 };
+    const valueOf = (opponentMode: 'worst' | 'uniform' | 'setwise') =>
+      new ValueSearchBattleAgent(new SeededRandom(1), { evaluate, fairness: 'fair', trustMargin: 0, opponentMode, belief })
+        .valueOf(session.getContext(0), action);
+    return { worst: await valueOf('worst'), uniform: await valueOf('uniform'), setwise: await valueOf('setwise') };
+  }
+
+  test('候補セットの間は平均で、worst より高く、候補が1技ずつなら uniform と同じ', async () => {
+    const { worst, uniform, setwise } = await values();
+    expect(setwise).toBeGreaterThan(worst);
+    expect(setwise).toBeCloseTo(uniform, 10);
+  });
+
+  test('候補が1つなら worst と同じ', async () => {
+    const one: Belief = new Map([['mon-x', [{ moves: [weak, strong] as never, item: null, ability: 'none' }]]]);
+    const session = await BattleSession.start(
+      [makePokemon('mon-me', [attack('たいあたり')])], [makePokemon('mon-x', [attack('たいあたり')])],
+      { rng: new SeededRandom(3), information: 'partial', beliefs: [one, one] },
+    );
+    const action: AgentAction = { type: 'move', moveIndex: 0, target: 0 };
+    const valueOf = (opponentMode: 'worst' | 'setwise') =>
+      new ValueSearchBattleAgent(new SeededRandom(1), { evaluate, fairness: 'fair', trustMargin: 0, opponentMode, belief: one })
+        .valueOf(session.getContext(0), action);
+    expect(await valueOf('setwise')).toBe(await valueOf('worst'));
+  });
+});
